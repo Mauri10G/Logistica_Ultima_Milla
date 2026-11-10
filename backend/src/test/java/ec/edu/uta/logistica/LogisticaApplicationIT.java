@@ -24,7 +24,11 @@ class LogisticaApplicationIT extends IntegrationTestBase {
         assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success", Integer.class))
                 .isGreaterThanOrEqualTo(2);
         assertThat(jdbc.queryForObject("select postgis_version()", String.class)).isNotBlank();
-        assertThat(jdbc.queryForObject("select count(*) from zona", Integer.class)).isEqualTo(5);
+        // Solo las zonas de V2: la base se comparte con otras *IT, que pueden crear zonas antes que esta prueba
+        // (el orden de ejecucion cambia entre equipos y CI), asi que no se cuenta la tabla completa.
+        assertThat(jdbc.queryForObject("select count(*) from zona where nombre in "
+                + "('Centro', 'Ingahurco', 'Ficoa/Atocha', 'Norte/Izamba', 'Sur/Huachi')", Integer.class))
+                .isEqualTo(5);
     }
 
     @Test
