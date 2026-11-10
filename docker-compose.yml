@@ -1,0 +1,43 @@
+# Infraestructura local del proyecto.
+#   docker compose up -d                      -> solo PostGIS (puerto 5433)
+#   docker compose --profile sonar up -d      -> PostGIS + SonarQube (puerto 9000)
+name: logistica
+
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: logistica-postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: logistica
+      POSTGRES_USER: logistica
+      POSTGRES_PASSWORD: logistica
+    ports:
+      - "5433:5432" # 5433 para no chocar con un Postgres local en 5432
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U logistica -d logistica"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: logistica-sonarqube
+    profiles: ["sonar"]
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+
+volumes:
+  postgis_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:

@@ -1,0 +1,15 @@
+{
+  "name": "logistica-acceptance",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pruebas de aceptación (Cucumber.js + Playwright) del Sistema de Gestión de Entregas y Rutas",
+  "scripts": {
+    "navegador": "playwright install chromium",
+    "test": "cucumber-js",
+    "test:dry": "cucumber-js --dry-run"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^13.3.0",
+    "playwright": "^1.65.0"
+  }
+}

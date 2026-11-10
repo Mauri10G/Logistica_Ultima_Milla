@@ -1,0 +1,16 @@
+# Perfil dev: PostgreSQL/PostGIS del docker-compose (puerto 5433 para no chocar con un Postgres local).
+# Levantar antes:  docker compose up -d
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/logistica}
+    username: ${DB_USER:logistica}
+    password: ${DB_PASSWORD:logistica}
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    ec.edu.uta.logistica: DEBUG

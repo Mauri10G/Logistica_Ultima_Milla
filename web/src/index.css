@@ -1,0 +1,302 @@
+:root {
+  --color-fondo: #f3f4f6;
+  --color-tarjeta: #ffffff;
+  --color-texto: #1f2937;
+  --color-suave: #6b7280;
+  --color-borde: #e5e7eb;
+  --color-primario: #2563eb;
+  --color-menu: #111827;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--color-texto);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-fondo);
+}
+
+/* Layout con menu lateral */
+.layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+
+.menu-lateral {
+  background: var(--color-menu);
+  color: #fff;
+  padding: 1rem;
+}
+
+.menu-lateral .logo {
+  font-size: 1.1rem;
+  margin: 0 0 1.5rem;
+}
+
+.menu-lateral ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu-lateral a {
+  display: block;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  color: #d1d5db;
+  text-decoration: none;
+}
+
+.menu-lateral a:hover,
+.menu-lateral a.activo {
+  background: #1f2937;
+  color: #fff;
+}
+
+.contenido {
+  padding: 1.5rem 2rem;
+  min-width: 0;
+}
+
+.encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.encabezado h2 {
+  margin: 0;
+}
+
+/* Tarjetas, tablas y formularios */
+.tarjeta {
+  background: var(--color-tarjeta);
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-tarjeta);
+  border: 1px solid var(--color-borde);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.tabla th,
+.tabla td {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--color-borde);
+}
+
+.tabla th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.vacio {
+  color: var(--color-suave);
+  text-align: center;
+}
+
+.formulario {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.ancho-completo {
+  grid-column: 1 / -1;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.campo label {
+  font-size: 0.8rem;
+  color: var(--color-suave);
+}
+
+.campo-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+input,
+select,
+textarea {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font: inherit;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-primario);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+button.secundario {
+  background: #e5e7eb;
+  color: var(--color-texto);
+}
+
+.acciones {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.filtros {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.total {
+  margin: 0 0 0.4rem auto;
+  color: var(--color-suave);
+}
+
+.dos-columnas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .dos-columnas {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mensajes */
+.mensaje-error {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.mensaje-ok {
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+/* Badges de estado */
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #e5e7eb;
+}
+
+.badge-PENDIENTE {
+  background: #fef3c7;
+  color: #92400e;
+}
+.badge-ASIGNADO,
+.badge-ARMADA {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.badge-RECOGIDO,
+.badge-EN_CURSO {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+.badge-EN_CAMINO {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+.badge-ENTREGADO,
+.badge-FINALIZADA {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* Rutas */
+.ruta {
+  border-left: 5px solid var(--color-primario);
+}
+
+.ruta header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.ruta ol {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.9rem;
+}
+
+/* Seguimiento */
+.conexion {
+  font-size: 0.85rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+}
+
+.conexion-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.conexion-error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.resumen {
+  display: flex;
+  gap: 1.25rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.fila-actualizada {
+  animation: destello 3s ease-out;
+}
+
+@keyframes destello {
+  from {
+    background: #fef08a;
+  }
+  to {
+    background: transparent;
+  }
+}

@@ -1,0 +1,10 @@
+# Perfil test: la base de datos la aporta Testcontainers (@ServiceConnection), aqui no hay datasource.
+logistica:
+  rutas:
+    armado:
+      programado-habilitado: false # el @Scheduled no debe interferir con las pruebas
+
+logging:
+  level:
+    root: WARN
+    ec.edu.uta.logistica: INFO

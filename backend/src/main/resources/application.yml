@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: logistica
+  profiles:
+    default: dev
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none # el esquema lo gestiona Flyway
+    properties:
+      hibernate:
+        default_batch_fetch_size: 50
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Propiedades propias del sistema (ver LogisticaProperties)
+logistica:
+  zona-horaria: America/Guayaquil
+  rutas:
+    max-pedidos: 4 # maximo de pedidos por ruta
+    armado:
+      programado-habilitado: true # armado automatico con @Scheduled
+      cron: "0 0 18 * * *" # todos los dias a las 18:00 (hora de logistica.zona-horaria)
+      dias-adelante: 1 # arma rutas del dia siguiente
+  cors:
+    origenes-permitidos:
+      - http://localhost:5173 # app web (Vite)
+      - http://localhost:*
+      - http://127.0.0.1:*
+      - http://10.0.2.2:* # emulador Android
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
