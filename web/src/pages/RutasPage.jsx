@@ -1,17 +1,28 @@
 import { useCallback, useEffect, useState } from 'react'
-import { armarRutas, listarRutas } from '../api/rutasApi'
-import { mensajeDeError } from '../api/client'
-import EstadoBadge from '../components/EstadoBadge'
-import { COLORES_RUTA } from '../components/constantesMapa'
+import { listarRepartidores } from '../api/repartidoresApi'
+import {
+  armarRutas,
+  cambiarRepartidorDeRuta,
+  listarRutas,
+  moverPedidoARuta,
+  reordenarRuta,
+  sacarPedidoDeRuta,
+} from '../api/rutasApi'
+import { endpointNoDisponible, MENSAJE_FUNCION_NO_DISPONIBLE, mensajeDeError } from '../utils/errores'
+import { colorDeRuta } from '../components/constantesMapa'
+import IndicadorConexion from '../components/IndicadorConexion'
 import MapaRutas from '../components/MapaRutas'
+import RutaCard from '../components/RutaCard'
 import { fechaIso } from '../hooks/fechas'
-import { TOPIC_RUTAS } from '../services/websocket'
 import { useWebSocketTopic } from '../hooks/useWebSocketTopic'
+import { TOPIC_RUTAS } from '../services/websocket'
 
 export default function RutasPage() {
   const [fecha, setFecha] = useState(fechaIso(1))
   const [rutas, setRutas] = useState([])
+  const [repartidores, setRepartidores] = useState([])
   const [armando, setArmando] = useState(false)
+  const [ocupado, setOcupado] = useState(false)
   const [mensaje, setMensaje] = useState(null)
   const [error, setError] = useState(null)
 
@@ -28,8 +39,14 @@ export default function RutasPage() {
     cargar()
   }, [cargar])
 
+  useEffect(() => {
+    listarRepartidores()
+      .then(setRepartidores)
+      .catch((e) => setError(mensajeDeError(e)))
+  }, [])
+
   // Si otra persona (o el armado programado) arma o modifica rutas de esta fecha, se refresca sola.
-  useWebSocketTopic(TOPIC_RUTAS, (mensajeWs) => {
+  const conectado = useWebSocketTopic(TOPIC_RUTAS, (mensajeWs) => {
     if (mensajeWs.fecha === fecha) cargar()
   })
 
@@ -52,10 +69,52 @@ export default function RutasPage() {
     }
   }
 
+  /** Ejecuta un ajuste manual. Si el endpoint aún no existe (404/405) avisa sin romper la pantalla. */
+  async function ajustar(accion, textoOk) {
+    setOcupado(true)
+    setMensaje(null)
+    setError(null)
+    try {
+      await accion()
+      setMensaje(textoOk)
+      await cargar()
+    } catch (e) {
+      if (endpointNoDisponible(e)) {
+        setError(MENSAJE_FUNCION_NO_DISPONIBLE)
+      } else {
+        setError(mensajeDeError(e)) // p. ej. 409 "La ruta ya tiene el máximo de 4 pedidos"
+        await cargar()
+      }
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  const cambiarRepartidor = (ruta, repartidorId) =>
+    ajustar(() => cambiarRepartidorDeRuta(ruta.id, repartidorId), `Se cambió el repartidor de la ruta ${ruta.id}.`)
+
+  const moverPedido = (ruta, pedido, rutaDestinoId) =>
+    ajustar(
+      () => moverPedidoARuta(rutaDestinoId, pedido.id),
+      `El pedido ${pedido.id} se movió a la ruta ${rutaDestinoId}.`,
+    )
+
+  const sacarPedido = (ruta, pedido) =>
+    ajustar(
+      () => sacarPedidoDeRuta(ruta.id, pedido.id),
+      `El pedido ${pedido.id} salió de la ruta ${ruta.id} y volvió a PENDIENTE.`,
+    )
+
+  const reordenar = (ruta, nuevoOrden) =>
+    ajustar(() => reordenarRuta(ruta.id, nuevoOrden), `Se cambió el orden de las paradas de la ruta ${ruta.id}.`)
+
+  const repartidoresDisponibles = repartidores.filter((r) => r.disponible && r.activo !== false)
+
   return (
     <section>
       <header className="encabezado">
         <h2>Rutas</h2>
+        <IndicadorConexion conectado={conectado} />
       </header>
 
       <div className="filtros">
@@ -74,36 +133,32 @@ export default function RutasPage() {
         </button>
       </div>
 
-      {mensaje && <p className="mensaje-ok">{mensaje}</p>}
-      {error && <p className="mensaje-error">{error}</p>}
+      {mensaje && (
+        <p className="mensaje-ok" role="status">
+          {mensaje}
+        </p>
+      )}
+      {error && (
+        <p className="mensaje-error" role="alert">
+          {error}
+        </p>
+      )}
 
       <div className="dos-columnas">
         <div className="lista-rutas">
           {rutas.map((ruta, indice) => (
-            <article
+            <RutaCard
               key={ruta.id}
-              className="tarjeta ruta"
-              data-testid="ruta-card"
-              data-total={ruta.pedidos.length}
-              style={{ borderLeftColor: COLORES_RUTA[indice % COLORES_RUTA.length] }}
-            >
-              <header>
-                <strong>
-                  Ruta {ruta.id} · {ruta.zonaNombre}
-                </strong>
-                <EstadoBadge estado={ruta.estado} />
-              </header>
-              <p>
-                Repartidor: {ruta.repartidorNombre} · {ruta.pedidos.length}/{ruta.maxPedidos} pedidos
-              </p>
-              <ol>
-                {ruta.pedidos.map((pedido) => (
-                  <li key={pedido.id}>
-                    {pedido.horaEntrega?.slice(0, 5)} · {pedido.direccion} <EstadoBadge estado={pedido.estado} />
-                  </li>
-                ))}
-              </ol>
-            </article>
+              ruta={ruta}
+              color={colorDeRuta(indice)}
+              repartidores={repartidoresDisponibles}
+              otrasRutas={rutas.filter((otra) => otra.id !== ruta.id && otra.estado === 'ARMADA')}
+              ocupado={ocupado}
+              onCambiarRepartidor={cambiarRepartidor}
+              onMover={moverPedido}
+              onSacar={sacarPedido}
+              onReordenar={reordenar}
+            />
           ))}
           {rutas.length === 0 && <p className="vacio">No hay rutas armadas para esta fecha.</p>}
         </div>
