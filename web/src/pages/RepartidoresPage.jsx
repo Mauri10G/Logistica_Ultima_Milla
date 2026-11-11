@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { cambiarDisponibilidad, crearRepartidor, listarRepartidores } from '../api/repartidoresApi'
-import { mensajeDeError } from '../api/client'
+import { mensajeDeError } from '../utils/errores'
 
 export default function RepartidoresPage() {
   const [repartidores, setRepartidores] = useState([])
@@ -11,6 +11,7 @@ export default function RepartidoresPage() {
   const cargar = useCallback(async () => {
     try {
       setRepartidores(await listarRepartidores())
+      setError(null)
     } catch (e) {
       setError(mensajeDeError(e))
     }
@@ -48,18 +49,30 @@ export default function RepartidoresPage() {
         <h2>Repartidores</h2>
       </header>
 
-      {error && <p className="mensaje-error">{error}</p>}
+      {error && (
+        <p className="mensaje-error" role="alert">
+          {error}
+        </p>
+      )}
       <table className="tabla">
+        <caption className="solo-lectores">Repartidores</caption>
         <thead>
           <tr>
-            <th>#</th>
-            <th>Nombres</th>
-            <th>Teléfono</th>
-            <th>Capacidad</th>
-            <th>Disponible</th>
+            <th scope="col">#</th>
+            <th scope="col">Nombres</th>
+            <th scope="col">Teléfono</th>
+            <th scope="col">Capacidad</th>
+            <th scope="col">Disponible</th>
           </tr>
         </thead>
         <tbody>
+          {repartidores.length === 0 && (
+            <tr>
+              <td colSpan={5} className="vacio">
+                No hay repartidores registrados.
+              </td>
+            </tr>
+          )}
           {repartidores.map((repartidor) => (
             <tr key={repartidor.id}>
               <td>{repartidor.id}</td>
