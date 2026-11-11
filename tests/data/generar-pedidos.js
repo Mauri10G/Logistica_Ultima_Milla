@@ -64,6 +64,9 @@ const NOMBRES = ['Maria', 'Jose', 'Luis', 'Ana', 'Carlos', 'Lucia', 'Pedro', 'So
 const APELLIDOS = ['Torres', 'Mena', 'Salazar', 'Naranjo', 'Vargas', 'Cevallos', 'Paredes', 'Lopez', 'Guevara', 'Chachalo']
 const elegir = (lista) => lista[Math.floor(Math.random() * lista.length)]
 
+/** Mensaje de un error de red con su causa (p. ej. "fetch failed (ECONNREFUSED)"). */
+const describirError = (error) => (error.cause?.code ? `${error.message} (${error.cause.code})` : error.message)
+
 /** Punto dentro del poligono (ray casting) */
 function dentro([lng, lat], anillo) {
   let adentro = false
@@ -150,7 +153,8 @@ async function main() {
           errores.set(clave, (errores.get(clave) ?? 0) + 1)
         }
       } catch (error) {
-        errores.set(error.message, (errores.get(error.message) ?? 0) + 1)
+        const motivo = describirError(error)
+        errores.set(motivo, (errores.get(motivo) ?? 0) + 1)
       }
       if ((indice + 1) % 500 === 0) console.log(`  ${indice + 1}/${CANTIDAD}`)
     }
@@ -169,6 +173,11 @@ async function main() {
     console.log(`Armando rutas de ${FECHA}...`)
     const t0 = Date.now()
     const respuesta = await fetch(`${API}/api/rutas/armar?fecha=${FECHA}`, { method: 'POST', headers: cabeceras })
+    if (!respuesta.ok) {
+      console.error(`El armado de rutas fallo: HTTP ${respuesta.status} ${(await respuesta.text()).slice(0, 200)}`)
+      process.exitCode = 1
+      return
+    }
     const rutas = await respuesta.json()
     console.log(`Armado: HTTP ${respuesta.status}, ${Array.isArray(rutas) ? rutas.length : '?'} rutas en ${((Date.now() - t0) / 1000).toFixed(1)} s`)
   }
@@ -176,6 +185,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error.message)
+  console.error(describirError(error))
   process.exitCode = 1
 })
