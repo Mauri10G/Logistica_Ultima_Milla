@@ -12,6 +12,7 @@
  */
 const { parseArgs } = require('node:util')
 const { ESCENARIOS, resolverOpciones } = require('./lib/escenarios')
+const { obtenerCabeceras } = require('./lib/auth')
 
 const { values: opciones } = parseArgs({
   options: {
@@ -111,7 +112,10 @@ function pedidoAleatorio(zonas, indice) {
 }
 
 async function main() {
-  const respuestaZonas = await fetch(`${API}/api/zonas?soloActivas=true`)
+  const cabeceras = await obtenerCabeceras(API)
+  if (cabeceras.Authorization) console.log(`Sesion iniciada como ${process.env.API_USUARIO}.`)
+
+  const respuestaZonas = await fetch(`${API}/api/zonas?soloActivas=true`, { headers: cabeceras })
   if (!respuestaZonas.ok) throw new Error(`No se pudieron leer las zonas: HTTP ${respuestaZonas.status}`)
   const zonas = await respuestaZonas.json()
   if (zonas.length === 0) throw new Error('No hay zonas activas')
@@ -130,7 +134,7 @@ async function main() {
       try {
         const respuesta = await fetch(`${API}/api/pedidos`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: cabeceras,
           body: JSON.stringify(pedidoAleatorio(zonas, indice)),
         })
         if (respuesta.status === 201) {
@@ -158,7 +162,7 @@ async function main() {
   if (opciones.armar) {
     console.log(`Armando rutas de ${FECHA}...`)
     const t0 = Date.now()
-    const respuesta = await fetch(`${API}/api/rutas/armar?fecha=${FECHA}`, { method: 'POST' })
+    const respuesta = await fetch(`${API}/api/rutas/armar?fecha=${FECHA}`, { method: 'POST', headers: cabeceras })
     const rutas = await respuesta.json()
     console.log(`Armado: HTTP ${respuesta.status}, ${Array.isArray(rutas) ? rutas.length : '?'} rutas en ${((Date.now() - t0) / 1000).toFixed(1)} s`)
   }
