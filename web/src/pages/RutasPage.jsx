@@ -82,8 +82,8 @@ export default function RutasPage() {
       if (endpointNoDisponible(e)) {
         setError(MENSAJE_FUNCION_NO_DISPONIBLE)
       } else {
+        await cargar() // el estado pudo haber cambiado; recargar limpia el error, por eso se muestra después
         setError(mensajeDeError(e)) // p. ej. 409 "La ruta ya tiene el máximo de 4 pedidos"
-        await cargar()
       }
     } finally {
       setOcupado(false)

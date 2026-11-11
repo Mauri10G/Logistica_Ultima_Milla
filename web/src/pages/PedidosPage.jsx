@@ -90,8 +90,8 @@ export default function PedidosPage() {
       setMensaje(`Pedido ${pedido.id} eliminado.`)
       await cargar()
     } catch (error) {
+      await cargar() // recargar limpia el error de la lista, por eso se muestra después
       setErrorLista(mensajeDeErrorPedido(error))
-      await cargar()
     }
   }
 
