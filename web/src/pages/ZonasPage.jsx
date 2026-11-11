@@ -1,26 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
-import { crearZona, listarZonas } from '../api/zonasApi'
-import { mensajeDeError } from '../api/client'
-import MapaZonas from '../components/MapaZonas'
-
-const EJEMPLO_AREA = `{
-  "type": "Polygon",
-  "coordinates": [[[-78.60, -1.28], [-78.58, -1.28], [-78.58, -1.26], [-78.60, -1.26], [-78.60, -1.28]]]
-}`
+import { actualizarZona, crearZona, listarZonas } from '../api/zonasApi'
+import { codigoDeError, estadoHttp, mensajeDeError } from '../utils/errores'
+import ZonaForm from '../components/ZonaForm'
 
 export default function ZonasPage() {
   const [zonas, setZonas] = useState([])
-  const [error, setError] = useState(null)
-  const [nombre, setNombre] = useState('')
-  const [area, setArea] = useState(EJEMPLO_AREA)
-  const [confirmar, setConfirmar] = useState(false)
+  const [zonaEnEdicion, setZonaEnEdicion] = useState(null)
+  const [errorLista, setErrorLista] = useState(null)
+  const [errorForm, setErrorForm] = useState(null)
+  const [advertencia, setAdvertencia] = useState(null)
+  const [mensaje, setMensaje] = useState(null)
   const [guardando, setGuardando] = useState(false)
+  const [version, setVersion] = useState(0) // cambia tras guardar para vaciar el formulario
 
   const cargar = useCallback(async () => {
     try {
       setZonas(await listarZonas())
+      setErrorLista(null)
     } catch (e) {
-      setError(mensajeDeError(e))
+      setErrorLista(mensajeDeError(e))
     }
   }, [])
 
@@ -28,36 +26,82 @@ export default function ZonasPage() {
     cargar()
   }, [cargar])
 
-  async function guardar(evento) {
-    evento.preventDefault()
+  function limpiarAvisos() {
+    setErrorForm(null)
+    setAdvertencia(null)
+  }
+
+  function editar(zona) {
+    setZonaEnEdicion(zona)
+    setMensaje(null)
+    limpiarAvisos()
+  }
+
+  function terminarEdicion() {
+    setZonaEnEdicion(null)
+    limpiarAvisos()
+  }
+
+  /** Guarda la zona. Si el backend avisa ZONA_SUPERPUESTA (409) se muestra la advertencia (CP-08). */
+  async function guardar(datos, confirmarSuperposicion) {
     setGuardando(true)
-    setError(null)
+    limpiarAvisos()
     try {
-      await crearZona({ nombre, area: JSON.parse(area) }, confirmar)
-      setNombre('')
-      setConfirmar(false)
+      if (zonaEnEdicion) {
+        await actualizarZona(zonaEnEdicion.id, datos, confirmarSuperposicion)
+        setMensaje(`Zona "${datos.nombre}" actualizada.`)
+      } else {
+        await crearZona(datos, confirmarSuperposicion)
+        setMensaje(`Zona "${datos.nombre}" creada.`)
+      }
+      setZonaEnEdicion(null)
+      setVersion((v) => v + 1)
       await cargar()
     } catch (e) {
-      setError(e instanceof SyntaxError ? 'El área no es un JSON válido' : mensajeDeError(e))
+      if (estadoHttp(e) === 409 && codigoDeError(e) === 'ZONA_SUPERPUESTA') {
+        setAdvertencia(mensajeDeError(e))
+      } else {
+        setErrorForm(mensajeDeError(e))
+      }
     } finally {
       setGuardando(false)
     }
   }
 
+  const zonasReferencia = zonas.filter((zona) => zona.activa && zona.id !== zonaEnEdicion?.id)
+
   return (
     <section>
       <header className="encabezado">
         <h2>Zonas</h2>
+        {zonaEnEdicion && (
+          <button type="button" className="secundario" onClick={terminarEdicion}>
+            Nueva zona
+          </button>
+        )}
       </header>
+
+      {mensaje && (
+        <p className="mensaje-ok" role="status">
+          {mensaje}
+        </p>
+      )}
+      {errorLista && (
+        <p className="mensaje-error" role="alert">
+          {errorLista}
+        </p>
+      )}
 
       <div className="dos-columnas">
         <div>
           <table className="tabla">
+            <caption className="solo-lectores">Zonas de reparto</caption>
             <thead>
               <tr>
-                <th>#</th>
-                <th>Nombre</th>
-                <th>Activa</th>
+                <th scope="col">#</th>
+                <th scope="col">Nombre</th>
+                <th scope="col">Activa</th>
+                <th scope="col">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -66,40 +110,41 @@ export default function ZonasPage() {
                   <td>{zona.id}</td>
                   <td>{zona.nombre}</td>
                   <td>{zona.activa ? 'Sí' : 'No'}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="secundario"
+                      aria-label={`Editar zona ${zona.nombre}`}
+                      onClick={() => editar(zona)}
+                    >
+                      Editar
+                    </button>
+                  </td>
                 </tr>
               ))}
+              {zonas.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="vacio">
+                    No hay zonas configuradas.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-
-          <form className="tarjeta formulario" onSubmit={guardar} aria-label="Nueva zona">
-            <h3 className="ancho-completo">Nueva zona</h3>
-            <div className="campo ancho-completo">
-              <label htmlFor="zonaNombre">Nombre de la zona</label>
-              <input id="zonaNombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required />
-            </div>
-            <div className="campo ancho-completo">
-              <label htmlFor="zonaArea">Área (GeoJSON Polygon)</label>
-              <textarea id="zonaArea" rows={6} value={area} onChange={(e) => setArea(e.target.value)} required />
-            </div>
-            <div className="campo ancho-completo campo-check">
-              <input id="zonaConfirmar" type="checkbox" checked={confirmar} onChange={(e) => setConfirmar(e.target.checked)} />
-              <label htmlFor="zonaConfirmar">Confirmar superposición con otras zonas</label>
-            </div>
-            {error && (
-              <p className="mensaje-error ancho-completo" role="alert">
-                {error}
-              </p>
-            )}
-            <div className="acciones ancho-completo">
-              <button type="submit" disabled={guardando}>
-                Guardar zona
-              </button>
-            </div>
-          </form>
         </div>
 
         <div className="tarjeta">
-          <MapaZonas zonas={zonas.filter((zona) => zona.activa)} />
+          <ZonaForm
+            key={`${zonaEnEdicion?.id ?? 'nueva'}-${version}`}
+            zona={zonaEnEdicion}
+            zonasReferencia={zonasReferencia}
+            onGuardar={guardar}
+            onCancelar={zonaEnEdicion ? terminarEdicion : undefined}
+            onEditar={limpiarAvisos}
+            guardando={guardando}
+            error={errorForm}
+            advertencia={advertencia}
+          />
         </div>
       </div>
     </section>
