@@ -13,6 +13,7 @@
 const { parseArgs } = require('node:util')
 const { ESCENARIOS, resolverOpciones } = require('./lib/escenarios')
 const { obtenerCabeceras } = require('./lib/auth')
+const { asegurarRepartidores } = require('./lib/repartidores')
 
 const { values: opciones } = parseArgs({
   options: {
@@ -119,6 +120,11 @@ async function main() {
   if (!respuestaZonas.ok) throw new Error(`No se pudieron leer las zonas: HTTP ${respuestaZonas.status}`)
   const zonas = await respuestaZonas.json()
   if (zonas.length === 0) throw new Error('No hay zonas activas')
+
+  if (REPARTIDORES > 0) {
+    const { existentes, creados } = await asegurarRepartidores(API, REPARTIDORES, cabeceras)
+    console.log(`Repartidores disponibles: ${existentes + creados} (${creados} nuevos).`)
+  }
 
   console.log(
     `Escenario ${resueltas.escenario}: ${CANTIDAD} pedidos para ${FECHA} en ${zonas.length} zonas (${CONCURRENCIA} en paralelo)...`,
