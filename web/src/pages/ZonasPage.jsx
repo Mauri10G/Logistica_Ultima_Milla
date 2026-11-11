@@ -54,9 +54,11 @@ export default function ZonasPage() {
         await crearZona(datos, confirmarSuperposicion)
         setMensaje(`Zona "${datos.nombre}" creada.`)
       }
+      // Primero se trae la lista nueva y recién después se reinicia el formulario (y su mapa),
+      // para que el mapa de referencia nunca se dibuje con las zonas anteriores.
+      await cargar()
       setZonaEnEdicion(null)
       setVersion((v) => v + 1)
-      await cargar()
     } catch (e) {
       if (estadoHttp(e) === 409 && codigoDeError(e) === 'ZONA_SUPERPUESTA') {
         setAdvertencia(mensajeDeError(e))

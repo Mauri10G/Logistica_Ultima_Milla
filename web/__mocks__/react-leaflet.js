@@ -1,7 +1,7 @@
 // Mock manual de react-leaflet para Jest: la libreria es ESM y necesita un mapa real, que jsdom no ofrece.
 // Cada componente es un <div> con data-testid; useMapEvents guarda los manejadores para que las pruebas
 // puedan simular un clic en el mapa con manejadoresMapa.actual.click({ latlng: { lat, lng } }).
-import { createElement } from 'react'
+import { createElement, useRef } from 'react'
 
 export const manejadoresMapa = { actual: {} }
 
@@ -18,7 +18,18 @@ function contenedor(testid) {
 
 export const MapContainer = contenedor('mapa')
 export const TileLayer = () => null
-export const GeoJSON = contenedor('geojson')
+
+// Igual que react-leaflet real: la capa guarda `data` al crearse y ignora sus cambios posteriores.
+// Solo se redibuja si React la vuelve a montar (cambia su `key`).
+export function GeoJSON({ children, data }) {
+  const dataInicial = useRef(data)
+  return createElement(
+    'div',
+    { 'data-testid': 'geojson', 'data-data': JSON.stringify(dataInicial.current) },
+    children,
+  )
+}
+
 export const Polyline = contenedor('polilinea')
 export const Polygon = contenedor('poligono')
 export const CircleMarker = contenedor('marcador-circulo')

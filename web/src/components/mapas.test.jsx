@@ -33,6 +33,39 @@ describe('CapaZonas', () => {
   })
 })
 
+describe('CapaZonas: se redibuja cuando una zona cambia', () => {
+  const area = (x) => ({ type: 'Polygon', coordinates: [[[x, -1.2], [x + 1, -1.2], [x + 1, -1.3], [x, -1.2]]] })
+
+  test('si cambia el polígono de una zona (mismo id) se dibuja el nuevo', () => {
+    const { rerender } = render(<CapaZonas zonas={[{ id: 1, nombre: 'Centro', activa: true, area: area(-78) }]} />)
+    expect(JSON.parse(screen.getByTestId('geojson').dataset.data)).toEqual(area(-78))
+
+    rerender(<CapaZonas zonas={[{ id: 1, nombre: 'Centro', activa: true, area: area(-77) }]} />)
+
+    expect(JSON.parse(screen.getByTestId('geojson').dataset.data)).toEqual(area(-77))
+  })
+
+  test('si se agrega una zona aparece su capa', () => {
+    const una = { id: 1, nombre: 'Centro', activa: true, area: area(-78) }
+    const { rerender } = render(<CapaZonas zonas={[una]} />)
+
+    rerender(<CapaZonas zonas={[una, { id: 2, nombre: 'Norte', activa: true, area: area(-75) }]} />)
+
+    expect(screen.getAllByTestId('geojson')).toHaveLength(2)
+  })
+
+  test('si se quita una zona desaparece su capa', () => {
+    const una = { id: 1, nombre: 'Centro', activa: true, area: area(-78) }
+    const otra = { id: 2, nombre: 'Norte', activa: true, area: area(-75) }
+    const { rerender } = render(<CapaZonas zonas={[una, otra]} />)
+
+    rerender(<CapaZonas zonas={[otra]} />)
+
+    expect(screen.getAllByTestId('geojson')).toHaveLength(1)
+    expect(screen.queryByText('Centro')).not.toBeInTheDocument()
+  })
+})
+
 describe('SelectorUbicacion', () => {
   test('sin posición no hay marcador y un clic entrega latitud y longitud', () => {
     const onSeleccionar = jest.fn()

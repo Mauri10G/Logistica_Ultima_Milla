@@ -10,6 +10,7 @@ import {
 import { ESTADOS_PEDIDO } from './estados'
 import { formatearFechaHora } from './formatos'
 import { poligonoAPuntos, puntosAPoligono } from './geojson'
+import { claveDeZona } from './zonas'
 import { crearIconoParada, paradasOrdenadas } from './paradas'
 import { MENSAJE_FECHA_PASADA, MENSAJE_SIN_UBICACION, validarPedido } from './validacionPedido'
 
@@ -151,5 +152,24 @@ describe('paradas', () => {
     const icono = crearIconoParada(3, '#16a34a')
     expect(icono.options.html).toContain('>3<')
     expect(icono.options.html).toContain('#16a34a')
+  })
+})
+
+describe('claveDeZona', () => {
+  const zona = { id: 1, nombre: 'Centro', activa: true, area: { coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] } }
+
+  test('es estable si la zona no cambia', () => {
+    expect(claveDeZona({ ...zona })).toBe(claveDeZona(zona))
+  })
+
+  test('cambia si cambia el polígono, el nombre o el estado', () => {
+    const base = claveDeZona(zona)
+    expect(claveDeZona({ ...zona, area: { coordinates: [[[0, 0], [2, 0], [2, 2], [0, 0]]] } })).not.toBe(base)
+    expect(claveDeZona({ ...zona, nombre: 'Otro' })).not.toBe(base)
+    expect(claveDeZona({ ...zona, activa: false })).not.toBe(base)
+  })
+
+  test('tolera una zona sin área', () => {
+    expect(claveDeZona({ id: 2, nombre: 'Vacía', activa: true })).toContain('2:Vacía')
   })
 })

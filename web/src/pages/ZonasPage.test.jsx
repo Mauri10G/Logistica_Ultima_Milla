@@ -17,6 +17,28 @@ const AREA = {
     ],
   ],
 }
+const AREA_NUEVA = {
+  type: 'Polygon',
+  coordinates: [
+    [
+      [-78.6, -1.2],
+      [-78.5, -1.2],
+      [-78.5, -1.3],
+      [-78.6, -1.2],
+    ],
+  ],
+}
+const AREA_EDITADA = {
+  type: 'Polygon',
+  coordinates: [
+    [
+      [-78.7, -1.1],
+      [-78.4, -1.1],
+      [-78.4, -1.4],
+      [-78.7, -1.1],
+    ],
+  ],
+}
 const ZONAS = [
   { id: 1, nombre: 'Centro', activa: true, area: AREA },
   { id: 2, nombre: 'Norte', activa: false, area: AREA },
@@ -205,5 +227,95 @@ describe('ZonasPage', () => {
     await user.click(screen.getByRole('button', { name: 'Editar zona Norte' }))
     await user.click(screen.getByRole('button', { name: 'Cancelar edición' }))
     expect(screen.getByRole('form', { name: 'Nueva zona' })).toBeInTheDocument()
+  })
+})
+
+function areasDelMapa() {
+  return screen.getAllByTestId('geojson').map((capa) => JSON.parse(capa.dataset.data))
+}
+
+describe('ZonasPage: el mapa se actualiza al instante, sin recargar la página', () => {
+  test('el mapa recibe la zona nueva sin recargar', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    expect(areasDelMapa()).toEqual([AREA])
+    listarZonas.mockResolvedValue([...ZONAS, { id: 3, nombre: 'Ficoa', activa: true, area: AREA_NUEVA }])
+
+    await dibujarYGuardarZonaNueva(user)
+
+    await waitFor(() => expect(screen.getAllByTestId('geojson')).toHaveLength(2))
+    expect(areasDelMapa()).toContainEqual(AREA_NUEVA)
+    expect(screen.getByRole('cell', { name: 'Ficoa' })).toBeInTheDocument() // y la lista también
+  })
+
+  test('al editar una zona, su polígono nuevo se dibuja en el mapa (no queda el viejo)', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Editar zona Centro' }))
+    listarZonas.mockResolvedValue([{ ...ZONAS[0], area: AREA_EDITADA }, ZONAS[1]])
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    await waitFor(() => expect(areasDelMapa()).toEqual([AREA_EDITADA]))
+  })
+
+  test('al renombrar una zona el mapa muestra el nombre nuevo', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Editar zona Centro' }))
+    listarZonas.mockResolvedValue([{ ...ZONAS[0], nombre: 'Centro histórico' }, ZONAS[1]])
+    await user.clear(screen.getByLabelText('Nombre de la zona'))
+    await user.type(screen.getByLabelText('Nombre de la zona'), 'Centro histórico')
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(await screen.findByText('Centro histórico', { selector: '[data-testid="tooltip"]' })).toBeInTheDocument()
+    expect(screen.queryByText('Centro', { selector: '[data-testid="tooltip"]' })).not.toBeInTheDocument()
+  })
+
+  test('al dar de baja una zona desaparece del mapa', async () => {
+    const user = userEvent.setup()
+    const activas = [ZONAS[0], { ...ZONAS[1], activa: true }]
+    listarZonas.mockResolvedValue(activas)
+    await dibujar()
+    expect(screen.getAllByTestId('geojson')).toHaveLength(2)
+
+    await user.click(screen.getByRole('button', { name: 'Editar zona Centro' }))
+    listarZonas.mockResolvedValue([{ ...ZONAS[0], activa: false }, activas[1]])
+    await user.click(screen.getByLabelText('Zona activa'))
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    await waitFor(() => expect(screen.getAllByTestId('geojson')).toHaveLength(1))
+    expect(screen.getByText('Norte', { selector: '[data-testid="tooltip"]' })).toBeInTheDocument()
+  })
+
+  test('al reactivar una zona vuelve a aparecer en el mapa', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    expect(screen.getAllByTestId('geojson')).toHaveLength(1)
+
+    await user.click(screen.getByRole('button', { name: 'Editar zona Norte' }))
+    listarZonas.mockResolvedValue([ZONAS[0], { ...ZONAS[1], activa: true }])
+    await user.click(screen.getByLabelText('Zona activa'))
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    await waitFor(() => expect(screen.getAllByTestId('geojson')).toHaveLength(2))
+  })
+
+  test('el formulario se vacía solo después de que llegó la lista nueva', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    let entregarLista
+    await user.click(screen.getByRole('button', { name: 'Editar zona Centro' }))
+    listarZonas.mockReturnValue(new Promise((resolver) => (entregarLista = resolver)))
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await screen.findByText('Zona "Centro" actualizada.')
+    expect(screen.getByRole('form', { name: 'Editar zona' })).toBeInTheDocument() // aún editando
+
+    await act(async () => entregarLista([{ ...ZONAS[0], area: AREA_EDITADA }, ZONAS[1]]))
+
+    await waitFor(() => expect(screen.getByRole('form', { name: 'Nueva zona' })).toBeInTheDocument())
+    expect(areasDelMapa()).toEqual([AREA_EDITADA])
   })
 })
