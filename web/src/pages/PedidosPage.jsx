@@ -1,23 +1,26 @@
 import { useCallback, useEffect, useState } from 'react'
-import { crearPedido, listarPedidos } from '../api/pedidosApi'
-import { mensajeDeError } from '../api/client'
+import { crearPedido, editarPedido, eliminarPedido, listarPedidos } from '../api/pedidosApi'
+import { listarZonas } from '../api/zonasApi'
+import { mensajeDeError, mensajeDeErrorPedido } from '../utils/errores'
 import EstadoBadge from '../components/EstadoBadge'
 import PedidoForm from '../components/PedidoForm'
-
-const ESTADOS = ['PENDIENTE', 'ASIGNADO', 'RECOGIDO', 'EN_CAMINO', 'ENTREGADO']
+import { ESTADOS_PEDIDO } from '../utils/estados'
 
 export default function PedidosPage() {
   const [pedidos, setPedidos] = useState([])
   const [total, setTotal] = useState(0)
-  const [filtros, setFiltros] = useState({ fecha: '', estado: '' })
+  const [zonas, setZonas] = useState([])
+  const [filtros, setFiltros] = useState({ fecha: '', zonaId: '', estado: '' })
   const [mostrarForm, setMostrarForm] = useState(false)
+  const [pedidoEnEdicion, setPedidoEnEdicion] = useState(null)
   const [enviando, setEnviando] = useState(false)
   const [errorForm, setErrorForm] = useState(null)
   const [errorLista, setErrorLista] = useState(null)
+  const [mensaje, setMensaje] = useState(null)
 
   const cargar = useCallback(async () => {
     try {
-      const resultado = await listarPedidos({ fecha: filtros.fecha, estado: filtros.estado, size: 200 })
+      const resultado = await listarPedidos({ ...filtros, size: 200 })
       setPedidos(resultado.pedidos)
       setTotal(resultado.total)
       setErrorLista(null)
@@ -30,17 +33,65 @@ export default function PedidosPage() {
     cargar()
   }, [cargar])
 
-  async function registrar(datos) {
+  useEffect(() => {
+    listarZonas()
+      .then(setZonas)
+      .catch((error) => setErrorLista(mensajeDeError(error)))
+  }, [])
+
+  const zonasActivas = zonas.filter((zona) => zona.activa)
+
+  function abrirNuevo() {
+    setPedidoEnEdicion(null)
+    setErrorForm(null)
+    setMensaje(null)
+    setMostrarForm(true)
+  }
+
+  function abrirEdicion(pedido) {
+    setPedidoEnEdicion(pedido)
+    setErrorForm(null)
+    setMensaje(null)
+    setMostrarForm(true)
+  }
+
+  function cerrarForm() {
+    setMostrarForm(false)
+    setPedidoEnEdicion(null)
+    setErrorForm(null)
+  }
+
+  async function guardar(datos) {
     setEnviando(true)
     setErrorForm(null)
     try {
-      await crearPedido(datos)
-      setMostrarForm(false)
+      if (pedidoEnEdicion) {
+        await editarPedido(pedidoEnEdicion.id, datos)
+        setMensaje(`Pedido ${pedidoEnEdicion.id} actualizado.`)
+      } else {
+        await crearPedido(datos)
+        setMensaje('Pedido registrado.')
+      }
+      cerrarForm()
       await cargar()
     } catch (error) {
-      setErrorForm(mensajeDeError(error)) // p. ej. 422 "La dirección no corresponde a ninguna zona configurada"
+      setErrorForm(mensajeDeErrorPedido(error)) // 422 CP-03 / CP-04, 409 CP-05
+      if (pedidoEnEdicion) await cargar() // si ya no era PENDIENTE, la tabla debe reflejarlo
     } finally {
       setEnviando(false)
+    }
+  }
+
+  async function eliminar(pedido) {
+    if (!window.confirm(`¿Eliminar el pedido ${pedido.id}?`)) return
+    setMensaje(null)
+    try {
+      await eliminarPedido(pedido.id)
+      setMensaje(`Pedido ${pedido.id} eliminado.`)
+      await cargar()
+    } catch (error) {
+      setErrorLista(mensajeDeErrorPedido(error))
+      await cargar()
     }
   }
 
@@ -52,15 +103,35 @@ export default function PedidosPage() {
     <section>
       <header className="encabezado">
         <h2>Pedidos</h2>
-        <button type="button" onClick={() => setMostrarForm((visible) => !visible)}>
-          {mostrarForm ? 'Cerrar formulario' : 'Nuevo pedido'}
-        </button>
+        {mostrarForm ? (
+          <button type="button" className="secundario" onClick={cerrarForm}>
+            Cerrar formulario
+          </button>
+        ) : (
+          <button type="button" onClick={abrirNuevo}>
+            Nuevo pedido
+          </button>
+        )}
       </header>
+
+      {mensaje && (
+        <p className="mensaje-ok" role="status">
+          {mensaje}
+        </p>
+      )}
 
       {mostrarForm && (
         <div className="tarjeta">
-          <h3>Nuevo pedido</h3>
-          <PedidoForm onSubmit={registrar} enviando={enviando} error={errorForm} />
+          <h3>{pedidoEnEdicion ? `Editar pedido ${pedidoEnEdicion.id}` : 'Nuevo pedido'}</h3>
+          <PedidoForm
+            key={pedidoEnEdicion?.id ?? 'nuevo'}
+            pedido={pedidoEnEdicion}
+            zonas={zonasActivas}
+            onSubmit={guardar}
+            onCancelar={cerrarForm}
+            enviando={enviando}
+            error={errorForm}
+          />
         </div>
       )}
 
@@ -70,10 +141,21 @@ export default function PedidosPage() {
           <input id="filtroFecha" name="fecha" type="date" value={filtros.fecha} onChange={cambiarFiltro} />
         </div>
         <div className="campo">
+          <label htmlFor="filtroZona">Zona</label>
+          <select id="filtroZona" name="zonaId" value={filtros.zonaId} onChange={cambiarFiltro}>
+            <option value="">Todas</option>
+            {zonas.map((zona) => (
+              <option key={zona.id} value={zona.id}>
+                {zona.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="campo">
           <label htmlFor="filtroEstado">Estado</label>
           <select id="filtroEstado" name="estado" value={filtros.estado} onChange={cambiarFiltro}>
             <option value="">Todos</option>
-            {ESTADOS.map((estado) => (
+            {ESTADOS_PEDIDO.map((estado) => (
               <option key={estado} value={estado}>
                 {estado}
               </option>
@@ -85,17 +167,23 @@ export default function PedidosPage() {
         </p>
       </div>
 
-      {errorLista && <p className="mensaje-error">{errorLista}</p>}
+      {errorLista && (
+        <p className="mensaje-error" role="alert">
+          {errorLista}
+        </p>
+      )}
       <table className="tabla">
+        <caption className="solo-lectores">Lista de pedidos</caption>
         <thead>
           <tr>
-            <th>#</th>
-            <th>Cliente</th>
-            <th>Dirección</th>
-            <th>Zona</th>
-            <th>Entrega</th>
-            <th>Registro</th>
-            <th>Estado</th>
+            <th scope="col">#</th>
+            <th scope="col">Cliente</th>
+            <th scope="col">Dirección</th>
+            <th scope="col">Zona</th>
+            <th scope="col">Entrega</th>
+            <th scope="col">Registro</th>
+            <th scope="col">Estado</th>
+            <th scope="col">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -112,11 +200,33 @@ export default function PedidosPage() {
               <td>
                 <EstadoBadge estado={pedido.estado} />
               </td>
+              <td className="celda-acciones">
+                {pedido.estado === 'PENDIENTE' && (
+                  <>
+                    <button
+                      type="button"
+                      className="secundario"
+                      aria-label={`Editar pedido ${pedido.id}`}
+                      onClick={() => abrirEdicion(pedido)}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="peligro"
+                      aria-label={`Eliminar pedido ${pedido.id}`}
+                      onClick={() => eliminar(pedido)}
+                    >
+                      Eliminar
+                    </button>
+                  </>
+                )}
+              </td>
             </tr>
           ))}
           {pedidos.length === 0 && (
             <tr>
-              <td colSpan={7} className="vacio">
+              <td colSpan={8} className="vacio">
                 No hay pedidos con esos filtros.
               </td>
             </tr>

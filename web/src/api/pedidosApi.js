@@ -18,6 +18,17 @@ export async function crearPedido(datos) {
   return respuesta.data
 }
 
+/** Edita un pedido PENDIENTE (409 si ya no lo es: CP-05). */
+export async function editarPedido(id, datos) {
+  const respuesta = await api.put(`/pedidos/${id}`, datos)
+  return respuesta.data
+}
+
+/** Elimina un pedido PENDIENTE (409 si ya no lo es). */
+export async function eliminarPedido(id) {
+  await api.delete(`/pedidos/${id}`)
+}
+
 export async function cambiarEstadoPedido(id, estado, origen = 'WEB') {
   const respuesta = await api.patch(`/pedidos/${id}/estado`, { estado, origen })
   return respuesta.data
