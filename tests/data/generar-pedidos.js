@@ -162,10 +162,10 @@ async function main() {
     const rutas = await respuesta.json()
     console.log(`Armado: HTTP ${respuesta.status}, ${Array.isArray(rutas) ? rutas.length : '?'} rutas en ${((Date.now() - t0) / 1000).toFixed(1)} s`)
   }
-  process.exit(fallidos > CANTIDAD * 0.01 ? 1 : 0)
+  process.exitCode = fallidos > CANTIDAD * 0.01 ? 1 : 0
 }
 
 main().catch((error) => {
   console.error(error.message)
-  process.exit(1)
+  process.exitCode = 1
 })
