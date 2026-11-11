@@ -45,40 +45,90 @@ describe('RepartidoresPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Ocurrio un error interno')
   })
 
-  test('CP-10: registra un repartidor y limpia el formulario', async () => {
+  test('el formulario no se ve hasta pulsar Nuevo repartidor', async () => {
+    await dibujar()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('Nuevo repartidor abre un modal accesible con el foco en el primer campo', async () => {
     const user = userEvent.setup()
     await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    expect(screen.getByRole('dialog', { name: 'Nuevo repartidor' })).toHaveAttribute('aria-modal', 'true')
+    expect(screen.getByLabelText('Nombres')).toHaveFocus()
+  })
+
+  test('Cancelar y Esc cierran el modal sin guardar', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(crearRepartidor).not.toHaveBeenCalled()
+  })
+
+  test('CP-10: registra un repartidor, cierra el modal y actualiza la lista', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+    listarRepartidores.mockResolvedValue([
+      ...REPARTIDORES,
+      { id: 3, nombres: 'Carlos Vera', telefono: '0983333333', capacidadMaxima: 4, disponible: true },
+    ])
 
     await user.type(screen.getByLabelText('Nombres'), 'Carlos Vera')
     await user.type(screen.getByLabelText('Teléfono', { selector: '#repTelefono' }), '0983333333')
     await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
 
     await waitFor(() => expect(crearRepartidor).toHaveBeenCalledWith({ nombres: 'Carlos Vera', telefono: '0983333333' }))
-    await waitFor(() => expect(screen.getByLabelText('Nombres')).toHaveValue(''))
-    expect(listarRepartidores).toHaveBeenCalledTimes(2)
+    expect(await screen.findByText('Repartidor Carlos Vera agregado.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(await screen.findByText('0983333333')).toBeInTheDocument()
+  })
+
+  test('al volver a abrir el modal el formulario está vacío', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+    await user.type(screen.getByLabelText('Nombres'), 'Medio escrito')
+    await user.keyboard('{Escape}')
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    expect(screen.getByLabelText('Nombres')).toHaveValue('')
   })
 
   test('no envía el formulario si faltan datos', async () => {
     const user = userEvent.setup()
     await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
 
     await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
 
     expect(crearRepartidor).not.toHaveBeenCalled()
   })
 
-  test('muestra el error al registrar', async () => {
+  test('muestra el error dentro del modal y lo deja abierto', async () => {
     const user = userEvent.setup()
     crearRepartidor.mockRejectedValue({
       response: { status: 400, data: { mensaje: 'Hay campos invalidos', errores: { telefono: 'muy largo' } } },
     })
     await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
 
     await user.type(screen.getByLabelText('Nombres'), 'Carlos Vera')
     await user.type(screen.getByLabelText('Teléfono', { selector: '#repTelefono' }), '1')
     await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('telefono: muy largo')
+    expect(screen.getByRole('dialog', { name: 'Nuevo repartidor' })).toBeInTheDocument()
   })
 
   test('CP-10: cambia la disponibilidad', async () => {

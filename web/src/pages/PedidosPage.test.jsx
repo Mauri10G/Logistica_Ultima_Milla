@@ -149,15 +149,16 @@ describe('PedidosPage: lista y filtros', () => {
 })
 
 describe('PedidosPage: registrar', () => {
-  test('el formulario se abre y se cierra', async () => {
+  test('el formulario se abre en un modal y se cierra con Cancelar', async () => {
     const user = userEvent.setup()
     await dibujar()
 
     await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    expect(screen.getByRole('dialog', { name: 'Nuevo pedido' })).toBeInTheDocument()
     expect(screen.getByRole('form', { name: 'Nuevo pedido' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Cerrar formulario' }))
-    expect(screen.queryByRole('form', { name: 'Nuevo pedido' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   test('el mapa del formulario muestra solo las zonas activas', async () => {
@@ -190,7 +191,7 @@ describe('PedidosPage: registrar', () => {
       ),
     )
     expect(await screen.findByText('Pedido registrado.')).toBeInTheDocument()
-    expect(screen.queryByRole('form', { name: 'Nuevo pedido' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(listarPedidos.mock.calls.length).toBeGreaterThan(cargasAntes)
   })
 
@@ -206,7 +207,7 @@ describe('PedidosPage: registrar', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('no corresponde a ninguna zona configurada')
-    expect(screen.getByRole('form', { name: 'Nuevo pedido' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Nuevo pedido' })).toBeInTheDocument() // el modal sigue abierto
   })
 
   test('CP-04: si el backend rechaza la fecha pasada lo explica', async () => {
@@ -270,7 +271,7 @@ describe('PedidosPage: editar y eliminar', () => {
       expect(editarPedido).toHaveBeenCalledWith(1, expect.objectContaining({ clienteId: 10, direccion: 'Nueva dirección' })),
     )
     expect(await screen.findByText('Pedido 1 actualizado.')).toBeInTheDocument()
-    expect(screen.queryByRole('form', { name: 'Editar pedido' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   test('CP-05: si el pedido ya no es PENDIENTE (409) lo explica y recarga la lista', async () => {
@@ -293,7 +294,7 @@ describe('PedidosPage: editar y eliminar', () => {
 
     await user.click(screen.getByRole('button', { name: 'Cancelar' }))
 
-    expect(screen.queryByRole('form', { name: 'Editar pedido' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(editarPedido).not.toHaveBeenCalled()
   })
 
@@ -301,7 +302,7 @@ describe('PedidosPage: editar y eliminar', () => {
     const user = userEvent.setup()
     await dibujar()
     await user.click(screen.getByRole('button', { name: 'Editar pedido 1' }))
-    await user.click(screen.getByRole('button', { name: 'Cerrar formulario' }))
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
 
     await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
 
@@ -337,5 +338,116 @@ describe('PedidosPage: editar y eliminar', () => {
     await user.click(screen.getByRole('button', { name: 'Eliminar pedido 1' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('ya no se puede modificar')
+  })
+})
+
+describe('PedidosPage: modal del formulario', () => {
+  test('Nuevo pedido abre un diálogo accesible con el foco en el primer campo', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+
+    const dialogo = screen.getByRole('dialog', { name: 'Nuevo pedido' })
+    expect(dialogo).toHaveAttribute('aria-modal', 'true')
+    expect(screen.getByLabelText('Nombres del cliente')).toHaveFocus()
+  })
+
+  test('Editar abre el modal con el título y los datos del pedido', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Editar pedido 1' }))
+
+    expect(screen.getByRole('dialog', { name: 'Editar pedido 1' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Nombres del cliente')).toHaveValue('Maria Torres')
+  })
+
+  test('Esc cierra el modal sin guardar', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(crearPedido).not.toHaveBeenCalled()
+  })
+
+  test('el foco vuelve al botón que abrió el modal', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.getByRole('button', { name: 'Nuevo pedido' })).toHaveFocus()
+  })
+
+  test('la lista sigue en la página (no se mueve) y el modal queda fuera de ella', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    const tabla = screen.getByRole('table')
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+
+    expect(screen.getByRole('table')).toBe(tabla)
+    expect(screen.getByRole('dialog').closest('section')).toBeNull()
+    expect(document.body.style.overflow).toBe('hidden') // la página de fondo no se desplaza
+
+    await user.keyboard('{Escape}')
+    expect(document.body.style.overflow).not.toBe('hidden')
+  })
+
+  test('al abrir el formulario se vuelven a pedir las zonas y el mapa muestra las nuevas', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    const nueva = { id: 3, nombre: 'Ficoa', activa: true, area: { type: 'Polygon', coordinates: [] } }
+    listarZonas.mockResolvedValue([...ZONAS, nueva])
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+
+    await waitFor(() => expect(screen.getAllByTestId('geojson')).toHaveLength(2))
+    expect(screen.getByText('Ficoa', { selector: '[data-testid="tooltip"]' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Ficoa' })).toBeInTheDocument() // también en el filtro de zona
+  })
+
+  test('tras crear un pedido la lista se actualiza sin recargar la página', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await llenarNuevoPedido(user)
+    listarPedidos.mockResolvedValue({
+      pedidos: [...PEDIDOS, { ...PEDIDOS[0], id: 3, clienteNombres: 'Ana Ruiz' }],
+      total: 3,
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+    expect(await screen.findByText('Ana Ruiz')).toBeInTheDocument()
+    expect(screen.getByText('3 pedido(s)')).toBeInTheDocument()
+  })
+
+  test('tras editar un pedido la lista muestra los datos nuevos', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Editar pedido 1' }))
+    listarPedidos.mockResolvedValue({ pedidos: [{ ...PEDIDOS[0], direccion: 'Dirección nueva' }, PEDIDOS[1]], total: 2 })
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(await screen.findByText('Dirección nueva')).toBeInTheDocument()
+    expect(screen.queryByText('Bolívar y Mera')).not.toBeInTheDocument()
+  })
+
+  test('tras eliminar un pedido desaparece de la lista', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    listarPedidos.mockResolvedValue({ pedidos: [PEDIDOS[1]], total: 1 })
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar pedido 1' }))
+
+    await waitFor(() => expect(screen.queryByText('Maria Torres')).not.toBeInTheDocument())
+    expect(screen.getByText('1 pedido(s)')).toBeInTheDocument()
   })
 })

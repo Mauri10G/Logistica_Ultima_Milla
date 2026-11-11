@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { cambiarDisponibilidad, crearRepartidor, listarRepartidores } from '../api/repartidoresApi'
+import Modal from '../components/Modal'
 import { mensajeDeError } from '../utils/errores'
 
 export default function RepartidoresPage() {
   const [repartidores, setRepartidores] = useState([])
+  const [mostrarForm, setMostrarForm] = useState(false)
   const [nombres, setNombres] = useState('')
   const [telefono, setTelefono] = useState('')
   const [error, setError] = useState(null)
+  const [errorForm, setErrorForm] = useState(null)
+  const [mensaje, setMensaje] = useState(null)
+  const [enviando, setEnviando] = useState(false)
 
   const cargar = useCallback(async () => {
     try {
@@ -21,16 +26,32 @@ export default function RepartidoresPage() {
     cargar()
   }, [cargar])
 
+  function abrirForm() {
+    setNombres('')
+    setTelefono('')
+    setErrorForm(null)
+    setMensaje(null)
+    setMostrarForm(true)
+  }
+
+  function cerrarForm() {
+    setMostrarForm(false)
+    setErrorForm(null)
+  }
+
   async function crear(evento) {
     evento.preventDefault()
-    setError(null)
+    setErrorForm(null)
+    setEnviando(true)
     try {
       await crearRepartidor({ nombres, telefono })
-      setNombres('')
-      setTelefono('')
+      setMensaje(`Repartidor ${nombres} agregado.`)
+      cerrarForm()
       await cargar()
     } catch (e) {
-      setError(mensajeDeError(e))
+      setErrorForm(mensajeDeError(e))
+    } finally {
+      setEnviando(false)
     }
   }
 
@@ -47,8 +68,16 @@ export default function RepartidoresPage() {
     <section>
       <header className="encabezado">
         <h2>Repartidores</h2>
+        <button type="button" onClick={abrirForm}>
+          Nuevo repartidor
+        </button>
       </header>
 
+      {mensaje && (
+        <p className="mensaje-ok" role="status">
+          {mensaje}
+        </p>
+      )}
       {error && (
         <p className="mensaje-error" role="alert">
           {error}
@@ -89,20 +118,33 @@ export default function RepartidoresPage() {
         </tbody>
       </table>
 
-      <form className="tarjeta formulario" onSubmit={crear} aria-label="Nuevo repartidor">
-        <h3 className="ancho-completo">Nuevo repartidor</h3>
-        <div className="campo">
-          <label htmlFor="repNombres">Nombres</label>
-          <input id="repNombres" value={nombres} onChange={(e) => setNombres(e.target.value)} required />
-        </div>
-        <div className="campo">
-          <label htmlFor="repTelefono">Teléfono</label>
-          <input id="repTelefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} required />
-        </div>
-        <div className="acciones ancho-completo">
-          <button type="submit">Agregar repartidor</button>
-        </div>
-      </form>
+      {mostrarForm && (
+        <Modal titulo="Nuevo repartidor" onCerrar={cerrarForm}>
+          <form className="formulario" onSubmit={crear} aria-label="Nuevo repartidor">
+            <div className="campo">
+              <label htmlFor="repNombres">Nombres</label>
+              <input id="repNombres" value={nombres} onChange={(e) => setNombres(e.target.value)} required />
+            </div>
+            <div className="campo">
+              <label htmlFor="repTelefono">Teléfono</label>
+              <input id="repTelefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} required />
+            </div>
+            {errorForm && (
+              <p className="mensaje-error ancho-completo" role="alert">
+                {errorForm}
+              </p>
+            )}
+            <div className="acciones ancho-completo">
+              <button type="button" className="secundario" onClick={cerrarForm}>
+                Cancelar
+              </button>
+              <button type="submit" disabled={enviando}>
+                {enviando ? 'Guardando…' : 'Agregar repartidor'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </section>
   )
 }

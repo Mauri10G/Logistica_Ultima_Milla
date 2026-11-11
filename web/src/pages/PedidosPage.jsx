@@ -3,6 +3,7 @@ import { crearPedido, editarPedido, eliminarPedido, listarPedidos } from '../api
 import { listarZonas } from '../api/zonasApi'
 import { mensajeDeError, mensajeDeErrorPedido } from '../utils/errores'
 import EstadoBadge from '../components/EstadoBadge'
+import Modal from '../components/Modal'
 import PedidoForm from '../components/PedidoForm'
 import { ESTADOS_PEDIDO } from '../utils/estados'
 
@@ -33,11 +34,19 @@ export default function PedidosPage() {
     cargar()
   }, [cargar])
 
-  useEffect(() => {
-    listarZonas()
-      .then(setZonas)
-      .catch((error) => setErrorLista(mensajeDeError(error)))
+  // Las zonas se vuelven a pedir cada vez que se abre el formulario: así el mapa de referencia
+  // refleja las zonas creadas, editadas o dadas de baja desde la pantalla de Zonas.
+  const cargarZonas = useCallback(async () => {
+    try {
+      setZonas(await listarZonas())
+    } catch (error) {
+      setErrorLista(mensajeDeError(error))
+    }
   }, [])
+
+  useEffect(() => {
+    cargarZonas()
+  }, [cargarZonas])
 
   const zonasActivas = zonas.filter((zona) => zona.activa)
 
@@ -46,6 +55,7 @@ export default function PedidosPage() {
     setErrorForm(null)
     setMensaje(null)
     setMostrarForm(true)
+    cargarZonas()
   }
 
   function abrirEdicion(pedido) {
@@ -53,6 +63,7 @@ export default function PedidosPage() {
     setErrorForm(null)
     setMensaje(null)
     setMostrarForm(true)
+    cargarZonas()
   }
 
   function cerrarForm() {
@@ -103,15 +114,9 @@ export default function PedidosPage() {
     <section>
       <header className="encabezado">
         <h2>Pedidos</h2>
-        {mostrarForm ? (
-          <button type="button" className="secundario" onClick={cerrarForm}>
-            Cerrar formulario
-          </button>
-        ) : (
-          <button type="button" onClick={abrirNuevo}>
-            Nuevo pedido
-          </button>
-        )}
+        <button type="button" onClick={abrirNuevo}>
+          Nuevo pedido
+        </button>
       </header>
 
       {mensaje && (
@@ -121,8 +126,7 @@ export default function PedidosPage() {
       )}
 
       {mostrarForm && (
-        <div className="tarjeta">
-          <h3>{pedidoEnEdicion ? `Editar pedido ${pedidoEnEdicion.id}` : 'Nuevo pedido'}</h3>
+        <Modal titulo={pedidoEnEdicion ? `Editar pedido ${pedidoEnEdicion.id}` : 'Nuevo pedido'} onCerrar={cerrarForm}>
           <PedidoForm
             key={pedidoEnEdicion?.id ?? 'nuevo'}
             pedido={pedidoEnEdicion}
@@ -132,7 +136,7 @@ export default function PedidosPage() {
             enviando={enviando}
             error={errorForm}
           />
-        </div>
+        </Modal>
       )}
 
       <div className="filtros">
