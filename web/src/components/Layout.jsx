@@ -1,4 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { cerrarSesion } from '../auth/sesion'
+import { useSesion } from '../auth/useSesion'
 
 const MENU = [
   { to: '/pedidos', texto: 'Pedidos' },
@@ -9,6 +11,8 @@ const MENU = [
 ]
 
 export default function Layout() {
+  const { sesion, authHabilitada } = useSesion()
+
   return (
     <div className="layout">
       <nav className="menu-lateral" aria-label="Menú principal">
@@ -22,6 +26,11 @@ export default function Layout() {
             </li>
           ))}
         </ul>
+        {authHabilitada && sesion && (
+          <button type="button" className="cerrar-sesion" onClick={cerrarSesion}>
+            Cerrar sesión
+          </button>
+        )}
       </nav>
       <main className="contenido">
         <Outlet />
