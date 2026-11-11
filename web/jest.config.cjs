@@ -11,4 +11,6 @@ module.exports = {
   },
   collectCoverageFrom: ['src/**/*.{js,jsx}', '!src/main.jsx', '!src/__mocks__/**'],
   coverageDirectory: 'coverage',
+  // npm run test:coverage falla si la cobertura baja de 80 %.
+  coverageThreshold: { global: { statements: 80, branches: 80, functions: 80, lines: 80 } },
 }
