@@ -1,34 +1,54 @@
 #!/usr/bin/env node
 /**
- * Generador de datos masivos: simula un dia de alta demanda (San Valentin) registrando pedidos aleatorios
- * DENTRO de las zonas activas, a traves de POST /api/pedidos (asi se ejercitan tambien las reglas de negocio).
- * No tiene dependencias: solo Node 18+.
+ * Generador de datos masivos: puebla el sistema para un dia de alta demanda (San Valentin). Primero completa
+ * los repartidores y despues registra pedidos aleatorios DENTRO de las zonas activas, todo a traves de la API
+ * (asi se ejercitan tambien las reglas de negocio). No tiene dependencias: solo Node 18+.
  *
- *   node tests/data/generar-pedidos.js                      5000 pedidos para el proximo 14 de febrero
- *   node tests/data/generar-pedidos.js --cantidad 20000 --fecha 2027-02-14 --concurrencia 40
+ *   node tests/data/generar-pedidos.js --escenario normal          500 pedidos, 10 repartidores
+ *   node tests/data/generar-pedidos.js                             alta demanda: 5000 pedidos, 40 repartidores
+ *   node tests/data/generar-pedidos.js --escenario san-valentin    20000 pedidos, 80 repartidores
+ *   node tests/data/generar-pedidos.js --cantidad 300 --repartidores 5 --fecha 2027-02-14 --concurrencia 10
  *   node tests/data/generar-pedidos.js --api http://servidor:8080 --armar     (arma las rutas al terminar)
  */
-const { parseArgs } = require('node:util');
+const { parseArgs } = require('node:util')
+const { ESCENARIOS, resolverOpciones } = require('./lib/escenarios')
 
 const { values: opciones } = parseArgs({
   options: {
     api: { type: 'string', default: 'http://localhost:8080' },
-    cantidad: { type: 'string', default: '5000' },
+    escenario: { type: 'string' },
+    cantidad: { type: 'string' },
+    repartidores: { type: 'string' },
     fecha: { type: 'string' },
-    concurrencia: { type: 'string', default: '20' },
+    concurrencia: { type: 'string' },
     armar: { type: 'boolean', default: false },
     ayuda: { type: 'boolean', default: false },
   },
 })
 
 if (opciones.ayuda) {
-  console.log('Uso: node generar-pedidos.js [--api URL] [--cantidad N] [--fecha YYYY-MM-DD] [--concurrencia N] [--armar]')
+  console.log(
+    'Uso: node generar-pedidos.js [--escenario normal|alta|san-valentin] [--api URL] [--cantidad N]\n' +
+      '                             [--repartidores N] [--fecha YYYY-MM-DD] [--concurrencia N] [--armar]\n\nEscenarios:',
+  )
+  Object.entries(ESCENARIOS).forEach(([nombre, e]) =>
+    console.log(`  ${nombre.padEnd(13)} ${e.pedidos} pedidos, ${e.repartidores} repartidores. ${e.descripcion}`),
+  )
   process.exit(0)
 }
 
+let resueltas
+try {
+  resueltas = resolverOpciones(opciones)
+} catch (error) {
+  console.error(error.message)
+  process.exit(1)
+}
+
 const API = opciones.api.replace(/\/$/, '')
-const CANTIDAD = Number(opciones.cantidad)
-const CONCURRENCIA = Number(opciones.concurrencia)
+const CANTIDAD = resueltas.cantidad
+const CONCURRENCIA = resueltas.concurrencia
+const REPARTIDORES = resueltas.repartidores
 
 /** Proximo 14 de febrero (el de este año si todavia no paso). */
 function proximoSanValentin() {
@@ -96,7 +116,9 @@ async function main() {
   const zonas = await respuestaZonas.json()
   if (zonas.length === 0) throw new Error('No hay zonas activas')
 
-  console.log(`Generando ${CANTIDAD} pedidos para ${FECHA} en ${zonas.length} zonas (${CONCURRENCIA} en paralelo)...`)
+  console.log(
+    `Escenario ${resueltas.escenario}: ${CANTIDAD} pedidos para ${FECHA} en ${zonas.length} zonas (${CONCURRENCIA} en paralelo)...`,
+  )
   const inicio = Date.now()
   let siguiente = 0
   let creados = 0
