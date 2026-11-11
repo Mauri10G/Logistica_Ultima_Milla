@@ -5,6 +5,7 @@ class Pedido {
   final String clienteTelefono;
   final String direccion;
   final String horaEntrega;
+  final String prioridad;
   final String estado;
   final int? ordenEnRuta;
   final double latitud;
@@ -19,6 +20,7 @@ class Pedido {
     required this.estado,
     required this.latitud,
     required this.longitud,
+    this.prioridad = 'NORMAL',
     this.ordenEnRuta,
   });
 
@@ -29,11 +31,18 @@ class Pedido {
       clienteTelefono: json['clienteTelefono'] as String? ?? '',
       direccion: json['direccion'] as String? ?? '',
       horaEntrega: json['horaEntrega'] as String? ?? '',
+      prioridad: json['prioridad'] as String? ?? 'NORMAL',
       estado: json['estado'] as String,
       ordenEnRuta: json['ordenEnRuta'] as int?,
       latitud: (json['latitud'] as num?)?.toDouble() ?? 0,
       longitud: (json['longitud'] as num?)?.toDouble() ?? 0,
     );
+  }
+
+  /// URI de Google Maps usando coordenadas si existen o la direccion como respaldo.
+  Uri get uriGoogleMaps {
+    final consulta = (latitud != 0 || longitud != 0) ? '$latitud,$longitud' : direccion;
+    return Uri.https('www.google.com', '/maps/search/', {'api': '1', 'query': consulta});
   }
 
   /// Flujo lineal del backend: PENDIENTE -> ASIGNADO -> RECOGIDO -> EN_CAMINO -> ENTREGADO.
