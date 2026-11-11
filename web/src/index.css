@@ -300,3 +300,200 @@ button.secundario {
     background: transparent;
   }
 }
+
+/* Accesibilidad y utilidades */
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primario);
+  outline-offset: 2px;
+}
+
+.ayuda {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-suave);
+}
+
+.error-campo {
+  color: #b91c1c;
+  font-size: 0.8rem;
+}
+
+input[readonly] {
+  background: #f3f4f6;
+  color: var(--color-suave);
+}
+
+input[aria-invalid='true'] {
+  border-color: #dc2626;
+}
+
+button.peligro {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+button.advertencia {
+  background: #d97706;
+}
+
+.celda-acciones {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.acciones {
+  gap: 0.5rem;
+}
+
+.acciones-mapa {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.mensaje-advertencia {
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.mensaje-advertencia p {
+  margin: 0 0 0.5rem;
+}
+
+/* Rutas: ajustes manuales y marcadores numerados */
+.campo-en-linea {
+  margin: 0.4rem 0;
+}
+
+.paradas li {
+  margin-bottom: 0.4rem;
+}
+
+.ajustes-parada {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+
+.ajustes-parada button {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.ajustes-parada select {
+  padding: 0.15rem 0.3rem;
+  font-size: 0.8rem;
+}
+
+.parada-marcador span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Seguimiento: historial */
+.fila-seleccionada {
+  background: #eff6ff;
+}
+
+.panel-historial h3 {
+  margin: 0;
+}
+
+.linea-tiempo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.linea-tiempo li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--color-borde);
+  font-size: 0.9rem;
+}
+
+.linea-tiempo .hora,
+.linea-tiempo .origen {
+  color: var(--color-suave);
+  font-size: 0.8rem;
+}
+
+/* Login y menú */
+.pantalla-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.formulario-login {
+  width: min(360px, 100%);
+}
+
+.cerrar-sesion {
+  margin-top: 1.5rem;
+  width: 100%;
+  background: #374151;
+}
+
+/* Modal */
+.modal-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 2000; /* por encima de los controles de Leaflet (hasta 1000) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(17, 24, 39, 0.55);
+}
+
+.modal {
+  width: min(760px, 100%);
+  max-height: 100%;
+  overflow-y: auto; /* scroll interno si no entra en pantalla */
+  overscroll-behavior: contain;
+  background: var(--color-tarjeta);
+  border-radius: 10px;
+  padding: 1.25rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+.modal:focus {
+  outline: none;
+}
+
+.modal-titulo {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+}

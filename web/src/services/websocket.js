@@ -1,4 +1,5 @@
 import { Client } from '@stomp/stompjs'
+import { alCambiarSesion, obtenerToken } from '../auth/sesion'
 import { API_URL } from '../entorno'
 
 /** ws://localhost:8080/ws (el backend expone STOMP sobre WebSocket nativo en /ws). */
@@ -19,9 +20,20 @@ function avisarConexion(conectado) {
 
 function suscribirTopico(topic, entrada) {
   entrada.suscripcion = cliente.subscribe(topic, (mensaje) => {
-    const cuerpo = JSON.parse(mensaje.body)
+    let cuerpo
+    try {
+      cuerpo = JSON.parse(mensaje.body)
+    } catch {
+      return // mensaje que no es JSON: se ignora
+    }
     entrada.callbacks.forEach((callback) => callback(cuerpo))
   })
+}
+
+/** Cabeceras del CONNECT: lleva Authorization: Bearer <token> cuando hay sesión. */
+export function cabecerasConexion() {
+  const token = obtenerToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 function obtenerCliente() {
@@ -29,10 +41,15 @@ function obtenerCliente() {
   cliente = new Client({
     brokerURL: urlWebSocket(),
     reconnectDelay: 3000,
+    // Se evalúa en cada (re)conexión, así siempre usa el token vigente.
+    beforeConnect: (conexion) => {
+      conexion.connectHeaders = cabecerasConexion()
+    },
     onConnect: () => {
       avisarConexion(true)
       topicos.forEach((entrada, topic) => suscribirTopico(topic, entrada))
     },
+    onStompError: () => avisarConexion(false),
     onWebSocketClose: () => avisarConexion(false),
   })
   cliente.activate()
@@ -56,8 +73,12 @@ export function suscribirse(topic, callback) {
   return () => {
     entrada.callbacks.delete(callback)
     if (entrada.callbacks.size === 0) {
-      entrada.suscripcion?.unsubscribe()
-      topicos.delete(topic)
+      try {
+        entrada.suscripcion?.unsubscribe()
+      } catch {
+        // la conexión ya se cerró (p. ej. al cerrar sesión): no hay nada que cancelar
+      }
+      if (topicos.get(topic) === entrada) topicos.delete(topic)
     }
   }
 }
@@ -68,3 +89,18 @@ export function alCambiarConexion(oyente) {
   if (cliente) oyente(cliente.connected)
   return () => oyentesConexion.delete(oyente)
 }
+
+/** Cierra la conexión (al cerrar sesión). La siguiente suscripción abre una nueva con el token nuevo. */
+export function desconectar() {
+  if (!cliente) return
+  const anterior = cliente
+  cliente = null
+  topicos.clear()
+  anterior.deactivate()
+  avisarConexion(false)
+}
+
+// Al cerrar sesión (botón o 401) se corta la conexión: la siguiente se abrirá con el token nuevo.
+alCambiarSesion((sesion) => {
+  if (!sesion) desconectar()
+})
