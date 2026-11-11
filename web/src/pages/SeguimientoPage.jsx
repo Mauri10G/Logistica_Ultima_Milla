@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { listarPedidos } from '../api/pedidosApi'
-import { mensajeDeError } from '../api/client'
+import { obtenerHistorial } from '../api/seguimientoApi'
+import { mensajeDeError } from '../utils/errores'
 import EstadoBadge from '../components/EstadoBadge'
+import HistorialPedido from '../components/HistorialPedido'
+import IndicadorConexion from '../components/IndicadorConexion'
 import { fechaIso } from '../hooks/fechas'
 import { useWebSocketTopic } from '../hooks/useWebSocketTopic'
 import { TOPIC_PEDIDOS } from '../services/websocket'
+import { ESTADOS_PEDIDO } from '../utils/estados'
 
 /**
  * Seguimiento en tiempo real (CP-11): cuando el repartidor cambia el estado de un pedido desde la app
  * movil, el backend publica en /topic/pedidos y esta tabla se actualiza sola, sin recargar.
+ * Al elegir un pedido se muestra su historial, que también se recarga solo si llega un cambio suyo.
  */
 export default function SeguimientoPage() {
   const [fecha, setFecha] = useState(fechaIso(0))
   const [pedidos, setPedidos] = useState([])
   const [recienActualizados, setRecienActualizados] = useState(new Set())
   const [error, setError] = useState(null)
+  const [seleccionadoId, setSeleccionadoId] = useState(null)
+  const [historial, setHistorial] = useState(null)
+  const [errorHistorial, setErrorHistorial] = useState(null)
   const temporizadores = useRef([])
+  const seleccionadoRef = useRef(null)
 
   const cargar = useCallback(async () => {
     try {
@@ -36,6 +45,33 @@ export default function SeguimientoPage() {
     return () => pendientes.forEach(clearTimeout)
   }, [])
 
+  const cargarHistorial = useCallback(async (pedidoId) => {
+    try {
+      const datos = await obtenerHistorial(pedidoId)
+      if (seleccionadoRef.current === pedidoId) {
+        setHistorial(datos)
+        setErrorHistorial(null)
+      }
+    } catch (e) {
+      if (seleccionadoRef.current === pedidoId) setErrorHistorial(mensajeDeError(e))
+    }
+  }, [])
+
+  function seleccionar(pedido) {
+    seleccionadoRef.current = pedido.id
+    setSeleccionadoId(pedido.id)
+    setHistorial(null)
+    setErrorHistorial(null)
+    cargarHistorial(pedido.id)
+  }
+
+  function cerrarHistorial() {
+    seleccionadoRef.current = null
+    setSeleccionadoId(null)
+    setHistorial(null)
+    setErrorHistorial(null)
+  }
+
   const conectado = useWebSocketTopic(TOPIC_PEDIDOS, (cambio) => {
     setPedidos((actuales) =>
       actuales.map((pedido) => (pedido.id === cambio.pedidoId ? { ...pedido, estado: cambio.estadoNuevo } : pedido)),
@@ -50,6 +86,7 @@ export default function SeguimientoPage() {
         })
       }, 3000),
     )
+    if (cambio.pedidoId === seleccionadoRef.current) cargarHistorial(cambio.pedidoId)
   })
 
   const resumen = pedidos.reduce((acumulado, pedido) => {
@@ -57,13 +94,13 @@ export default function SeguimientoPage() {
     return acumulado
   }, {})
 
+  const seleccionado = pedidos.find((pedido) => pedido.id === seleccionadoId)
+
   return (
     <section>
       <header className="encabezado">
         <h2>Seguimiento de entregas</h2>
-        <span className={conectado ? 'conexion conexion-ok' : 'conexion conexion-error'} role="status">
-          Tiempo real: {conectado ? 'conectado' : 'desconectado'}
-        </span>
+        <IndicadorConexion conectado={conectado} />
       </header>
 
       <div className="filtros">
@@ -80,47 +117,79 @@ export default function SeguimientoPage() {
       </div>
 
       <ul className="resumen">
-        {['PENDIENTE', 'ASIGNADO', 'RECOGIDO', 'EN_CAMINO', 'ENTREGADO'].map((estado) => (
+        {ESTADOS_PEDIDO.map((estado) => (
           <li key={estado}>
             <EstadoBadge estado={estado} /> {resumen[estado] ?? 0}
           </li>
         ))}
       </ul>
 
-      {error && <p className="mensaje-error">{error}</p>}
-      <table className="tabla">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Cliente</th>
-            <th>Dirección</th>
-            <th>Zona</th>
-            <th>Ruta</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pedidos.map((pedido) => (
-            <tr key={pedido.id} className={recienActualizados.has(pedido.id) ? 'fila-actualizada' : undefined}>
-              <td>{pedido.id}</td>
-              <td>{pedido.clienteNombres}</td>
-              <td>{pedido.direccion}</td>
-              <td>{pedido.zonaNombre}</td>
-              <td>{pedido.rutaId ?? '—'}</td>
-              <td data-testid={`estado-pedido-${pedido.id}`}>
-                <EstadoBadge estado={pedido.estado} />
-              </td>
-            </tr>
-          ))}
-          {pedidos.length === 0 && (
+      {error && (
+        <p className="mensaje-error" role="alert">
+          {error}
+        </p>
+      )}
+
+      <div className={seleccionado ? 'dos-columnas' : undefined}>
+        <table className="tabla">
+          <caption className="solo-lectores">Pedidos de la fecha con su estado actual</caption>
+          <thead>
             <tr>
-              <td colSpan={6} className="vacio">
-                No hay pedidos para esta fecha.
-              </td>
+              <th scope="col">#</th>
+              <th scope="col">Cliente</th>
+              <th scope="col">Dirección</th>
+              <th scope="col">Zona</th>
+              <th scope="col">Ruta</th>
+              <th scope="col">Estado</th>
+              <th scope="col">Historial</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pedidos.map((pedido) => (
+              <tr
+                key={pedido.id}
+                className={[
+                  recienActualizados.has(pedido.id) ? 'fila-actualizada' : '',
+                  pedido.id === seleccionadoId ? 'fila-seleccionada' : '',
+                ]
+                  .join(' ')
+                  .trim() || undefined}
+              >
+                <td>{pedido.id}</td>
+                <td>{pedido.clienteNombres}</td>
+                <td>{pedido.direccion}</td>
+                <td>{pedido.zonaNombre}</td>
+                <td>{pedido.rutaId ?? '—'}</td>
+                <td data-testid={`estado-pedido-${pedido.id}`}>
+                  <EstadoBadge estado={pedido.estado} />
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="secundario"
+                    aria-label={`Ver historial del pedido ${pedido.id}`}
+                    aria-pressed={pedido.id === seleccionadoId}
+                    onClick={() => seleccionar(pedido)}
+                  >
+                    Ver historial
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {pedidos.length === 0 && (
+              <tr>
+                <td colSpan={7} className="vacio">
+                  No hay pedidos para esta fecha.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {seleccionado && (
+          <HistorialPedido pedido={seleccionado} historial={historial} error={errorHistorial} onCerrar={cerrarHistorial} />
+        )}
+      </div>
     </section>
   )
 }
