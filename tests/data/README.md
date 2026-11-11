@@ -76,6 +76,7 @@ docker exec -i logistica-postgis psql -U logistica -d logistica < tests/data/vol
 ```
 
 Para empezar con la base vacía: `docker compose down -v && docker compose up -d` y volver a levantar el backend.
+Ojo: `down -v` borra todos los volúmenes del proyecto, también los de SonarQube si lo tienes levantado.
 
 ## Receta para las pruebas de volumen
 
@@ -86,6 +87,8 @@ k6 run -e FECHA=2027-02-14 -e ARMAR=1 tests/performance/volumen.js              
 ```
 
 ## Pruebas del generador
+
+Las pruebas usan el runner integrado de Node y necesitan **Node 22 o superior** (el generador funciona desde Node 18).
 
 ```bash
 node --test "tests/data/test/*.test.js"
