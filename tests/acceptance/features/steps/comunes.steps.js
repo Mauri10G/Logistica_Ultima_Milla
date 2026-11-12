@@ -23,6 +23,15 @@ When('pulsa el botón {string}', async function (boton) {
 // punto del mapa (Web Mercator: 256 * 2^13 píxeles dan la vuelta al mundo).
 When('hace clic en el mapa en la latitud {float} y longitud {float}', async function (latitud, longitud) {
   const mapa = this.pagina.locator('.leaflet-container').first()
+  if (!this.mapaListo) {
+    // antes del primer clic: el mapa visible y las zonas existentes ya dibujadas (un <path> por zona activa).
+    // La zona de la prueba no cuenta: al editarla (CP-07) su polígono se borra con "Limpiar" antes de dibujar el nuevo.
+    await mapa.waitFor()
+    const zonas = await (await fetch(`${this.api}/api/zonas?soloActivas=true`)).json()
+    const dibujadas = zonas.filter((zona) => zona.nombre !== this.zona).length
+    if (dibujadas > 0) await this.pagina.locator('.leaflet-overlay-pane path').nth(dibujadas - 1).waitFor()
+    this.mapaListo = true
+  }
   // hover primero: lleva el mapa a la vista; si la página se desplaza durante el clic, el punto cae en otro lugar
   await mapa.hover()
   const caja = await mapa.boundingBox()
