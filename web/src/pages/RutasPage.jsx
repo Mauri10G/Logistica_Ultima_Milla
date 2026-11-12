@@ -28,6 +28,7 @@ export default function RutasPage() {
   const [repartidores, setRepartidores] = useState([])
   const [armando, setArmando] = useState(false)
   const [ocupado, setOcupado] = useState(false)
+  const [rutaResaltadaId, setRutaResaltadaId] = useState(null)
   const [mensaje, setMensaje] = useState(null)
   const [error, setError] = useState(null)
   const [cargando, setCargando] = useState(true)
@@ -161,6 +162,8 @@ export default function RutasPage() {
               repartidores={repartidoresDisponibles}
               otrasRutas={rutas.filter((otra) => otra.id !== ruta.id && otra.estado === 'ARMADA')}
               ocupado={ocupado}
+              resaltada={ruta.id === rutaResaltadaId}
+              onResaltar={setRutaResaltadaId}
               onCambiarRepartidor={cambiarRepartidor}
               onMover={moverPedido}
               onSacar={sacarPedido}
@@ -178,8 +181,8 @@ export default function RutasPage() {
             </div>
           )}
         </div>
-        <div className="tarjeta">
-          <MapaRutas rutas={rutas} />
+        <div className="tarjeta columna-fija">
+          <MapaRutas rutas={rutas} rutaResaltadaId={rutaResaltadaId} />
         </div>
       </div>
     </section>

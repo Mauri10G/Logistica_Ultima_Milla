@@ -150,6 +150,34 @@ describe('MapaRutas', () => {
     expect(lineas[1]).toHaveAttribute('data-color', COLORES_RUTA[1])
   })
 
+  test('sin ruta resaltada todas las líneas tienen el mismo grosor y opacidad', () => {
+    render(<MapaRutas rutas={rutas} />)
+
+    for (const linea of screen.getAllByTestId('polilinea')) {
+      expect(linea).toHaveAttribute('data-weight', '3')
+      expect(linea).toHaveAttribute('data-opacity', '1')
+    }
+  })
+
+  test('la ruta resaltada se engrosa, conserva su color y las demás se atenúan', () => {
+    render(<MapaRutas rutas={rutas} rutaResaltadaId={11} />)
+
+    const [primera, segunda] = screen.getAllByTestId('polilinea')
+    expect(segunda).toHaveAttribute('data-weight', '7')
+    expect(segunda).toHaveAttribute('data-opacity', '1')
+    expect(segunda).toHaveAttribute('data-color', COLORES_RUTA[1])
+    expect(primera).toHaveAttribute('data-weight', '3')
+    expect(primera).toHaveAttribute('data-opacity', '0.3')
+  })
+
+  test('si el id resaltado no es de ninguna ruta no atenúa nada', () => {
+    render(<MapaRutas rutas={rutas} rutaResaltadaId={999} />)
+
+    for (const linea of screen.getAllByTestId('polilinea')) {
+      expect(linea).toHaveAttribute('data-opacity', '1')
+    }
+  })
+
   test('hay un marcador por parada con su número en el popup', () => {
     render(<MapaRutas rutas={rutas} />)
 

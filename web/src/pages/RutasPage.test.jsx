@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { listarRepartidores } from '../api/repartidoresApi'
 import {
@@ -195,9 +195,16 @@ describe('RutasPage: tiempo real', () => {
   })
 })
 
+async function abrirAjustes(user, rutaId = 5, zona = 'Centro') {
+  const tarjeta = screen.getByText(`Ruta ${rutaId} · ${zona}`).closest('article')
+  await user.click(within(tarjeta).getByRole('button', { name: 'Ajustar ruta' }))
+}
+
 describe('RutasPage: ajustes manuales', () => {
   test('solo ofrece repartidores disponibles y activos', async () => {
+    const user = userEvent.setup()
     await dibujar()
+    await abrirAjustes(user)
 
     const select = screen.getByLabelText('Cambiar repartidor de la ruta 5')
     expect(select).toHaveTextContent('Ana Pérez')
@@ -209,6 +216,7 @@ describe('RutasPage: ajustes manuales', () => {
   test('cambiar repartidor llama al endpoint y recarga', async () => {
     const user = userEvent.setup()
     await dibujar()
+    await abrirAjustes(user)
     const cargas = listarRutas.mock.calls.length
 
     await user.selectOptions(screen.getByLabelText('Cambiar repartidor de la ruta 5'), '2')
@@ -221,6 +229,7 @@ describe('RutasPage: ajustes manuales', () => {
   test('mover un pedido a otra ruta', async () => {
     const user = userEvent.setup()
     await dibujar()
+    await abrirAjustes(user)
 
     await user.selectOptions(screen.getByLabelText('Mover el pedido 11 a otra ruta'), '6')
 
@@ -232,6 +241,7 @@ describe('RutasPage: ajustes manuales', () => {
     const user = userEvent.setup()
     moverPedidoARuta.mockRejectedValue(errorHttp(409, 'ESTADO_ILEGAL', 'La ruta ya tiene el maximo de 4 pedidos'))
     await dibujar()
+    await abrirAjustes(user)
 
     await user.selectOptions(screen.getByLabelText('Mover el pedido 11 a otra ruta'), '6')
 
@@ -241,6 +251,7 @@ describe('RutasPage: ajustes manuales', () => {
   test('sacar un pedido de la ruta', async () => {
     const user = userEvent.setup()
     await dibujar()
+    await abrirAjustes(user)
 
     await user.click(screen.getByRole('button', { name: 'Sacar el pedido 12 de la ruta' }))
 
@@ -251,6 +262,7 @@ describe('RutasPage: ajustes manuales', () => {
   test('subir una parada envía el nuevo orden', async () => {
     const user = userEvent.setup()
     await dibujar()
+    await abrirAjustes(user)
 
     await user.click(screen.getByRole('button', { name: 'Subir la parada del pedido 12' }))
 
@@ -261,6 +273,7 @@ describe('RutasPage: ajustes manuales', () => {
   test('bajar una parada envía el nuevo orden', async () => {
     const user = userEvent.setup()
     await dibujar()
+    await abrirAjustes(user)
 
     await user.click(screen.getByRole('button', { name: 'Bajar la parada del pedido 11' }))
 
@@ -274,6 +287,7 @@ describe('RutasPage: ajustes manuales', () => {
     const user = userEvent.setup()
     cambiarRepartidorDeRuta.mockRejectedValue(error)
     await dibujar()
+    await abrirAjustes(user)
 
     await user.selectOptions(screen.getByLabelText('Cambiar repartidor de la ruta 5'), '2')
 
@@ -284,6 +298,7 @@ describe('RutasPage: ajustes manuales', () => {
     const user = userEvent.setup()
     sacarPedidoDeRuta.mockRejectedValue(errorHttp(404, 'RECURSO_NO_ENCONTRADO', 'No existe el pedido con id 12'))
     await dibujar()
+    await abrirAjustes(user)
 
     await user.click(screen.getByRole('button', { name: 'Sacar el pedido 12 de la ruta' }))
 
@@ -295,6 +310,7 @@ describe('RutasPage: ajustes manuales', () => {
     let terminar
     reordenarRuta.mockReturnValue(new Promise((resolver) => (terminar = resolver)))
     await dibujar()
+    await abrirAjustes(user)
 
     await user.click(screen.getByRole('button', { name: 'Subir la parada del pedido 12' }))
 
@@ -309,5 +325,69 @@ describe('RutasPage: ajustes manuales', () => {
 
     expect(screen.queryByLabelText(/Cambiar repartidor/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Sacar/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('RutasPage: lista y mapa enlazados', () => {
+  const tarjetaDe = (texto) => screen.getByText(texto).closest('article')
+
+  test('el borde de cada ruta es del mismo color que su línea en el mapa', async () => {
+    await dibujar()
+
+    const lineas = screen.getAllByTestId('polilinea')
+    const tarjetas = screen.getAllByTestId('ruta-card')
+    expect(tarjetas).toHaveLength(2)
+    tarjetas.forEach((tarjeta, i) => {
+      expect(tarjeta).toHaveStyle({ borderLeftColor: lineas[i].getAttribute('data-color') })
+    })
+    expect(lineas[0].getAttribute('data-color')).not.toBe(lineas[1].getAttribute('data-color'))
+  })
+
+  test('al pasar el mouse sobre una ruta se resalta en el mapa y al salir se quita', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    const [linea5, linea6] = screen.getAllByTestId('polilinea')
+
+    await user.hover(tarjetaDe('Ruta 6 · Norte'))
+    expect(linea6).toHaveAttribute('data-weight', '7')
+    expect(linea5).toHaveAttribute('data-opacity', '0.3')
+    expect(tarjetaDe('Ruta 6 · Norte')).toHaveClass('ruta-resaltada')
+    expect(tarjetaDe('Ruta 5 · Centro')).not.toHaveClass('ruta-resaltada')
+
+    await user.unhover(tarjetaDe('Ruta 6 · Norte'))
+    expect(linea6).toHaveAttribute('data-weight', '3')
+    expect(linea5).toHaveAttribute('data-opacity', '1')
+    expect(tarjetaDe('Ruta 6 · Norte')).not.toHaveClass('ruta-resaltada')
+  })
+
+  test('con el teclado: enfocar el botón de una ruta también la resalta', async () => {
+    await dibujar()
+    const [linea5] = screen.getAllByTestId('polilinea')
+
+    act(() => within(tarjetaDe('Ruta 5 · Centro')).getByRole('button', { name: 'Ajustar ruta' }).focus())
+
+    expect(linea5).toHaveAttribute('data-weight', '7')
+  })
+
+  test('el mapa va en una columna fija al bajar por la lista', async () => {
+    await dibujar()
+
+    expect(screen.getByRole('group', { name: 'Mapa de rutas' }).closest('.columna-fija')).not.toBeNull()
+  })
+
+  test('cada ruta es un resumen y sus controles solo aparecen con Ajustar ruta', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    expect(screen.queryByRole('button', { name: /Subir la parada/ })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Ajustar ruta' })).toHaveLength(2)
+
+    await abrirAjustes(user)
+    expect(screen.getByRole('button', { name: 'Subir la parada del pedido 12' })).toBeInTheDocument()
+    // la otra ruta sigue compacta
+    expect(screen.queryByRole('button', { name: /parada del pedido 21/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Listo' }))
+    expect(screen.queryByRole('button', { name: /Subir la parada/ })).not.toBeInTheDocument()
   })
 })

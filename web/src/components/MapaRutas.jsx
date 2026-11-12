@@ -10,8 +10,10 @@ import EstadoBadge from './EstadoBadge'
  * marcador numerado en cada parada. El color de la ruta i es el mismo que el de su tarjeta en la lista
  * (línea y aro del marcador); el relleno del marcador es el color del estado del pedido, igual que en las
  * tablas. Debajo va la leyenda de esos colores.
+ * Si `rutaResaltadaId` es una de las rutas, su línea se engrosa y las demás se atenúan.
  */
-export default function MapaRutas({ rutas, altura = 420 }) {
+export default function MapaRutas({ rutas, altura = 420, rutaResaltadaId = null }) {
+  const hayResaltada = rutas.some((ruta) => ruta.id === rutaResaltadaId)
   return (
     <div role="group" aria-label="Mapa de rutas">
       <div className="mapa-marco">
@@ -20,11 +22,13 @@ export default function MapaRutas({ rutas, altura = 420 }) {
           {rutas.map((ruta, indice) => {
             const color = colorDeRuta(indice)
             const paradas = paradasOrdenadas(ruta)
+            const resaltada = hayResaltada && ruta.id === rutaResaltadaId
+            const atenuada = hayResaltada && !resaltada
             return (
               <Fragment key={ruta.id}>
                 <Polyline
                   positions={paradas.map(({ pedido }) => [pedido.latitud, pedido.longitud])}
-                  pathOptions={{ color, weight: 3 }}
+                  pathOptions={{ color, weight: resaltada ? 7 : 3, opacity: atenuada ? 0.3 : 1 }}
                 />
                 {paradas.map(({ pedido }, posicion) => (
                   <Marker
