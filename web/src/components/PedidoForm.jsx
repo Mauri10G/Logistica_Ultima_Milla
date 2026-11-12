@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { fechaIso } from '../hooks/fechas'
-import { validarPedido } from '../utils/validacionPedido'
+import { fechaPorDefecto, horaMinimaEntrega, validarEntrega, validarPedido } from '../utils/validacionPedido'
 import SelectorUbicacion from './SelectorUbicacion'
 
 const VALORES_INICIALES = {
@@ -10,13 +9,13 @@ const VALORES_INICIALES = {
   direccion: '',
   latitud: '',
   longitud: '',
-  fechaEntrega: '',
+  fechaEntrega: null, // null = sin tocar: se usa la fecha por defecto según la hora del servidor
   horaEntrega: '',
   prioridad: 'NORMAL',
 }
 
 function valoresDesde(pedido) {
-  if (!pedido) return { ...VALORES_INICIALES, fechaEntrega: fechaIso(0) }
+  if (!pedido) return { ...VALORES_INICIALES }
   return {
     clienteNombres: pedido.clienteNombres ?? '',
     clienteTelefono: pedido.clienteTelefono ?? '',
@@ -36,16 +35,38 @@ function valoresDesde(pedido) {
  *
  * @param {object} [pedido] si viene, el formulario edita ese pedido (PedidoResponse)
  * @param {object[]} [zonas] zonas activas que se muestran como referencia en el mapa
+ * @param {object|null} [horaServidor] respuesta de GET /api/servidor/hora. Con ella se fija la fecha mínima, la hora
+ *   mínima del día de hoy y el aviso de hora inválida; es la hora del servidor, no la del computador. Si es null
+ *   (el endpoint no responde) el formulario no valida fecha ni hora y el backend decide y explica el rechazo.
  */
-export default function PedidoForm({ onSubmit, onCancelar, enviando = false, error = null, zonas = [], pedido = null }) {
+export default function PedidoForm({
+  onSubmit,
+  onCancelar,
+  enviando = false,
+  error = null,
+  zonas = [],
+  pedido = null,
+  horaServidor = null,
+}) {
   const [valores, setValores] = useState(() => valoresDesde(pedido))
   const [errores, setErrores] = useState({})
   const editando = pedido !== null
+  const fechaEntrega = valores.fechaEntrega ?? fechaPorDefecto(horaServidor)
+  const avisos = validarEntrega(fechaEntrega, valores.horaEntrega, horaServidor)
+  const fechaMinima = horaServidor?.entregaMinimaFecha
+  const horaMinima = horaMinimaEntrega(fechaEntrega, horaServidor)
+  const errorFecha = errores.fechaEntrega ?? avisos.fechaEntrega
+  const errorHora = errores.horaEntrega ?? avisos.horaEntrega
 
   function cambiar(evento) {
     const { name, value } = evento.target
     setValores((anteriores) => ({ ...anteriores, [name]: value }))
-    setErrores((anteriores) => ({ ...anteriores, [name]: undefined }))
+    const entrega = name === 'fechaEntrega' || name === 'horaEntrega'
+    setErrores((anteriores) =>
+      entrega
+        ? { ...anteriores, fechaEntrega: undefined, horaEntrega: undefined }
+        : { ...anteriores, [name]: undefined },
+    )
   }
 
   function elegirUbicacion(latitud, longitud) {
@@ -64,7 +85,7 @@ export default function PedidoForm({ onSubmit, onCancelar, enviando = false, err
       direccion: valores.direccion.trim(),
       latitud: Number(valores.latitud),
       longitud: Number(valores.longitud),
-      fechaEntrega: valores.fechaEntrega,
+      fechaEntrega,
       horaEntrega: valores.horaEntrega,
       prioridad: valores.prioridad,
     }
@@ -83,7 +104,7 @@ export default function PedidoForm({ onSubmit, onCancelar, enviando = false, err
 
   function enviar(evento) {
     evento.preventDefault()
-    const encontrados = validarPedido(valores)
+    const encontrados = validarPedido({ ...valores, fechaEntrega }, horaServidor)
     setErrores(encontrados)
     if (Object.keys(encontrados).length > 0) return
     onSubmit(construirDatos())
@@ -136,21 +157,37 @@ export default function PedidoForm({ onSubmit, onCancelar, enviando = false, err
           id="fechaEntrega"
           name="fechaEntrega"
           type="date"
-          value={valores.fechaEntrega}
+          value={fechaEntrega}
+          min={fechaMinima}
           onChange={cambiar}
           required
-          aria-invalid={Boolean(errores.fechaEntrega)}
-          aria-describedby={errores.fechaEntrega ? 'errorFechaEntrega' : undefined}
+          aria-invalid={Boolean(errorFecha)}
+          aria-describedby={errorFecha ? 'errorFechaEntrega' : undefined}
         />
-        {errores.fechaEntrega && (
-          <span id="errorFechaEntrega" className="error-campo" role="alert">
-            {errores.fechaEntrega}
+        {errorFecha && (
+          <span id="errorFechaEntrega" className="error-campo" role={errores.fechaEntrega ? 'alert' : 'status'}>
+            {errorFecha}
           </span>
         )}
       </div>
       <div className="campo">
         <label htmlFor="horaEntrega">Hora aproximada</label>
-        <input id="horaEntrega" name="horaEntrega" type="time" value={valores.horaEntrega} onChange={cambiar} required />
+        <input
+          id="horaEntrega"
+          name="horaEntrega"
+          type="time"
+          value={valores.horaEntrega}
+          min={horaMinima}
+          onChange={cambiar}
+          required
+          aria-invalid={Boolean(errorHora)}
+          aria-describedby={errorHora ? 'errorHoraEntrega' : undefined}
+        />
+        {errorHora && (
+          <span id="errorHoraEntrega" className="error-campo" role={errores.horaEntrega ? 'alert' : 'status'}>
+            {errorHora}
+          </span>
+        )}
       </div>
       <div className="campo">
         <label htmlFor="prioridad">Prioridad</label>
