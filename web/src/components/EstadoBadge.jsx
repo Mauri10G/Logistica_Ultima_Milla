@@ -1,14 +1,6 @@
-const ETIQUETAS = {
-  PENDIENTE: 'Pendiente',
-  ASIGNADO: 'Asignado',
-  RECOGIDO: 'Recogido',
-  EN_CAMINO: 'En camino',
-  ENTREGADO: 'Entregado',
-  ARMADA: 'Armada',
-  EN_CURSO: 'En curso',
-  FINALIZADA: 'Finalizada',
-}
+import { ETIQUETAS_ESTADO } from '../utils/estados'
 
+/** Badge de color de un estado (pedido o ruta). Los colores salen de las variables --estado-* de index.css. */
 export default function EstadoBadge({ estado }) {
-  return <span className={`badge badge-${estado}`}>{ETIQUETAS[estado] ?? estado}</span>
+  return <span className={`badge badge-${estado}`}>{ETIQUETAS_ESTADO[estado] ?? estado}</span>
 }
