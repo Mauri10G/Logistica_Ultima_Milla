@@ -208,9 +208,210 @@ describe('ZonaForm (superposición, CP-08)', () => {
     expect(onGuardar.mock.calls[0][1]).toBe(true)
   })
 
+  test('la advertencia explica cómo dibujar zonas pegadas sin cruzarse', () => {
+    render(<ZonaForm onGuardar={jest.fn()} advertencia="El area se superpone con: Centro (se cruza)" />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/cerca de la zona vecina/)
+  })
+
   test('sin advertencia no existe ese botón', () => {
     render(<ZonaForm onGuardar={jest.fn()} />)
     expect(screen.queryByRole('button', { name: 'Guardar de todas formas' })).not.toBeInTheDocument()
+  })
+})
+
+// Zona vecina para el efecto imán: vértices [longitud, latitud].
+const VECINA = {
+  id: 1,
+  nombre: 'Centro',
+  activa: true,
+  area: {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [-78.625, -1.2468],
+        [-78.605, -1.2474],
+        [-78.605, -1.2346],
+        [-78.625, -1.2354],
+        [-78.625, -1.2468],
+      ],
+    ],
+  },
+}
+// ~0.0002° ≈ 22 m (dentro del imán de 100 m) y ~0.0015° ≈ 167 m (fuera)
+const CERCA = 0.0002
+const LEJOS = 0.0015
+
+describe('ZonaForm (efecto imán)', () => {
+  test('un clic a menos de 100 m de un vértice de otra zona se pega exacto a ese vértice', async () => {
+    const user = userEvent.setup()
+    const onGuardar = jest.fn()
+    render(<ZonaForm zonasReferencia={[VECINA]} onGuardar={onGuardar} />)
+
+    await user.type(screen.getByLabelText('Nombre de la zona'), 'Vecina')
+    clic(-1.2468 + 0.00012, -78.625 - 0.00012) // en diagonal, ~18 m del vértice (-78.625, -1.2468)
+    clic(-1.2354, -78.64)
+    clic(-1.2354 + 0.0008, -78.625) // ~89 m al norte del vértice (-78.625, -1.2354)
+    await user.click(screen.getByRole('button', { name: 'Cerrar polígono' }))
+    await user.click(screen.getByRole('button', { name: 'Guardar zona' }))
+
+    const anillo = onGuardar.mock.calls[0][0].area.coordinates[0]
+    expect(anillo[0]).toEqual([-78.625, -1.2468]) // exacto, [lng, lat]
+    expect(anillo[1]).toEqual([-78.64, -1.2354]) // este punto no estaba cerca de nada: queda donde se hizo clic
+    expect(anillo[2]).toEqual([-78.625, -1.2354])
+  })
+
+  test('sin vértice cerca se pega al borde de la otra zona y el aviso lo dice', async () => {
+    const user = userEvent.setup()
+    const onGuardar = jest.fn()
+    render(<ZonaForm zonasReferencia={[VECINA]} onGuardar={onGuardar} />)
+
+    await user.type(screen.getByLabelText('Nombre de la zona'), 'Al borde')
+    clic(-1.241, -78.625 - 0.0004) // ~44 m al oeste del borde oeste de Centro, lejos de sus vértices
+    expect(screen.getByText('Punto pegado al borde de la zona «Centro».')).toBeInTheDocument()
+    clic(-1.241, -78.64)
+    clic(-1.25, -78.64)
+    await user.click(screen.getByRole('button', { name: 'Cerrar polígono' }))
+    await user.click(screen.getByRole('button', { name: 'Guardar zona' }))
+
+    const [lng, lat] = onGuardar.mock.calls[0][0].area.coordinates[0][0]
+    expect(lng).toBeCloseTo(-78.625, 9)
+    expect(lat).toBeCloseTo(-1.241, 9)
+  })
+
+  test('muestra un aviso pequeño con el nombre de la zona cuando se pegó', () => {
+    render(<ZonaForm zonasReferencia={[VECINA]} onGuardar={jest.fn()} />)
+
+    clic(-1.2468 + CERCA, -78.625)
+
+    expect(screen.getByText('Punto pegado a un vértice de la zona «Centro».')).toBeInTheDocument()
+    expect(screen.getAllByTestId('marcador-circulo')).toHaveLength(1)
+  })
+
+  test('a más de 100 m de todo vértice y borde no se pega ni hay aviso', async () => {
+    const user = userEvent.setup()
+    const onGuardar = jest.fn()
+    render(<ZonaForm zonasReferencia={[VECINA]} onGuardar={onGuardar} />)
+
+    await user.type(screen.getByLabelText('Nombre de la zona'), 'Lejana')
+    clic(-1.2468 + LEJOS, -78.625 - LEJOS)
+    clic(-1.3, -78.5)
+    clic(-1.3, -78.6)
+    await user.click(screen.getByRole('button', { name: 'Cerrar polígono' }))
+    await user.click(screen.getByRole('button', { name: 'Guardar zona' }))
+
+    expect(screen.queryByText(/Punto pegado/)).not.toBeInTheDocument()
+    expect(onGuardar.mock.calls[0][0].area.coordinates[0][0]).toEqual([-78.6265, -1.2453])
+  })
+
+  test('el aviso se quita al hacer otro clic que no se pega, al deshacer y al limpiar', async () => {
+    const user = userEvent.setup()
+    render(<ZonaForm zonasReferencia={[VECINA]} onGuardar={jest.fn()} />)
+
+    clic(-1.2468, -78.625)
+    expect(screen.getByText(/Punto pegado/)).toBeInTheDocument()
+    clic(-1.3, -78.5)
+    expect(screen.queryByText(/Punto pegado/)).not.toBeInTheDocument()
+
+    clic(-1.2354, -78.625)
+    expect(screen.getByText(/Punto pegado/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Deshacer punto' }))
+    expect(screen.queryByText(/Punto pegado/)).not.toBeInTheDocument()
+
+    clic(-1.2354, -78.625)
+    await user.click(screen.getByRole('button', { name: 'Limpiar' }))
+    expect(screen.queryByText(/Punto pegado/)).not.toBeInTheDocument()
+  })
+
+  test('las zonas inactivas no atraen los puntos', () => {
+    render(<ZonaForm zonasReferencia={[{ ...VECINA, activa: false }]} onGuardar={jest.fn()} />)
+
+    clic(-1.2468 + CERCA, -78.625)
+
+    expect(screen.queryByText(/Punto pegado/)).not.toBeInTheDocument()
+  })
+
+  test('sin zonas de referencia no hay imán ni la sugerencia', () => {
+    render(<ZonaForm onGuardar={jest.fn()} />)
+
+    clic(-1.2468, -78.625)
+
+    expect(screen.queryByText(/Punto pegado/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/se pega solo/)).not.toBeInTheDocument()
+  })
+
+  test('con zonas de referencia explica el imán de 100 m', () => {
+    render(<ZonaForm zonasReferencia={[VECINA]} onGuardar={jest.fn()} />)
+
+    expect(screen.getByText(/a menos de 100 m de otra zona/)).toBeInTheDocument()
+  })
+})
+
+function mover(lat, lng) {
+  act(() => manejadoresMapa.actual.mousemove({ latlng: { lat, lng } }))
+}
+
+function salirDelMapa() {
+  act(() => manejadoresMapa.actual.mouseout())
+}
+
+const indicador = () => document.querySelector('[data-color="#16a34a"]')
+
+describe('ZonaForm (indicador del imán al pasar el mouse)', () => {
+  test('cerca de un vértice muestra el indicador en ese vértice, sin agregar puntos', () => {
+    render(<ZonaForm zonasReferencia={[VECINA]} onGuardar={jest.fn()} />)
+
+    mover(-1.2468 + CERCA, -78.625)
+
+    expect(indicador()).toHaveAttribute('data-center', JSON.stringify([-1.2468, -78.625]))
+    expect(screen.getByText('Vértice de Centro')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Deshacer punto' })).toBeDisabled() // no se agregó ningún punto
+  })
+
+  test('sin vértice cerca muestra el indicador sobre el borde', () => {
+    render(<ZonaForm zonasReferencia={[VECINA]} onGuardar={jest.fn()} />)
+
+    mover(-1.241, -78.625 - 0.0004)
+
+    expect(screen.getByText('Borde de Centro')).toBeInTheDocument()
+    const [lat, lng] = JSON.parse(indicador().getAttribute('data-center'))
+    expect(lat).toBeCloseTo(-1.241, 9)
+    expect(lng).toBeCloseTo(-78.625, 9)
+  })
+
+  test('lejos de todo no hay indicador, y se quita al alejarse o al salir del mapa', () => {
+    render(<ZonaForm zonasReferencia={[VECINA]} onGuardar={jest.fn()} />)
+
+    mover(-1.3, -78.5)
+    expect(indicador()).toBeNull()
+
+    mover(-1.2468 + CERCA, -78.625)
+    expect(indicador()).not.toBeNull()
+    mover(-1.3, -78.5)
+    expect(indicador()).toBeNull()
+
+    mover(-1.2468 + CERCA, -78.625)
+    salirDelMapa()
+    expect(indicador()).toBeNull()
+  })
+
+  test('con el polígono cerrado ya no hay indicador', async () => {
+    const user = userEvent.setup()
+    render(<ZonaForm zonasReferencia={[VECINA]} onGuardar={jest.fn()} />)
+    dibujarTresPuntos()
+    await user.click(screen.getByRole('button', { name: 'Cerrar polígono' }))
+
+    mover(-1.2468 + CERCA, -78.625)
+
+    expect(indicador()).toBeNull()
+  })
+
+  test('sin zonas de referencia no hay indicador', () => {
+    render(<ZonaForm onGuardar={jest.fn()} />)
+
+    mover(-1.2468, -78.625)
+
+    expect(indicador()).toBeNull()
   })
 })
 

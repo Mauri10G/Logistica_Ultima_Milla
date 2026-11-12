@@ -11,6 +11,7 @@ import ec.edu.uta.logistica.zonas.dto.ZonaResponse;
 import ec.edu.uta.logistica.zonas.entity.Zona;
 import ec.edu.uta.logistica.zonas.repository.ZonaRepository;
 import org.locationtech.jts.geom.Polygon;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,10 +20,21 @@ public class ZonaService {
 
     private static final long SIN_EXCLUSION = 0L;
 
-    private final ZonaRepository zonaRepository;
+    /** Valor por defecto de {@code logistica.zonas.tolerancia-superposicion-m2}. */
+    public static final double TOLERANCIA_POR_DEFECTO_M2 = 500d;
 
-    public ZonaService(ZonaRepository zonaRepository) {
+    private final ZonaRepository zonaRepository;
+    private final double toleranciaSuperposicionM2;
+
+    /**
+     * @param toleranciaSuperposicionM2 {@code logistica.zonas.tolerancia-superposicion-m2}: area minima, en metros
+     *                                  cuadrados, que debe tener la interseccion de dos zonas para contar como
+     *                                  superposicion (absorbe las diferencias de decimales al pegar bordes)
+     */
+    public ZonaService(ZonaRepository zonaRepository,
+                       @Value("${logistica.zonas.tolerancia-superposicion-m2:500}") double toleranciaSuperposicionM2) {
         this.zonaRepository = zonaRepository;
+        this.toleranciaSuperposicionM2 = toleranciaSuperposicionM2;
     }
 
     @Transactional(readOnly = true)
@@ -82,11 +94,13 @@ public class ZonaService {
         if (confirmada) {
             return;
         }
-        List<Zona> superpuestas = zonaRepository.buscarSuperpuestas(area.toText(), excluirId);
+        List<Zona> superpuestas = zonaRepository.buscarSuperpuestas(area.toText(), excluirId,
+                toleranciaSuperposicionM2);
         if (!superpuestas.isEmpty()) {
             String nombres = superpuestas.stream().map(Zona::getNombre).collect(Collectors.joining(", "));
             throw new ConflictoException("ZONA_SUPERPUESTA", "El area se superpone con: " + nombres
-                    + ". Reenvie con confirmarSuperposicion=true para guardarla de todos modos.");
+                    + " (se cruza, la contiene o queda dentro de ella)."
+                    + " Dos zonas pueden compartir borde, pero no ocupar la misma superficie.");
         }
     }
 

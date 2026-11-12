@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { poligonoAPuntos, puntosAPoligono } from '../utils/geojson'
+import { buscarPuntoImantado, RADIO_IMAN_METROS } from '../utils/iman'
 import EditorPoligono from './EditorPoligono'
 
 export const MENSAJE_POCOS_PUNTOS = 'Dibuje al menos 3 puntos en el mapa'
@@ -11,7 +12,9 @@ export const MINIMO_PUNTOS = 3
  * Cerrar polígono y Limpiar. Es presentacional: entrega { nombre, area, activa } a `onGuardar`.
  *
  * @param {object} [zona] si viene, se edita esa zona y su polígono se carga en el mapa (CP-07)
- * @param {object[]} [zonasReferencia] las demás zonas, como referencia en el mapa
+ * @param {object[]} [zonasReferencia] las demás zonas activas, como referencia en el mapa y para el efecto imán:
+ *   un clic a menos de RADIO_IMAN_METROS de un vértice (prioridad) o de un borde de ellas se pega ahí
+ *   (zonas contiguas, sin huecos)
  * @param {string|null} [advertencia] mensaje de ZONA_SUPERPUESTA; muestra "Guardar de todas formas" (CP-08)
  * @param {() => void} [onEditar] se llama cuando el usuario cambia algo (para limpiar avisos anteriores)
  */
@@ -30,6 +33,7 @@ export default function ZonaForm({
   const [puntos, setPuntos] = useState(() => (zona ? poligonoAPuntos(zona.area) : []))
   const [cerrado, setCerrado] = useState(zona !== null)
   const [errorLocal, setErrorLocal] = useState(null)
+  const [avisoIman, setAvisoIman] = useState(null)
   const editando = zona !== null
 
   function modificado() {
@@ -38,12 +42,17 @@ export default function ZonaForm({
   }
 
   function agregarPunto(latitud, longitud) {
-    setPuntos((anteriores) => [...anteriores, [Number(latitud.toFixed(6)), Number(longitud.toFixed(6))]])
+    const iman = buscarPuntoImantado(latitud, longitud, zonasReferencia)
+    // pegado: el vértice exacto o el punto del borde de la otra zona (sin redondear); si no, el clic a 6 decimales
+    const punto = iman ? iman.punto : [Number(latitud.toFixed(6)), Number(longitud.toFixed(6))]
+    setPuntos((anteriores) => [...anteriores, punto])
+    setAvisoIman(iman ? `Punto pegado ${iman.tipo === 'vertice' ? 'a un vértice' : 'al borde'} de la zona «${iman.zona}».` : null)
     modificado()
   }
 
   function deshacer() {
     setPuntos((anteriores) => anteriores.slice(0, -1))
+    setAvisoIman(null)
     setCerrado(false)
     modificado()
   }
@@ -54,11 +63,13 @@ export default function ZonaForm({
       return
     }
     setCerrado(true)
+    setAvisoIman(null)
     modificado()
   }
 
   function limpiar() {
     setPuntos([])
+    setAvisoIman(null)
     setCerrado(false)
     modificado()
   }
@@ -108,6 +119,17 @@ export default function ZonaForm({
             ? `Polígono cerrado con ${puntos.length} puntos.`
             : `Haga clic en el mapa para agregar puntos (${puntos.length} agregado(s), mínimo ${MINIMO_PUNTOS}).`}
         </p>
+        {!cerrado && zonasReferencia.length > 0 && (
+          <p className="ayuda">
+            Para que dos zonas queden pegadas, haga clic a menos de {RADIO_IMAN_METROS} m de otra zona: el punto se pega
+            solo al vértice más cercano o, si no hay, al borde. Un círculo verde en el mapa muestra dónde se pegará.
+          </p>
+        )}
+        {avisoIman && (
+          <p className="ayuda aviso-iman" role="status">
+            {avisoIman}
+          </p>
+        )}
         <div className="acciones-mapa">
           <button type="button" className="secundario" onClick={deshacer} disabled={puntos.length === 0}>
             Deshacer punto
@@ -135,6 +157,10 @@ export default function ZonaForm({
         <div className="mensaje-advertencia ancho-completo" role="alert">
           <p>
             <strong>Advertencia:</strong> {advertencia}
+          </p>
+          <p>
+            Para que queden pegadas sin cruzarse, dibuje los puntos del borde común cerca de la zona vecina: se pegan
+            solos a sus vértices o a su borde. Se tolera una superposición mínima por diferencias de decimales.
           </p>
           <button type="button" className="advertencia" onClick={() => onGuardar(construirDatos(), true)} disabled={guardando}>
             Guardar de todas formas

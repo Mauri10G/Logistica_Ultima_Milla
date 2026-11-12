@@ -3,6 +3,7 @@ package ec.edu.uta.logistica.zonas.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -26,22 +27,29 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** CP-06 a CP-08: superposicion de zonas. */
+/**
+ * CP-06 a CP-08: superposicion de zonas. El servicio delega la geometria en {@code buscarSuperpuestas} (interiores que
+ * se cruzan; ver {@code ZonaRepositoryIT}): si devuelve zonas se rechaza, si devuelve vacio (p. ej. zonas que solo
+ * comparten borde) se acepta.
+ */
 @ExtendWith(MockitoExtension.class)
 class ZonaServiceTest {
 
     @Mock
     private ZonaRepository zonaRepository;
 
+    private static final double TOLERANCIA_M2 = 750d;
+
     private ZonaService servicio;
     private final Zona centro = Fabrica.zona(1L, "Centro");
 
     @BeforeEach
     void preparar() {
-        servicio = new ZonaService(zonaRepository);
+        servicio = new ZonaService(zonaRepository, TOLERANCIA_M2);
     }
 
     private static Map<String, Object> geoJson() {
@@ -54,7 +62,7 @@ class ZonaServiceTest {
     @DisplayName("CP-06: una zona que se superpone con otra se rechaza (409) y se nombra la zona en conflicto")
     void rechazaSuperposicion() {
         when(zonaRepository.existsByNombreIgnoreCase("Nueva")).thenReturn(false);
-        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong())).thenReturn(List.of(centro));
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong(), anyDouble())).thenReturn(List.of(centro));
 
         assertThatThrownBy(() -> servicio.crear(new ZonaRequest("Nueva", geoJson(), null, null), false))
                 .isInstanceOf(ConflictoException.class)
@@ -62,6 +70,89 @@ class ZonaServiceTest {
                 .satisfies(e -> assertThat(((ApiException) e).getCodigo()).isEqualTo("ZONA_SUPERPUESTA"));
 
         verify(zonaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("una zona contenida dentro de otra se rechaza (409 ZONA_SUPERPUESTA)")
+    void rechazaZonaDentroDeOtra() {
+        when(zonaRepository.existsByNombreIgnoreCase("Interior")).thenReturn(false);
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong(), anyDouble())).thenReturn(List.of(centro));
+
+        assertThatThrownBy(() -> servicio.crear(new ZonaRequest("Interior", geoJson(), null, null), false))
+                .isInstanceOf(ConflictoException.class)
+                .hasMessageContaining("Centro")
+                .satisfies(e -> assertThat(((ApiException) e).getCodigo()).isEqualTo("ZONA_SUPERPUESTA"));
+    }
+
+    @Test
+    @DisplayName("el mensaje de ZONA_SUPERPUESTA explica la regla: compartir borde si se puede, ocupar lo mismo no")
+    void mensajeExplicaLaRegla() {
+        when(zonaRepository.existsByNombreIgnoreCase("Nueva")).thenReturn(false);
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong(), anyDouble())).thenReturn(List.of(centro, Fabrica.zona(2L, "Norte")));
+
+        assertThatThrownBy(() -> servicio.crear(new ZonaRequest("Nueva", geoJson(), null, null), false))
+                .hasMessageContaining("Centro, Norte")
+                .hasMessageContaining("compartir borde");
+    }
+
+    @Test
+    @DisplayName("zonas que solo comparten borde se guardan (la consulta no devuelve ninguna superpuesta)")
+    void guardaZonaQueSoloComparteBorde() {
+        when(zonaRepository.existsByNombreIgnoreCase("Vecina")).thenReturn(false);
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong(), anyDouble())).thenReturn(List.of());
+        when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
+
+        ZonaResponse creada = servicio.crear(new ZonaRequest("Vecina", geoJson(), null, null), false);
+
+        assertThat(creada.nombre()).isEqualTo("Vecina");
+        verify(zonaRepository).save(any(Zona.class));
+    }
+
+    @Test
+    @DisplayName("al verificar, el servicio entrega a la consulta el poligono WKT de la zona nueva")
+    void consultaConElPoligonoNuevo() {
+        when(zonaRepository.existsByNombreIgnoreCase("Nueva")).thenReturn(false);
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong(), anyDouble())).thenReturn(List.of());
+        when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
+        ArgumentCaptor<String> wkt = ArgumentCaptor.forClass(String.class);
+
+        servicio.crear(new ZonaRequest("Nueva", geoJson(), null, null), false);
+
+        verify(zonaRepository).buscarSuperpuestas(wkt.capture(), eq(0L), eq(TOLERANCIA_M2));
+        assertThat(wkt.getValue()).startsWith("POLYGON ((-78.62 -1.24, -78.61 -1.24");
+    }
+
+    @Test
+    @DisplayName("la tolerancia configurada (m2) se entrega a la consulta, al crear y al editar")
+    void entregaLaToleranciaALaConsulta() {
+        when(zonaRepository.existsByNombreIgnoreCase("Nueva")).thenReturn(false);
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong(), anyDouble())).thenReturn(List.of());
+        when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
+        when(zonaRepository.findById(1L)).thenReturn(Optional.of(centro));
+        when(zonaRepository.findByNombreIgnoreCase("Centro")).thenReturn(Optional.of(centro));
+
+        servicio.crear(new ZonaRequest("Nueva", geoJson(), null, null), false);
+        servicio.actualizar(1L, new ZonaRequest("Centro", geoJson(), null, null), false);
+
+        verify(zonaRepository).buscarSuperpuestas(anyString(), eq(0L), eq(TOLERANCIA_M2));
+        verify(zonaRepository).buscarSuperpuestas(anyString(), eq(1L), eq(TOLERANCIA_M2));
+    }
+
+    @Test
+    @DisplayName("el valor por defecto de la tolerancia es 500 m2")
+    void toleranciaPorDefecto() {
+        assertThat(ZonaService.TOLERANCIA_POR_DEFECTO_M2).isEqualTo(500d);
+    }
+
+    @Test
+    @DisplayName("una zona inactiva no se compara con las demas")
+    void zonaInactivaNoVerificaSuperposicion() {
+        when(zonaRepository.existsByNombreIgnoreCase("Inactiva")).thenReturn(false);
+        when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
+
+        servicio.crear(new ZonaRequest("Inactiva", geoJson(), false, null), false);
+
+        verify(zonaRepository, never()).buscarSuperpuestas(anyString(), anyLong(), anyDouble());
     }
 
     @Test
@@ -75,14 +166,14 @@ class ZonaServiceTest {
 
         assertThat(porParametro.nombre()).isEqualTo("Nueva");
         assertThat(porCuerpo.activa()).isTrue();
-        verify(zonaRepository, never()).buscarSuperpuestas(anyString(), anyLong());
+        verify(zonaRepository, never()).buscarSuperpuestas(anyString(), anyLong(), anyDouble());
     }
 
     @Test
     @DisplayName("una zona que no se superpone se guarda")
     void guardaSiNoHaySuperposicion() {
         when(zonaRepository.existsByNombreIgnoreCase("Nueva")).thenReturn(false);
-        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong())).thenReturn(List.of());
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong(), anyDouble())).thenReturn(List.of());
         when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
 
         ZonaResponse creada = servicio.crear(new ZonaRequest("Nueva", geoJson(), null, null), false);
@@ -95,12 +186,12 @@ class ZonaServiceTest {
     void edicionExcluyeLaPropiaZona() {
         when(zonaRepository.findById(1L)).thenReturn(Optional.of(centro));
         when(zonaRepository.findByNombreIgnoreCase("Centro")).thenReturn(Optional.of(centro));
-        when(zonaRepository.buscarSuperpuestas(anyString(), eq(1L))).thenReturn(List.of());
+        when(zonaRepository.buscarSuperpuestas(anyString(), eq(1L), anyDouble())).thenReturn(List.of());
         when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
 
         servicio.actualizar(1L, new ZonaRequest("Centro", geoJson(), null, null), false);
 
-        verify(zonaRepository).buscarSuperpuestas(anyString(), eq(1L));
+        verify(zonaRepository).buscarSuperpuestas(anyString(), eq(1L), anyDouble());
     }
 
     @Test
@@ -109,7 +200,7 @@ class ZonaServiceTest {
         Zona norte = Fabrica.zona(2L, "Norte");
         when(zonaRepository.findById(1L)).thenReturn(Optional.of(centro));
         when(zonaRepository.findByNombreIgnoreCase("Centro")).thenReturn(Optional.of(centro));
-        when(zonaRepository.buscarSuperpuestas(anyString(), eq(1L))).thenReturn(List.of(norte));
+        when(zonaRepository.buscarSuperpuestas(anyString(), eq(1L), anyDouble())).thenReturn(List.of(norte));
 
         assertThatThrownBy(() -> servicio.actualizar(1L, new ZonaRequest("Centro", geoJson(), null, null), false))
                 .isInstanceOf(ConflictoException.class).hasMessageContaining("Norte");

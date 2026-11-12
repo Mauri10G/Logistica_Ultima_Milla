@@ -61,10 +61,13 @@ ec.edu.uta.logistica
 
 ## Reglas de negocio ya implementadas (casos de prueba CP-01 a CP-11)
 
-- Zona del pedido = `ST_Contains` del punto; fuera de toda zona → **422** "La dirección no corresponde a ninguna zona configurada" (CP-03).
+- Zona del pedido = `ST_Covers` del punto (el borde cuenta; si cae entre dos zonas gana la de menor id); fuera de toda zona → **422** "La dirección no corresponde a ninguna zona configurada" (CP-03).
 - No se permite fecha de entrega anterior a hoy → 422 (CP-04). "Hoy" sale del `Clock` en zona `America/Guayaquil`.
 - Solo se edita/elimina un pedido en estado `PENDIENTE` → 409 (CP-05).
-- Zona que se superpone con otra (`ST_Intersects`, solo zonas activas) → 409 `ZONA_SUPERPUESTA`, salvo `confirmarSuperposicion=true` (CP-06 a CP-08).
+- Zona que se superpone con otra (`ST_Relate(..., 'T********')`: solo cuentan los interiores que se cruzan, solo zonas activas) → 409 `ZONA_SUPERPUESTA`, salvo `confirmarSuperposicion=true` (CP-06 a CP-08).
+  Las zonas pueden compartir borde o vértices; cruzarse, quedar dentro de otra o contener a otra no (las 5 zonas base son contiguas desde V3).
+  Tolerancia: la intersección solo cuenta si supera `logistica.zonas.tolerancia-superposicion-m2` (500 m², área en `geography`); absorbe las diferencias de decimales al pegar un borde al del vecino. Una zona contenida en otra se rechaza siempre.
+  Web: el dibujo de zonas tiene imán de 100 m (`RADIO_IMAN_METROS` en `web/src/utils/iman.js`): el clic se pega al vértice más cercano de otra zona activa o, si no hay, a su borde más cercano, y un círculo verde lo anticipa al pasar el mouse.
 - `Ruta.agregarPedido` lanza `IllegalStateException` si se supera `max_pedidos` (CP-09). Máximo configurable: `logistica.rutas.max-pedidos: 4`.
 - Estados del pedido lineales: `PENDIENTE → ASIGNADO → RECOGIDO → EN_CAMINO → ENTREGADO`; transición inválida → 409. `ASIGNADO` solo lo fija el armado de rutas.
 - Estados de ruta: `ARMADA → EN_CURSO` (al recoger el primer pedido) `→ FINALIZADA` (todos entregados).

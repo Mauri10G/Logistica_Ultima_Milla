@@ -28,8 +28,8 @@ persona trabaja en su carpeta.
 | Módulo | Responsabilidad | Piezas clave |
 |---|---|---|
 | `common` | Transversal | `LogisticaProperties` (config propia), `WebConfig` (CORS), `WebSocketConfig` (STOMP en `/ws`), `GlobalExceptionHandler`, `GeoUtil` (haversine, SRID 4326), `GeoJsonUtil` |
-| `pedidos` | Registro de pedidos | `Pedido`, `Cliente`, `EstadoPedido` (transiciones), `PedidoService` (zona por `ST_Contains`, fecha, edición solo PENDIENTE), `PATCH .../estado` |
-| `zonas` | Gestión de zonas | `Zona` (`geometry(Polygon,4326)`), `ZonaService` (superposición con `ST_Intersects`), GeoJSON |
+| `pedidos` | Registro de pedidos | `Pedido`, `Cliente`, `EstadoPedido` (transiciones), `PedidoService` (zona por `ST_Covers`, fecha, edición solo PENDIENTE), `PATCH .../estado` |
+| `zonas` | Gestión de zonas | `Zona` (`geometry(Polygon,4326)`), `ZonaService` (superposición con `ST_Relate` sobre interiores), GeoJSON |
 | `rutas` | Armado de rutas | `Ruta` (`agregarPedido`), `ArmadoRutasService`, `RutaService` (último momento), `BloqueoZonaFecha`, `algoritmo/` |
 | `repartidores` | Gestión de repartidores | `Repartidor`, disponibilidad, `GET .../ruta-actual` |
 | `seguimiento` | Tiempo real e historial | `SeguimientoService` (historial + evento), `SeguimientoPublicador` (STOMP tras el commit) |
@@ -52,10 +52,39 @@ historial_estado_pedido(id, pedido_id, estado_anterior?, estado_nuevo, fecha_cam
 Índices: GIST en `zona.area` y `pedido.ubicacion`; compuesto `pedido(fecha_entrega, zona_id, estado)`;
 único `pedido(ruta_id, orden_en_ruta)` (red de seguridad de concurrencia).
 `V2__datos_base.sql`: 5 zonas de Ambato (Centro, Ingahurco, Ficoa/Atocha, Norte/Izamba, Sur/Huachi) como rectángulos
-aproximados que **no se superponen ni se tocan** (margen de ~200 m), 6 repartidores, 10 clientes y 20 pedidos para mañana.
+separados ~200 m entre sí, 6 repartidores, 10 clientes y 20 pedidos para mañana.
+`V3__zonas_contiguas.sql`: reemplaza el área de esas 5 zonas (por nombre; mismos ids y nombres) por polígonos pegados
+entre sí, sin huecos. Cada polígono contiene al rectángulo anterior, así que los 20 pedidos siguen en su misma zona.
+`V4` en adelante queda para las siguientes migraciones (la V4 es de la tabla de usuarios).
 
-> Los puntos que caen en el margen entre zonas no pertenecen a ninguna y se rechazan con 422. Es intencional (CP-03) y
-> hay que tenerlo presente al dibujar zonas reales: conviene que cubran toda el área de servicio.
+#### Zonas: contiguas, sin huecos y sin cruces
+
+- **Regla de superposición:** dos zonas pueden **compartir borde o vértices**; solo se rechazan (409 `ZONA_SUPERPUESTA`)
+  si sus **interiores se cruzan**: cruce parcial, zona contenida en otra, zona que contiene a otra o zonas iguales.
+- **Consulta:** `ZonaRepository.buscarSuperpuestas` usa `ST_Relate(area, nueva, 'T********')`, es decir, "la
+  intersección de los interiores no es vacía" (celda II de la matriz DE-9IM). Antes se usaba `ST_Intersects`, que
+  también es verdadero cuando solo se tocan los bordes y obligaba a dejar márgenes (huecos) entre zonas. No se usó
+  `ST_Overlaps` porque no detecta la contención ni la igualdad, y `ST_Touches` solo dice "se tocan", no "no se cruzan".
+  `area && nueva` va como filtro previo para aprovechar el índice GIST (`ST_Relate` no lo usa).
+- **Tolerancia de superposición** (`logistica.zonas.tolerancia-superposicion-m2`, por defecto **500**): además de
+  `ST_Relate`, la consulta calcula el área de la intersección en metros cuadrados
+  (`ST_Area(ST_CollectionExtract(ST_Intersection(...), 3)::geography)`) y solo hay superposición si supera ese mínimo.
+  Sirve para absorber las diferencias de decimales al pegar el borde de una zona al de su vecina: un punto pegado a
+  "algún lugar" de un borde puede quedar a centímetros y dejaría una franja de área mínima que no es un cruce real.
+  500 m² equivalen a una franja de ~25 cm de ancho a lo largo de 2 km de borde. Una zona totalmente contenida en otra
+  (o que la contiene) se rechaza siempre, sin importar su área (`ST_CoveredBy`), así que una zona diminuta no se cuela
+  dentro de otra. Si se pone en 0, vuelve a rechazarse cualquier cruce por pequeño que sea.
+- **Vértices compartidos e imán:** para que el borde común sea el mismo segmento, los vértices de las dos zonas deben
+  coincidir. Por eso el editor web tiene un efecto imán de **100 m** (`RADIO_IMAN_METROS` en `web/src/utils/iman.js`):
+  al hacer clic se pega al vértice más cercano de otra zona activa (prioridad) y, si no hay ninguno a menos de 100 m,
+  al punto más cercano de cualquier borde de otra zona activa. Antes de hacer clic, un círculo verde con el nombre de la
+  zona muestra dónde se va a pegar. Un punto pegado a un borde (no a un vértice) puede diferir de ese borde por
+  decimales: eso lo cubre la tolerancia de superposición. La V3 usa los mismos vértices en los bordes comunes.
+- **Punto de un pedido (CP-03):** `ST_Covers`, no `ST_Contains`: con zonas contiguas, un punto exactamente sobre el
+  borde compartido no está en el interior de ninguna y quedaría sin zona. Con `ST_Covers` el borde cuenta como parte de
+  la zona y, si cae entre dos, se elige la de menor id. Un punto fuera de todas las zonas se sigue rechazando con 422.
+- **Cobertura:** que las zonas sean contiguas no cubre toda la ciudad: lo que queda fuera del bloque de zonas sigue
+  siendo "fuera de zona" (422). Conviene dibujar las zonas reales de modo que cubran toda el área de servicio.
 
 ### Estados
 
@@ -69,7 +98,7 @@ Ruta:   ARMADA → EN_CURSO (se recoge el primer pedido) → FINALIZADA (todos E
 ## 4. Flujo de datos principal
 
 1. **Registrar pedido** (`POST /api/pedidos`): valida (Bean Validation) → fecha de entrega ≥ hoy (CP-04) → zona por
-   `ST_Contains` (CP-03) → crea/usa cliente → guarda `PENDIENTE` con `fecha_registro = ahora`.
+   `ST_Covers` (CP-03) → crea/usa cliente → guarda `PENDIENTE` con `fecha_registro = ahora`.
 2. **Armar rutas** (`POST /api/rutas/armar?fecha=` o `@Scheduled`): ver sección 5.
 3. **Repartidor** consulta `GET /api/repartidores/{id}/ruta-actual` y marca `RECOGIDO → EN_CAMINO → ENTREGADO`
    (cada `PATCH` valida la transición, guarda historial y publica en `/topic/pedidos`; la ruta cambia de estado sola).
@@ -135,7 +164,7 @@ dos rutas.
 | Tema | Decisión |
 |---|---|
 | Errores | Cuerpo uniforme `{timestamp, status, codigo, mensaje, errores?}`. 400 validación/solicitud mal formada · 404 no existe · **409** conflicto de estado (pedido no editable, transición inválida, zona superpuesta, concurrencia) · **422** regla de negocio (fuera de zona, fecha pasada, sin repartidores) |
-| Superposición de zonas | `ST_Intersects` sobre zonas activas: dos zonas que **comparten borde** también cuentan como superpuestas (requieren `confirmarSuperposicion=true`). Los datos base dejan margen entre zonas |
+| Superposición de zonas | `ST_Relate(..., 'T********')` sobre zonas activas: solo cuenta si los **interiores** se cruzan (cruce, zona dentro de otra o que contiene a otra). Compartir borde o vértices **no** es superposición, ni tampoco una franja de intersección menor a `logistica.zonas.tolerancia-superposicion-m2` (500 m² por defecto, para absorber diferencias de decimales al pegar bordes). Si se cruzan, requiere `confirmarSuperposicion=true` |
 | Bajas | Zonas y repartidores se dan de baja lógica (`activa`/`activo = false`) para no romper el historial |
 | Hora y fecha | Un `Clock` único en `America/Guayaquil` (`logistica.zona-horaria`); el servidor y CI en UTC no cambian "hoy" |
 | Tiempo real | Se publica `AFTER_COMMIT`: nunca se envía un cambio que luego se revierta |
@@ -149,7 +178,7 @@ dos rutas.
 | CP-03 | Dirección fuera de zona → 422 | `PedidoServiceTest`, `ZonaRepositoryIT`, `ApiRestIT` |
 | CP-04 | Fecha de entrega anterior a hoy | `PedidoServiceTest`, `ApiRestIT` |
 | CP-05 | Solo se edita un pedido PENDIENTE | `PedidoServiceTest`, `ApiRestIT` |
-| CP-06 a CP-08 | Superposición de zonas y `confirmarSuperposicion` | `ZonaServiceTest`, `ZonaRepositoryIT`, `ApiRestIT` |
+| CP-06 a CP-08 | Superposición de zonas (interiores que se cruzan) y `confirmarSuperposicion` | `ZonaServiceTest`, `ZonaRepositoryIT`, `ZonasContiguasIT`, `ApiRestIT` |
 | CP-09 | Ruta no supera el máximo | `RutaTest`, `ConcurrenciaRutasIT`, feature de aceptación |
 | CP-11 | Seguimiento en tiempo real | Verificado a mano con un cliente STOMP real; pendiente automatizar con Playwright |
 | — | Transiciones de estado | `EstadoPedidoTest`, `ApiRestIT` |
