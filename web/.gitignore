@@ -29,3 +29,6 @@ dist-ssr
 !.env.example
 coverage
 reports
+
+# SonarQube scanner
+.scannerwork/
