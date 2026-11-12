@@ -9,18 +9,18 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('Flujo del repartidor', () {
-    testWidgets('al abrir la app se muestra la seleccion de repartidor', (tester) async {
+    testWidgets('al abrir la app sin sesion muestra la pantalla de login', (tester) async {
       app.main();
       await tester.pumpAndSettle();
 
-      expect(find.text('Seleccione su repartidor'), findsOneWidget);
-      expect(find.text('Ver mi ruta'), findsOneWidget);
+      expect(find.text('Ingreso de repartidor'), findsOneWidget);
+      expect(find.text('Ingresar'), findsOneWidget);
     });
 
     // TODO: con el backend levantado (docker compose up -d + mvnw spring-boot:run):
-    //  1. ingresar el id de un repartidor con ruta armada y tocar "Ver mi ruta"
+    //  1. iniciar sesion como repartidor (COURIER) con ruta armada
     //  2. verificar que se listan los pedidos en orden
-    //  3. tocar "Marcar como recogido" / "Marcar en camino" / "Marcar como entregado"
+    //  3. tocar "Marcar como recogido" / "Marcar en camino" / "Marcar como entregado" (con confirmacion)
     //  4. verificar que el pedido queda ENTREGADO
   });
 }

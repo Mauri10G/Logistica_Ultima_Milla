@@ -14,6 +14,7 @@ class _FakeStompService extends StompService {
   void conectar({
     required void Function() alCambiarRutas,
     void Function(bool conectado)? alCambiarConexion,
+    String? token,
   }) {}
 
   @override

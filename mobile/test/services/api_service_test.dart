@@ -161,4 +161,68 @@ void main() {
       'Av. Cevallos 123',
     );
   });
+
+  test('iniciarSesion envia POST /api/auth/login y parsea token, rol y repartidorId', () async {
+    late http.Request enviada;
+    final api = ApiService(
+      urlBase: 'http://servidor',
+      cliente: MockClient((peticion) async {
+        enviada = peticion;
+        return _json({'token': 'eyJ.abc.123', 'rol': 'COURIER', 'repartidorId': 5}, 200);
+      }),
+    );
+
+    final sesion = await api.iniciarSesion(' carlos ', 'clave123');
+
+    expect(enviada.method, 'POST');
+    expect(enviada.url.toString(), 'http://servidor/api/auth/login');
+    expect(jsonDecode(enviada.body), {'usuario': 'carlos', 'clave': 'clave123'});
+    expect(sesion.token, 'eyJ.abc.123');
+    expect(sesion.rol, 'COURIER');
+    expect(sesion.repartidorId, 5);
+    expect(sesion.esRepartidor, isTrue);
+  });
+
+  test('iniciarSesion con 401 informa credenciales invalidas sin expirar sesion', () async {
+    var expirada = false;
+    final api = ApiService(
+      urlBase: 'http://servidor',
+      alExpirarSesion: () async => expirada = true,
+      cliente: MockClient((_) async => http.Response('', 401)),
+    );
+
+    await expectLater(
+      () => api.iniciarSesion('carlos', 'mal'),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.status, 'status', 401)
+            .having((e) => e.mensaje, 'mensaje', 'Usuario o clave incorrectos'),
+      ),
+    );
+    expect(expirada, isFalse);
+  });
+
+  test('envia Authorization Bearer en peticiones y notifica 401 fuera de login', () async {
+    late http.Request enviada;
+    var expirada = false;
+    final api = ApiService(
+      urlBase: 'http://servidor',
+      obtenerToken: () => 'mi-jwt-secreto',
+      alExpirarSesion: () async => expirada = true,
+      cliente: MockClient((peticion) async {
+        enviada = peticion;
+        if (peticion.method == 'GET') {
+          return http.Response('', 401);
+        }
+        return _json(_pedidoJson, 200);
+      }),
+    );
+
+    await api.cambiarEstado(7, 'ENTREGADO');
+    expect(enviada.headers['Authorization'], 'Bearer mi-jwt-secreto');
+
+    await expectLater(() => api.obtenerRutaActual(1), throwsA(isA<ApiException>()));
+    expect(enviada.headers['Authorization'], 'Bearer mi-jwt-secreto');
+    expect(expirada, isTrue);
+  });
 }

@@ -12,15 +12,18 @@ import 'package:logistica_repartidor/services/stomp_service.dart';
 class FakeStompService extends StompService {
   void Function()? alCambiarRutas;
   void Function(bool conectado)? alCambiarConexion;
+  String? tokenRecibido;
   bool desconectado = false;
 
   @override
   void conectar({
     required void Function() alCambiarRutas,
     void Function(bool conectado)? alCambiarConexion,
+    String? token,
   }) {
     this.alCambiarRutas = alCambiarRutas;
     this.alCambiarConexion = alCambiarConexion;
+    tokenRecibido = token;
   }
 
   void emitirCambioRutas() => alCambiarRutas?.call();
@@ -311,5 +314,37 @@ void main() {
     await tester.pump();
 
     expect(uriLanzada?.toString(), 'https://www.google.com/maps/search/?api=1&query=-1.2412%2C-78.6197');
+  });
+
+  testWidgets('pasa el token a STOMP y permite cerrar sesion', (tester) async {
+    var cerroSesion = false;
+    final stomp = FakeStompService();
+    final api = ApiService(
+      urlBase: 'http://servidor',
+      cliente: MockClient(
+        (_) async => _json(_rutaJson([_pedido(id: 1, orden: 1, direccion: 'Bolivar y Mera')]), 200),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RutaScreen(
+          repartidorId: 1,
+          token: 'jwt-en-ruta',
+          api: api,
+          stomp: stomp,
+          alCerrarSesion: () async => cerroSesion = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(stomp.tokenRecibido, 'jwt-en-ruta');
+
+    await tester.tap(find.byTooltip('Cerrar sesión'));
+    await tester.pumpAndSettle();
+
+    expect(stomp.desconectado, isTrue);
+    expect(cerroSesion, isTrue);
   });
 }
