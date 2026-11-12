@@ -4,16 +4,42 @@ import { listarPedidos } from '../api/pedidosApi'
 import { obtenerHistorial } from '../api/seguimientoApi'
 import { mensajeDeError } from '../utils/errores'
 import Avisos from '../components/Avisos'
-import { FilasCarga } from '../components/Cargando'
+import Buscador from '../components/Buscador'
 import EncabezadoPagina from '../components/EncabezadoPagina'
 import EstadoBadge from '../components/EstadoBadge'
 import EstadoVacio from '../components/EstadoVacio'
 import HistorialPedido from '../components/HistorialPedido'
 import IndicadorConexion from '../components/IndicadorConexion'
+import Tabla from '../components/Tabla'
 import { fechaIso } from '../hooks/fechas'
 import { useWebSocketTopic } from '../hooks/useWebSocketTopic'
 import { TOPIC_PEDIDOS } from '../services/websocket'
+import { coincide } from '../utils/busqueda'
 import { ESTADOS_PEDIDO } from '../utils/estados'
+
+const COLUMNAS = [
+  { clave: 'id', titulo: '#' },
+  { clave: 'cliente', titulo: 'Cliente' },
+  { clave: 'direccion', titulo: 'Dirección' },
+  { clave: 'zona', titulo: 'Zona' },
+  { clave: 'hora', titulo: 'Hora' },
+  { clave: 'ruta', titulo: 'Ruta' },
+  { clave: 'estado', titulo: 'Estado' },
+  { clave: 'historial', titulo: 'Historial' },
+]
+
+const VALORES = {
+  id: (pedido) => pedido.id,
+  cliente: (pedido) => pedido.clienteNombres,
+  direccion: (pedido) => pedido.direccion,
+  zona: (pedido) => pedido.zonaNombre,
+  hora: (pedido) => pedido.horaEntrega,
+  ruta: (pedido) => pedido.rutaId,
+  estado: (pedido) => ESTADOS_PEDIDO.indexOf(pedido.estado),
+}
+
+// Al cargar o recargar, la tabla viene por número de pedido de menor a mayor.
+const ORDEN_INICIAL = { clave: 'id', direccion: 'asc' }
 
 /**
  * Seguimiento en tiempo real (CP-11): cuando el repartidor cambia el estado de un pedido desde la app
@@ -22,6 +48,8 @@ import { ESTADOS_PEDIDO } from '../utils/estados'
  */
 export default function SeguimientoPage() {
   const [fecha, setFecha] = useState(fechaIso(0))
+  const [busqueda, setBusqueda] = useState('')
+  const [estadoFiltro, setEstadoFiltro] = useState('')
   const [pedidos, setPedidos] = useState([])
   const [recienActualizados, setRecienActualizados] = useState(new Set())
   const [error, setError] = useState(null)
@@ -103,6 +131,9 @@ export default function SeguimientoPage() {
   }, {})
 
   const seleccionado = pedidos.find((pedido) => pedido.id === seleccionadoId)
+  const visibles = pedidos.filter(
+    (pedido) => (!estadoFiltro || pedido.estado === estadoFiltro) && coincide(busqueda, pedido.clienteNombres, pedido.direccion),
+  )
 
   return (
     <section>
@@ -126,79 +157,90 @@ export default function SeguimientoPage() {
         <button type="button" className="secundario" onClick={() => setFecha(fechaIso(1))}>
           Mañana
         </button>
+        <Buscador
+          id="segBuscar"
+          etiqueta="Buscar por cliente o dirección"
+          valor={busqueda}
+          onCambiar={setBusqueda}
+          placeholder="Nombre o calle"
+        />
       </div>
 
-      <ul className="resumen">
+      <ul className="resumen" aria-label="Filtrar por estado">
+        <li>
+          <button
+            type="button"
+            className="pastilla-filtro"
+            aria-pressed={estadoFiltro === ''}
+            onClick={() => setEstadoFiltro('')}
+          >
+            Todos {pedidos.length}
+          </button>
+        </li>
         {ESTADOS_PEDIDO.map((estado) => (
           <li key={estado}>
-            <EstadoBadge estado={estado} /> {resumen[estado] ?? 0}
+            <button
+              type="button"
+              className="pastilla-filtro"
+              aria-pressed={estadoFiltro === estado}
+              onClick={() => setEstadoFiltro(estadoFiltro === estado ? '' : estado)}
+            >
+              <EstadoBadge estado={estado} /> {resumen[estado] ?? 0}
+            </button>
           </li>
         ))}
       </ul>
 
       <div className={seleccionado ? 'dos-columnas dos-columnas-historial' : undefined}>
-        <div className="tabla-contenedor">
-          <table className="tabla" aria-busy={cargando}>
-            <caption className="solo-lectores">Pedidos de la fecha con su estado actual</caption>
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Cliente</th>
-                <th scope="col">Dirección</th>
-                <th scope="col">Zona</th>
-                <th scope="col">Ruta</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Historial</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cargando && <FilasCarga columnas={7} />}
-              {pedidos.map((pedido) => (
-                <tr
-                  key={pedido.id}
-                  className={[
-                    recienActualizados.has(pedido.id) ? 'fila-actualizada' : '',
-                    pedido.id === seleccionadoId ? 'fila-seleccionada' : '',
-                  ]
-                    .join(' ')
-                    .trim() || undefined}
+        <Tabla
+          titulo="Pedidos de la fecha con su estado actual"
+          columnas={COLUMNAS}
+          valores={VALORES}
+          filas={visibles}
+          cargando={cargando}
+          ordenInicial={ORDEN_INICIAL}
+          reiniciarCon={[fecha, busqueda, estadoFiltro]}
+          vacio={
+            <EstadoVacio
+              icono={PackageSearch}
+              titulo="No hay pedidos para esta fecha."
+              ayuda="Elija otra fecha, otro estado o cambie la búsqueda para ver sus entregas."
+            />
+          }
+          renderFila={(pedido) => (
+            <tr
+              key={pedido.id}
+              className={[
+                recienActualizados.has(pedido.id) ? 'fila-actualizada' : '',
+                pedido.id === seleccionadoId ? 'fila-seleccionada' : '',
+              ]
+                .join(' ')
+                .trim() || undefined}
+            >
+              <td>{pedido.id}</td>
+              <td>{pedido.clienteNombres}</td>
+              <td>{pedido.direccion}</td>
+              <td>{pedido.zonaNombre}</td>
+              <td className="celda-fecha">{pedido.horaEntrega?.slice(0, 5)}</td>
+              <td>{pedido.rutaId ?? '—'}</td>
+              <td data-testid={`estado-pedido-${pedido.id}`}>
+                <EstadoBadge estado={pedido.estado} />
+              </td>
+              <td>
+                <button
+                  type="button"
+                  className="secundario pequeno"
+                  aria-label={`Ver historial del pedido ${pedido.id}`}
+                  aria-pressed={pedido.id === seleccionadoId}
+                  onClick={() => seleccionar(pedido)}
                 >
-                  <td>{pedido.id}</td>
-                  <td>{pedido.clienteNombres}</td>
-                  <td>{pedido.direccion}</td>
-                  <td>{pedido.zonaNombre}</td>
-                  <td>{pedido.rutaId ?? '—'}</td>
-                  <td data-testid={`estado-pedido-${pedido.id}`}>
-                    <EstadoBadge estado={pedido.estado} />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="secundario pequeno"
-                      aria-label={`Ver historial del pedido ${pedido.id}`}
-                      aria-pressed={pedido.id === seleccionadoId}
-                      onClick={() => seleccionar(pedido)}
-                    >
-                      <Eye size={14} aria-hidden="true" />
-                      Ver historial
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!cargando && pedidos.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="vacio">
-                    <EstadoVacio
-                      icono={PackageSearch}
-                      titulo="No hay pedidos para esta fecha."
-                      ayuda="Elija otra fecha para ver sus entregas."
-                    />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  <Eye size={14} aria-hidden="true" />
+                  Ver historial
+                </button>
+              </td>
+            </tr>
+          )}
+        />
 
         {seleccionado && (
           <HistorialPedido pedido={seleccionado} historial={historial} error={errorHistorial} onCerrar={cerrarHistorial} />
