@@ -347,4 +347,41 @@ void main() {
     expect(stomp.desconectado, isTrue);
     expect(cerroSesion, isTrue);
   });
+
+  testWidgets('actualiza el icono de estado de conexion STOMP y permite recargar desde 404', (tester) async {
+    var devolverRuta = false;
+    final stomp = FakeStompService();
+    final api = ApiService(
+      urlBase: 'http://servidor',
+      cliente: MockClient((_) async {
+        if (!devolverRuta) {
+          return http.Response('', 404);
+        }
+        return _json(_rutaJson([_pedido(id: 1, orden: 1, direccion: 'Av. Los Shyris 120')]), 200);
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: RutaScreen(repartidorId: 1, api: api, stomp: stomp)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No tienes una ruta asignada'), findsOneWidget);
+    expect(find.byIcon(Icons.wifi_off), findsOneWidget);
+    expect(find.byTooltip('Tiempo real desconectado'), findsOneWidget);
+
+    stomp.emitirConexion(true);
+    await tester.pump();
+    expect(find.byIcon(Icons.wifi), findsOneWidget);
+    expect(find.byTooltip('Tiempo real conectado'), findsOneWidget);
+
+    stomp.emitirConexion(false);
+    await tester.pump();
+    expect(find.byIcon(Icons.wifi_off), findsOneWidget);
+
+    devolverRuta = true;
+    await tester.tap(find.text('Recargar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Av. Los Shyris 120'), findsOneWidget);
+  });
 }

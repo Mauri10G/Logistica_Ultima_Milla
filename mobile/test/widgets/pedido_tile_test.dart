@@ -118,4 +118,19 @@ void main() {
     expect(llamado, isFalse);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
+
+  testWidgets('muestra estilos e iconos distintos para prioridades NORMAL, ALTA y URGENTE', (tester) async {
+    await tester.pumpWidget(envolver(PedidoTile(pedido: pedidoEn('ASIGNADO', prioridad: 'NORMAL'))));
+    expect(find.text('Prioridad: NORMAL'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_upward), findsNothing);
+    expect(find.byIcon(Icons.priority_high), findsNothing);
+
+    await tester.pumpWidget(envolver(PedidoTile(pedido: pedidoEn('ASIGNADO', prioridad: 'ALTA'))));
+    expect(find.text('Prioridad: ALTA'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_upward), findsOneWidget);
+
+    await tester.pumpWidget(envolver(PedidoTile(pedido: pedidoEn('ASIGNADO', prioridad: 'URGENTE'))));
+    expect(find.text('Prioridad: URGENTE'), findsOneWidget);
+    expect(find.byIcon(Icons.priority_high), findsOneWidget);
+  });
 }
