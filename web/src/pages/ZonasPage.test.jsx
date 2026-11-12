@@ -146,6 +146,35 @@ describe('ZonasPage', () => {
     expect(screen.queryByRole('button', { name: 'Guardar de todas formas' })).not.toBeInTheDocument()
   })
 
+  test('imán: al dibujar una zona nueva, los puntos cerca de un vértice de una zona activa se pegan a él', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.type(screen.getByLabelText('Nombre de la zona'), 'Vecina')
+    clic(-1.25 + 0.00012, -78.62 - 0.00012) // ~18 m del vértice (-78.62, -1.25) de Centro
+    clic(-1.3, -78.7)
+    clic(-1.27, -78.6 + 0.00015) // ~17 m del vértice (-78.6, -1.27) de Centro
+    expect(screen.getByText('Punto pegado a un vértice de la zona «Centro».')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cerrar polígono' }))
+    await user.click(screen.getByRole('button', { name: 'Guardar zona' }))
+
+    const anillo = crearZona.mock.calls[0][0].area.coordinates[0]
+    expect(anillo[0]).toEqual([-78.62, -1.25])
+    expect(anillo[1]).toEqual([-78.7, -1.3])
+    expect(anillo[2]).toEqual([-78.6, -1.27])
+  })
+
+  test('imán: las zonas inactivas y la propia zona en edición no atraen los puntos', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Editar zona Centro' }))
+    await user.click(screen.getByRole('button', { name: 'Deshacer punto' }))
+    clic(-1.25 + 0.00012, -78.62 - 0.00012) // cerca de un vértice de Centro (la propia) y de Norte (inactiva)
+
+    expect(screen.queryByText(/Punto pegado/)).not.toBeInTheDocument()
+  })
+
   test('la advertencia desaparece si se modifica el dibujo', async () => {
     const user = userEvent.setup()
     crearZona.mockRejectedValueOnce(errorHttp(409, 'ZONA_SUPERPUESTA', 'El area se superpone con: Centro'))
