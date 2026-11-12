@@ -1,12 +1,15 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { manejadoresMapa } from 'react-leaflet'
 import { crearPedido, editarPedido, eliminarPedido, listarPedidos, obtenerHoraServidor } from '../api/pedidosApi'
+import { obtenerHistorial } from '../api/seguimientoApi'
 import { listarZonas } from '../api/zonasApi'
+import { fechaIso } from '../hooks/fechas'
 import PedidosPage from './PedidosPage'
 
 jest.mock('../api/pedidosApi')
 jest.mock('../api/zonasApi')
+jest.mock('../api/seguimientoApi')
 
 const ZONAS = [
   { id: 1, nombre: 'Centro', activa: true, area: { type: 'Polygon', coordinates: [] } },
@@ -83,6 +86,7 @@ beforeEach(() => {
   crearPedido.mockResolvedValue({ id: 3 })
   editarPedido.mockResolvedValue({ id: 1 })
   eliminarPedido.mockResolvedValue(undefined)
+  obtenerHistorial.mockResolvedValue([])
   jest.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
@@ -616,5 +620,330 @@ describe('PedidosPage: modal del formulario', () => {
 
     await waitFor(() => expect(screen.queryByText('Maria Torres')).not.toBeInTheDocument())
     expect(screen.getByText('1 pedido(s)')).toBeInTheDocument()
+  })
+})
+
+function pedidoNumero(n, extra = {}) {
+  return {
+    ...PEDIDOS[0],
+    id: n,
+    clienteNombres: `Cliente ${String(n).padStart(2, '0')}`,
+    direccion: `Calle ${n}`,
+    fechaEntrega: '2031-05-18',
+    horaEntrega: `${String(8 + (n % 10)).padStart(2, '0')}:00:00`,
+    ...extra,
+  }
+}
+
+const idsEnTabla = () =>
+  screen
+    .getAllByRole('row')
+    .slice(1)
+    .map((fila) => Number(fila.cells[0].textContent))
+
+describe('PedidosPage: filtro de fecha rápido', () => {
+  test('al abrir el filtro de fecha está en hoy y se consulta con la fecha de hoy', async () => {
+    await dibujar()
+
+    expect(listarPedidos).toHaveBeenCalledWith(expect.objectContaining({ fecha: fechaIso(0) }))
+    expect(screen.getByLabelText('Fecha de entrega')).toHaveValue(fechaIso(0))
+    expect(screen.getByRole('button', { name: 'Hoy' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Mañana' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Todas' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  test('Mañana, Todas y Hoy cambian la fecha consultada', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Mañana' }))
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ fecha: fechaIso(1) })))
+    expect(screen.getByLabelText('Fecha de entrega')).toHaveValue(fechaIso(1))
+    expect(screen.getByRole('button', { name: 'Mañana' })).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: 'Todas' }))
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ fecha: '' })))
+    expect(screen.getByLabelText('Fecha de entrega')).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Todas' })).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: 'Hoy' }))
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ fecha: fechaIso(0) })))
+  })
+
+  test('elegir otra fecha a mano apaga los atajos', async () => {
+    await dibujar()
+
+    fireEvent.change(screen.getByLabelText('Fecha de entrega'), { target: { value: '2026-03-05' } })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Hoy' })).toHaveAttribute('aria-pressed', 'false'))
+    expect(screen.getByRole('button', { name: 'Todas' })).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+describe('PedidosPage: orden, búsqueda y paginación', () => {
+  test('viene ordenada por # de menor a mayor, con la flecha marcada en #', async () => {
+    listarPedidos.mockResolvedValue({ pedidos: [pedidoNumero(3), pedidoNumero(1), pedidoNumero(2)], total: 3 })
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+
+    expect(idsEnTabla()).toEqual([1, 2, 3])
+    expect(screen.getByRole('columnheader', { name: '#' })).toHaveAttribute('aria-sort', 'ascending')
+    expect(screen.getByRole('columnheader', { name: 'Entrega' })).not.toHaveAttribute('aria-sort')
+  })
+
+  test('el encabezado Entrega ordena por fecha y hora, y otro clic invierte', async () => {
+    const user = userEvent.setup()
+    listarPedidos.mockResolvedValue({
+      pedidos: [
+        pedidoNumero(1, { fechaEntrega: '2031-05-19', horaEntrega: '08:00:00' }),
+        pedidoNumero(2, { fechaEntrega: '2031-05-18', horaEntrega: '15:00:00' }),
+        pedidoNumero(3, { fechaEntrega: '2031-05-18', horaEntrega: '09:00:00' }),
+      ],
+      total: 3,
+    })
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+
+    await user.click(screen.getByRole('button', { name: 'Entrega' }))
+    expect(idsEnTabla()).toEqual([3, 2, 1])
+    expect(screen.getByRole('columnheader', { name: 'Entrega' })).toHaveAttribute('aria-sort', 'ascending')
+
+    await user.click(screen.getByRole('button', { name: 'Entrega' }))
+    expect(idsEnTabla()).toEqual([1, 2, 3])
+  })
+
+  test('el encabezado Estado ordena según el flujo del pedido, no alfabéticamente', async () => {
+    const user = userEvent.setup()
+    listarPedidos.mockResolvedValue({
+      pedidos: [pedidoNumero(1, { estado: 'ENTREGADO' }), pedidoNumero(2, { estado: 'PENDIENTE' }), pedidoNumero(3, { estado: 'EN_CAMINO' })],
+      total: 3,
+    })
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+
+    await user.click(screen.getByRole('button', { name: 'Estado' }))
+
+    expect(idsEnTabla()).toEqual([2, 3, 1])
+  })
+
+  test('el buscador filtra por cliente o por dirección, sin importar mayúsculas ni acentos', async () => {
+    const user = userEvent.setup()
+    listarPedidos.mockResolvedValue({
+      pedidos: [
+        pedidoNumero(1, { clienteNombres: 'María Torres', direccion: 'Bolívar y Mera' }),
+        pedidoNumero(2, { clienteNombres: 'Luis Mora', direccion: 'Cevallos y Sucre' }),
+      ],
+      total: 2,
+    })
+    render(<PedidosPage />)
+    await screen.findByText('María Torres')
+
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar por cliente o dirección' }), 'maria')
+    expect(idsEnTabla()).toEqual([1])
+
+    await user.clear(screen.getByRole('searchbox'))
+    await user.type(screen.getByRole('searchbox'), 'CEVALLOS')
+    expect(idsEnTabla()).toEqual([2])
+
+    await user.clear(screen.getByRole('searchbox'))
+    await user.type(screen.getByRole('searchbox'), 'nadie')
+    expect(screen.getByText('No hay pedidos con esos filtros.')).toBeInTheDocument()
+  })
+
+  test('buscar no vuelve a consultar al backend', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    const consultas = listarPedidos.mock.calls.length
+
+    await user.type(screen.getByRole('searchbox'), 'Luis')
+
+    expect(listarPedidos.mock.calls.length).toBe(consultas)
+  })
+
+  test('pagina de a 10: "Mostrando 1 a 10 de 24" y la página 3 trae las últimas 4', async () => {
+    const user = userEvent.setup()
+    listarPedidos.mockResolvedValue({ pedidos: Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)), total: 24 })
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+
+    expect(screen.getByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
+    expect(idsEnTabla()).toHaveLength(10)
+
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    await user.click(screen.getByRole('button', { name: 'Página 3' }))
+    expect(screen.getByText('Mostrando 21 a 24 de 24')).toBeInTheDocument()
+    expect(idsEnTabla()).toEqual([21, 22, 23, 24])
+  })
+
+  test('buscar o cambiar un filtro vuelve a la página 1', async () => {
+    const user = userEvent.setup()
+    listarPedidos.mockResolvedValue({ pedidos: Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)), total: 24 })
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    expect(screen.getByText('Mostrando 11 a 20 de 24')).toBeInTheDocument()
+    await user.type(screen.getByRole('searchbox'), 'Cliente')
+    expect(screen.getByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    await user.selectOptions(screen.getByLabelText('Estado'), 'PENDIENTE')
+    await waitFor(() => expect(screen.getByText('Mostrando 1 a 10 de 24')).toBeInTheDocument())
+  })
+})
+
+describe('PedidosPage: Ver (detalle de solo lectura)', () => {
+  test('todos los pedidos tienen un botón Ver, sea cual sea su estado', async () => {
+    await dibujar()
+
+    expect(screen.getByRole('button', { name: 'Ver pedido 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ver pedido 2' })).toBeInTheDocument()
+  })
+
+  test('abre un modal con los datos, la ruta asignada y el historial', async () => {
+    const user = userEvent.setup()
+    listarPedidos.mockResolvedValue({
+      pedidos: [PEDIDOS[0], { ...PEDIDOS[1], rutaId: 7, ordenEnRuta: 2 }],
+      total: 2,
+    })
+    obtenerHistorial.mockResolvedValue([
+      { id: 1, pedidoId: 2, estadoAnterior: null, estadoNuevo: 'PENDIENTE', fechaCambio: '2026-03-01T09:00:00', origen: 'WEB' },
+      { id: 2, pedidoId: 2, estadoAnterior: 'PENDIENTE', estadoNuevo: 'ASIGNADO', fechaCambio: '2026-03-01T18:00:00', origen: 'WEB' },
+    ])
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Ver pedido 2' }))
+
+    const dialogo = screen.getByRole('dialog', { name: 'Pedido 2' })
+    expect(dialogo).toHaveAttribute('aria-modal', 'true')
+    expect(within(dialogo).getByText('Luis Mora')).toBeInTheDocument()
+    expect(within(dialogo).getByText('0991112223')).toBeInTheDocument()
+    expect(within(dialogo).getByText('Cevallos y Sucre')).toBeInTheDocument()
+    expect(within(dialogo).getByText('2031-05-18 11:30')).toBeInTheDocument()
+    expect(within(dialogo).getByText('Alta')).toBeInTheDocument()
+    expect(within(dialogo).getByText('Ruta 7 · parada 2')).toBeInTheDocument()
+    expect(await within(dialogo).findByText('2026-03-01 18:00:00')).toBeInTheDocument()
+    expect(obtenerHistorial).toHaveBeenCalledWith(2)
+    expect(within(dialogo).getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  test('es de solo lectura: no tiene campos ni botones de guardar', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Ver pedido 1' }))
+
+    const dialogo = screen.getByRole('dialog', { name: 'Pedido 1' })
+    expect(within(dialogo).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(within(dialogo).queryByRole('button', { name: /Guardar|Registrar|Editar|Eliminar/ })).not.toBeInTheDocument()
+  })
+
+  test('un pedido sin ruta lo dice', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Ver pedido 1' }))
+
+    expect(within(screen.getByRole('dialog')).getByText('Sin ruta asignada')).toBeInTheDocument()
+  })
+
+  test('sin historial lo dice y si falla muestra el error', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Ver pedido 1' }))
+    expect(await screen.findByText('Este pedido aún no tiene cambios de estado.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cerrar' }))
+
+    obtenerHistorial.mockRejectedValue(errorHttp(500, 'ERROR_INTERNO', 'No se pudo leer el historial'))
+    await user.click(screen.getByRole('button', { name: 'Ver pedido 1' }))
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent('No se pudo leer el historial')
+  })
+
+  test('Cerrar y Esc lo cierran y el foco vuelve al botón Ver', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    const ver = screen.getByRole('button', { name: 'Ver pedido 1' })
+
+    await user.click(ver)
+    await user.click(screen.getByRole('button', { name: 'Cerrar' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(ver).toHaveFocus()
+
+    await user.click(ver)
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
+describe('PedidosPage: Editar y Eliminar solo en PENDIENTE', () => {
+  test('en un pedido pendiente no hay candado', async () => {
+    await dibujar()
+
+    const fila = screen.getByText('Maria Torres').closest('tr')
+    expect(within(fila).queryByRole('img', { name: /bloqueado/ })).not.toBeInTheDocument()
+  })
+
+  test('en los demás hay un candado pequeño junto a Ver, con el motivo como descripción accesible', async () => {
+    await dibujar()
+
+    const fila = screen.getByText('Luis Mora').closest('tr')
+    const candado = within(fila).getByRole('img', { name: 'Pedido 2 bloqueado' })
+    expect(candado).toHaveAttribute('tabindex', '0')
+    expect(candado).toHaveAccessibleDescription('Solo se edita o elimina un pedido pendiente; este ya está asignado.')
+    expect(within(fila).queryByRole('button', { name: /Editar|Eliminar/ })).not.toBeInTheDocument()
+    // el candado va a continuación del botón Ver
+    expect(within(fila).getByRole('button', { name: 'Ver pedido 2' }).nextElementSibling).toBe(candado)
+  })
+
+  test('el texto largo ya no se repite visible en cada fila', async () => {
+    await dibujar()
+
+    expect(document.querySelectorAll('.ayuda-accion')).toHaveLength(0)
+    expect(document.querySelector('.tooltip-fijo')).toBeNull()
+  })
+
+  test('al pasar el mouse sobre el candado aparece el tooltip y al salir desaparece', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    const candado = screen.getByRole('img', { name: 'Pedido 2 bloqueado' })
+
+    await user.hover(candado)
+    expect(document.querySelector('.tooltip-fijo')).toHaveTextContent(
+      'Solo se edita o elimina un pedido pendiente; este ya está asignado.',
+    )
+
+    await user.unhover(candado)
+    expect(document.querySelector('.tooltip-fijo')).toBeNull()
+  })
+
+  test('con el teclado: el foco muestra el tooltip, Esc lo cierra y al salir se quita', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    const candado = screen.getByRole('img', { name: 'Pedido 2 bloqueado' })
+
+    act(() => candado.focus())
+    expect(document.querySelector('.tooltip-fijo')).not.toBeNull()
+
+    await user.keyboard('{Escape}')
+    expect(document.querySelector('.tooltip-fijo')).toBeNull()
+
+    act(() => candado.blur())
+    act(() => candado.focus())
+    expect(document.querySelector('.tooltip-fijo')).not.toBeNull()
+    act(() => candado.blur())
+    expect(document.querySelector('.tooltip-fijo')).toBeNull()
+  })
+
+  test('el motivo nombra el estado real del pedido', async () => {
+    listarPedidos.mockResolvedValue({
+      pedidos: [pedidoNumero(5, { estado: 'EN_CAMINO' }), pedidoNumero(6, { estado: 'ENTREGADO' })],
+      total: 2,
+    })
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 05')
+
+    expect(screen.getByRole('img', { name: 'Pedido 5 bloqueado' })).toHaveAccessibleDescription(/ya está en camino\./)
+    expect(screen.getByRole('img', { name: 'Pedido 6 bloqueado' })).toHaveAccessibleDescription(/ya está entregado\./)
   })
 })

@@ -4,20 +4,13 @@ import Cargando from './Cargando'
 import EstadoBadge from './EstadoBadge'
 import EstadoVacio from './EstadoVacio'
 
-/** Panel con la línea de tiempo de estados de un pedido (GET /api/seguimiento/pedidos/{id}/historial). */
-export default function HistorialPedido({ pedido, historial, error, onCerrar }) {
+/**
+ * Línea de tiempo de estados de un pedido: error, carga, vacío o la lista de cambios.
+ * La comparten el panel de Seguimiento y el detalle de un pedido en Pedidos.
+ */
+export function LineaTiempoHistorial({ historial, error }) {
   return (
-    <aside className="tarjeta panel-historial" aria-label={`Historial del pedido ${pedido.id}`}>
-      <header className="encabezado">
-        <h2>Historial del pedido {pedido.id}</h2>
-        <button type="button" className="secundario pequeno" onClick={onCerrar}>
-          <X size={16} aria-hidden="true" />
-          Cerrar historial
-        </button>
-      </header>
-      <p>
-        {pedido.clienteNombres} · {pedido.direccion}
-      </p>
+    <>
       {error && (
         <p className="mensaje-error" role="alert">
           {error}
@@ -40,6 +33,25 @@ export default function HistorialPedido({ pedido, historial, error, onCerrar }) 
           ))}
         </ol>
       )}
+    </>
+  )
+}
+
+/** Panel con la línea de tiempo de estados de un pedido (GET /api/seguimiento/pedidos/{id}/historial). */
+export default function HistorialPedido({ pedido, historial, error, onCerrar }) {
+  return (
+    <aside className="tarjeta panel-historial" aria-label={`Historial del pedido ${pedido.id}`}>
+      <header className="encabezado">
+        <h2>Historial del pedido {pedido.id}</h2>
+        <button type="button" className="secundario pequeno" onClick={onCerrar}>
+          <X size={16} aria-hidden="true" />
+          Cerrar historial
+        </button>
+      </header>
+      <p>
+        {pedido.clienteNombres} · {pedido.direccion}
+      </p>
+      <LineaTiempoHistorial historial={historial} error={error} />
     </aside>
   )
 }
