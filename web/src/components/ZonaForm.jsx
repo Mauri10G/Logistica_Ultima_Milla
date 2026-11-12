@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { poligonoAPuntos, puntosAPoligono } from '../utils/geojson'
-import { buscarVerticeCercano, RADIO_IMAN_METROS } from '../utils/iman'
+import { buscarPuntoImantado, RADIO_IMAN_METROS } from '../utils/iman'
 import EditorPoligono from './EditorPoligono'
 
 export const MENSAJE_POCOS_PUNTOS = 'Dibuje al menos 3 puntos en el mapa'
@@ -13,7 +13,8 @@ export const MINIMO_PUNTOS = 3
  *
  * @param {object} [zona] si viene, se edita esa zona y su polígono se carga en el mapa (CP-07)
  * @param {object[]} [zonasReferencia] las demás zonas activas, como referencia en el mapa y para el efecto imán:
- *   un clic a menos de ~30 m de un vértice de ellas se pega exacto a ese vértice (zonas contiguas, sin huecos)
+ *   un clic a menos de RADIO_IMAN_METROS de un vértice (prioridad) o de un borde de ellas se pega ahí
+ *   (zonas contiguas, sin huecos)
  * @param {string|null} [advertencia] mensaje de ZONA_SUPERPUESTA; muestra "Guardar de todas formas" (CP-08)
  * @param {() => void} [onEditar] se llama cuando el usuario cambia algo (para limpiar avisos anteriores)
  */
@@ -41,11 +42,11 @@ export default function ZonaForm({
   }
 
   function agregarPunto(latitud, longitud) {
-    const vertice = buscarVerticeCercano(latitud, longitud, zonasReferencia)
-    // pegado: el vértice exacto de la otra zona (sin redondear); si no, el clic redondeado a 6 decimales
-    const punto = vertice ? vertice.punto : [Number(latitud.toFixed(6)), Number(longitud.toFixed(6))]
+    const iman = buscarPuntoImantado(latitud, longitud, zonasReferencia)
+    // pegado: el vértice exacto o el punto del borde de la otra zona (sin redondear); si no, el clic a 6 decimales
+    const punto = iman ? iman.punto : [Number(latitud.toFixed(6)), Number(longitud.toFixed(6))]
     setPuntos((anteriores) => [...anteriores, punto])
-    setAvisoIman(vertice ? `Punto pegado a un vértice de la zona «${vertice.zona}».` : null)
+    setAvisoIman(iman ? `Punto pegado ${iman.tipo === 'vertice' ? 'a un vértice' : 'al borde'} de la zona «${iman.zona}».` : null)
     modificado()
   }
 
@@ -120,8 +121,8 @@ export default function ZonaForm({
         </p>
         {!cerrado && zonasReferencia.length > 0 && (
           <p className="ayuda">
-            Para que dos zonas queden pegadas, haga clic a menos de {RADIO_IMAN_METROS} m de un vértice de otra zona:
-            el punto se pega solo.
+            Para que dos zonas queden pegadas, haga clic a menos de {RADIO_IMAN_METROS} m de otra zona: el punto se pega
+            solo al vértice más cercano o, si no hay, al borde. Un círculo verde en el mapa muestra dónde se pegará.
           </p>
         )}
         {avisoIman && (
@@ -158,8 +159,8 @@ export default function ZonaForm({
             <strong>Advertencia:</strong> {advertencia}
           </p>
           <p>
-            Para que queden pegadas sin cruzarse, dibuje los puntos del borde común cerca de los vértices de la zona
-            vecina: se pegan solos.
+            Para que queden pegadas sin cruzarse, dibuje los puntos del borde común cerca de la zona vecina: se pegan
+            solos a sus vértices o a su borde. Se tolera una superposición mínima por diferencias de decimales.
           </p>
           <button type="button" className="advertencia" onClick={() => onGuardar(construirDatos(), true)} disabled={guardando}>
             Guardar de todas formas
