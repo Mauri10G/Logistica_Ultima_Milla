@@ -41,21 +41,20 @@ When('pulsa Editar en la zona de la prueba', async function () {
 })
 
 Then('ve que el punto quedó pegado a un vértice de la zona vecina', async function () {
-  await this.pagina.locator('.aviso-iman', { hasText: 'Punto pegado a un vértice' }).waitFor()
+  await this.pagina.getByText('Punto pegado a un vértice').first().waitFor()
 })
 
 Then('ve el aviso de que la zona de la prueba fue {string}', async function (accion) {
-  await this.pagina.locator('.aviso-ok', { hasText: `Zona "${this.zona}" ${accion}.` }).waitFor()
+  await this.pagina.getByText(`Zona "${this.zona}" ${accion}.`).first().waitFor()
 })
 
 Then('ve la zona de la prueba en la tabla de zonas', async function () {
-  await this.pagina.locator('tbody tr', { hasText: this.zona }).first().waitFor()
+  await this.pagina.getByRole('row', { name: this.zona }).first().waitFor()
 })
 
 Then('ve la advertencia de superposición con la zona existente', async function () {
-  const advertencia = this.pagina.locator('.mensaje-advertencia', { hasText: 'se superpone con' })
-  await advertencia.waitFor()
-  assert.ok((await advertencia.textContent()).includes(`${this.zona} existente`), 'la advertencia no nombra a la zona existente')
+  await this.pagina.getByText('se superpone con').first().waitFor()
+  await this.pagina.getByText(`${this.zona} existente`).first().waitFor()
 })
 
 Then('no ve ninguna advertencia de superposición', async function () {

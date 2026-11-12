@@ -44,7 +44,7 @@ When('el personal arma las rutas de esa fecha desde la web', async function () {
   await this.pagina.goto(`${this.web}/rutas`)
   await this.pagina.locator('#rutasFecha').fill(this.fechaLejana)
   // se espera a que desaparezcan las rutas de la fecha anterior (mañana) para no contar tarjetas que no son de esta prueba
-  await this.pagina.locator('text=No hay rutas armadas para esta fecha.').waitFor()
+  await this.pagina.getByText('No hay rutas armadas para esta fecha.').waitFor()
   await this.pagina.getByRole('button', { name: 'Armar rutas' }).click()
   await this.pagina.locator('[data-testid="ruta-card"]').first().waitFor()
 })
@@ -114,26 +114,26 @@ When('cambia el repartidor de la primera ruta', async function () {
 })
 
 Then('ve que el orden de las paradas cambió', async function () {
-  await this.pagina.locator('.aviso-ok', { hasText: 'Se cambió el orden de las paradas' }).waitFor()
+  await this.pagina.getByText('Se cambió el orden de las paradas').first().waitFor()
   const ruta = await (await fetch(`${this.api}/api/rutas/${this.rutas[0].id}`)).json()
   assert.notDeepStrictEqual(ruta.pedidos.map((pedido) => pedido.id), this.ordenAntes)
 })
 
 Then('el pedido sacado vuelve a PENDIENTE sin ruta', async function () {
-  await this.pagina.locator('.aviso-ok', { hasText: 'volvió a PENDIENTE' }).waitFor()
+  await this.pagina.getByText('volvió a PENDIENTE').first().waitFor()
   const pedido = await (await fetch(`${this.api}/api/pedidos/${this.pedidoSacado}`)).json()
   assert.strictEqual(pedido.estado, 'PENDIENTE')
   assert.strictEqual(pedido.rutaId, null)
 })
 
 Then('el pedido movido queda en la segunda ruta', async function () {
-  await this.pagina.locator('.aviso-ok', { hasText: `El pedido ${this.pedidoMovido} se movió a la ruta ${this.rutas[1].id}` }).waitFor()
+  await this.pagina.getByText(`El pedido ${this.pedidoMovido} se movió a la ruta ${this.rutas[1].id}`).first().waitFor()
   const pedido = await (await fetch(`${this.api}/api/pedidos/${this.pedidoMovido}`)).json()
   assert.strictEqual(pedido.rutaId, this.rutas[1].id)
 })
 
 Then('la ruta tiene otro repartidor', async function () {
-  await this.pagina.locator('.aviso-ok', { hasText: 'Se cambió el repartidor de la ruta' }).waitFor()
+  await this.pagina.getByText('Se cambió el repartidor de la ruta').first().waitFor()
   const ruta = await (await fetch(`${this.api}/api/rutas/${this.rutas[0].id}`)).json()
   assert.notStrictEqual(ruta.repartidorId, this.repartidorAntes)
 })

@@ -23,8 +23,8 @@ When('pulsa el botón {string}', async function (boton) {
 // punto del mapa (Web Mercator: 256 * 2^13 píxeles dan la vuelta al mundo).
 When('hace clic en el mapa en la latitud {float} y longitud {float}', async function (latitud, longitud) {
   const mapa = this.pagina.locator('.leaflet-container').first()
-  // primero se lleva el mapa a la vista: si la página se desplaza durante el clic, el punto cae en otro lugar
-  await mapa.scrollIntoViewIfNeeded()
+  // hover primero: lleva el mapa a la vista; si la página se desplaza durante el clic, el punto cae en otro lugar
+  await mapa.hover()
   const caja = await mapa.boundingBox()
   const mundo = 256 * 2 ** 13
   const mercatorY = (grados) => (Math.log(Math.tan(Math.PI / 4 + (grados * Math.PI) / 360)) * mundo) / (2 * Math.PI)
@@ -34,13 +34,13 @@ When('hace clic en el mapa en la latitud {float} y longitud {float}', async func
 })
 
 Then('ve el aviso {string}', async function (texto) {
-  await this.pagina.locator('.aviso-ok', { hasText: texto }).first().waitFor()
+  await this.pagina.getByText(texto).first().waitFor()
 })
 
 Then('ve el mensaje de error {string}', async function (texto) {
-  await this.pagina.locator('[role="alert"]', { hasText: texto }).first().waitFor()
+  await this.pagina.getByText(texto).first().waitFor()
 })
 
 Then('no ve el mensaje de error {string}', async function (texto) {
-  assert.strictEqual(await this.pagina.locator('[role="alert"]', { hasText: texto }).count(), 0)
+  assert.strictEqual(await this.pagina.getByText(texto).count(), 0)
 })

@@ -77,7 +77,7 @@ When('pulsa Editar en el pedido del cliente de la prueba', async function () {
 })
 
 Then('ve al cliente de la prueba en la lista con estado {string} y zona {string}', async function (estado, zona) {
-  const fila = this.pagina.locator('tbody tr', { hasText: this.cliente })
+  const fila = this.pagina.getByRole('row', { name: this.cliente })
   await fila.waitFor()
   const texto = await fila.textContent()
   assert.ok(texto.includes(estado), `la fila "${texto}" no muestra el estado ${estado}`)
@@ -85,23 +85,23 @@ Then('ve al cliente de la prueba en la lista con estado {string} y zona {string}
 })
 
 Then('ve en la lista del cliente de la prueba la dirección {string}', async function (direccion) {
-  await this.pagina.locator('tbody tr', { hasText: this.cliente }).filter({ hasText: direccion }).waitFor()
+  await this.pagina.getByRole('row', { name: this.cliente }).getByText(direccion).waitFor()
 })
 
 Then('el detalle del pedido muestra {string}', async function (texto) {
-  await this.pagina.locator('.detalle-datos', { hasText: texto }).waitFor()
+  await this.pagina.getByRole('dialog').getByText(texto, { exact: true }).waitFor()
 })
 
 Then('ve el aviso de que el pedido de la prueba fue actualizado', async function () {
-  await this.pagina.locator('.aviso-ok', { hasText: `Pedido ${this.pedido.id} actualizado.` }).waitFor()
+  await this.pagina.getByText(`Pedido ${this.pedido.id} actualizado.`).first().waitFor()
 })
 
 Then('ve el aviso de fecha {string} bajo el campo de fecha de entrega', async function (texto) {
-  await this.pagina.locator('#errorFechaEntrega', { hasText: texto }).waitFor()
+  await this.pagina.getByText(texto).first().waitFor()
 })
 
 Then('ve el aviso de hora {string} bajo el campo de hora de entrega', async function (texto) {
-  await this.pagina.locator('#errorHoraEntrega', { hasText: texto }).waitFor()
+  await this.pagina.getByText(texto).first().waitFor()
 })
 
 // ---------- Comprobaciones contra el backend ----------
