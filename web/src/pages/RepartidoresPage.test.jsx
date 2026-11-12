@@ -112,6 +112,7 @@ describe('RepartidoresPage', () => {
     await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
     await user.type(screen.getByLabelText('Nombres'), 'Medio escrito')
     await user.keyboard('{Escape}')
+    await user.click(screen.getByRole('button', { name: 'Descartar cambios' }))
 
     await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
 
@@ -152,6 +153,17 @@ describe('RepartidoresPage', () => {
 
     await waitFor(() => expect(cambiarDisponibilidad).toHaveBeenCalledWith(1, false))
     await waitFor(() => expect(listarRepartidores).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('Ana Pérez ahora no está disponible.')).toBeInTheDocument()
+  })
+
+  test('volver a poner disponible a un repartidor avisa con su nombre', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('switch', { name: 'Disponible de Luis Mora' }))
+
+    await waitFor(() => expect(cambiarDisponibilidad).toHaveBeenCalledWith(2, true))
+    expect(await screen.findByText('Luis Mora ahora está disponible.')).toBeInTheDocument()
   })
 
   test('muestra el error al cambiar la disponibilidad', async () => {
@@ -161,7 +173,114 @@ describe('RepartidoresPage', () => {
 
     await user.click(screen.getByRole('switch', { name: 'Disponible de Luis Mora' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('No existe el repartidor con id 2')
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudo cambiar la disponibilidad de Luis Mora. No existe el repartidor con id 2',
+    )
+  })
+})
+
+describe('RepartidoresPage: confirmaciones', () => {
+  const RUTA_HOY = { id: 7, repartidorId: 1, zonaNombre: 'Centro', maxPedidos: 4, pedidos: [{ id: 1 }, { id: 2 }] }
+
+  async function dibujarConRuta() {
+    listarRutas.mockResolvedValue([RUTA_HOY])
+    await dibujar()
+    await screen.findByText('Ruta 7 · Centro · 2/4 pedidos')
+  }
+
+  test('marcar no disponible a quien tiene ruta hoy pide confirmar y nombra la ruta', async () => {
+    const user = userEvent.setup()
+    await dibujarConRuta()
+
+    await user.click(screen.getByRole('switch', { name: 'Disponible de Ana Pérez' }))
+
+    const dialogo = await screen.findByRole('alertdialog', { name: '¿Marcar a Ana Pérez como no disponible?' })
+    expect(within(dialogo).getByText('Ruta 7 · Centro · 2/4 pedidos', { selector: 'dd' })).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Marcar no disponible' })).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+    expect(cambiarDisponibilidad).not.toHaveBeenCalled()
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Marcar no disponible' }))
+
+    await waitFor(() => expect(cambiarDisponibilidad).toHaveBeenCalledWith(1, false))
+    expect(await screen.findByText('Ana Pérez ahora no está disponible.')).toBeInTheDocument()
+  })
+
+  test('cancelar deja al repartidor disponible y no llama a la API', async () => {
+    const user = userEvent.setup()
+    await dibujarConRuta()
+    await user.click(screen.getByRole('switch', { name: 'Disponible de Ana Pérez' }))
+
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancelar' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Disponible de Ana Pérez' })).toBeChecked()
+    expect(cambiarDisponibilidad).not.toHaveBeenCalled()
+  })
+
+  test('sin ruta hoy no pide confirmación', async () => {
+    const user = userEvent.setup()
+    await dibujarConRuta()
+
+    await user.click(screen.getByRole('switch', { name: 'Disponible de Luis Mora' })) // no disponible -> disponible
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(cambiarDisponibilidad).toHaveBeenCalledWith(2, true))
+  })
+
+  test('un repartidor disponible sin ruta hoy se apaga sin confirmar', async () => {
+    const user = userEvent.setup()
+    listarRutas.mockResolvedValue([{ ...RUTA_HOY, repartidorId: 2 }])
+    await dibujar()
+    await screen.findByText('Ruta 7 · Centro · 2/4 pedidos')
+
+    await user.click(screen.getByRole('switch', { name: 'Disponible de Ana Pérez' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(cambiarDisponibilidad).toHaveBeenCalledWith(1, false))
+  })
+
+  test('poner disponible a quien tiene ruta hoy no pide confirmación', async () => {
+    const user = userEvent.setup()
+    listarRutas.mockResolvedValue([{ ...RUTA_HOY, repartidorId: 2 }])
+    await dibujar()
+    await screen.findByText('Ruta 7 · Centro · 2/4 pedidos')
+
+    await user.click(screen.getByRole('switch', { name: 'Disponible de Luis Mora' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(cambiarDisponibilidad).toHaveBeenCalledWith(2, true))
+  })
+
+  test('cerrar el modal con datos escritos pregunta "¿Descartar los cambios?"', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+    await user.type(screen.getByLabelText('Nombres'), 'Carlos')
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    const pregunta = screen.getByRole('alertdialog', { name: '¿Descartar los cambios?' })
+    expect(within(pregunta).getByRole('button', { name: 'Descartar cambios' })).toHaveClass('peligro')
+    await user.click(within(pregunta).getByRole('button', { name: 'Seguir editando' }))
+    expect(screen.getByRole('dialog', { name: 'Nuevo repartidor' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Nombres')).toHaveValue('Carlos')
+
+    await user.keyboard('{Escape}') // pregunta de nuevo
+    await user.click(screen.getByRole('button', { name: 'Descartar cambios' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(crearRepartidor).not.toHaveBeenCalled()
+  })
+
+  test('cerrar el modal vacío no pregunta', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
 

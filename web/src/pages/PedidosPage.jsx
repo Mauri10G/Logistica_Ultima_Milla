@@ -14,8 +14,11 @@ import Modal from '../components/Modal'
 import PedidoForm from '../components/PedidoForm'
 import Tabla from '../components/Tabla'
 import { fechaIso } from '../hooks/fechas'
+import { DURACION_DESHACER_MS, useAccionDeshacible } from '../hooks/useAccionDeshacible'
+import { useConfirmacion } from '../hooks/useConfirmacion'
 import { coincide } from '../utils/busqueda'
 import { ESTADOS_PEDIDO, ETIQUETAS_ESTADO } from '../utils/estados'
+import { formatearFecha } from '../utils/formatos'
 import { horaServidorValida } from '../utils/validacionPedido'
 
 const COLUMNAS = [
@@ -64,6 +67,10 @@ export default function PedidosPage() {
   const [errorLista, setErrorLista] = useState(null)
   const [mensaje, setMensaje] = useState(null)
   const [cargando, setCargando] = useState(true)
+  const [ocultos, setOcultos] = useState(() => new Set()) // pedidos eliminados a la espera de que termine el "Deshacer"
+  const formModificado = useRef(false)
+  const { pedir, dialogo } = useConfirmacion()
+  const { programar, avisosDeshacer } = useAccionDeshacible()
 
   const cargar = useCallback(async () => {
     try {
@@ -136,6 +143,25 @@ export default function PedidosPage() {
     setMostrarForm(false)
     setPedidoEnEdicion(null)
     setErrorForm(null)
+    formModificado.current = false
+  }
+
+  /** Cerrar el formulario (Cancelar o Esc): si hay datos escritos sin guardar, primero se pregunta. */
+  function pedirCierreForm() {
+    if (enviando) return
+    if (!formModificado.current) {
+      cerrarForm()
+      return
+    }
+    pedir({
+      titulo: '¿Descartar los cambios?',
+      descripcion: pedidoEnEdicion
+        ? `Escribió cambios en el pedido ${pedidoEnEdicion.id} que todavía no guardó. Si cierra ahora, se perderán.`
+        : 'Escribió datos del pedido que todavía no guardó. Si cierra ahora, se perderán.',
+      textoConfirmar: 'Descartar cambios',
+      textoCancelar: 'Seguir editando',
+      onConfirmar: cerrarForm,
+    })
   }
 
   async function guardar(datos) {
@@ -146,8 +172,8 @@ export default function PedidosPage() {
         await editarPedido(pedidoEnEdicion.id, datos)
         setMensaje(`Pedido ${pedidoEnEdicion.id} actualizado.`)
       } else {
-        await crearPedido(datos)
-        setMensaje('Pedido registrado.')
+        const creado = await crearPedido(datos)
+        setMensaje(creado?.id ? `Pedido ${creado.id} registrado.` : 'Pedido registrado.')
       }
       cerrarForm()
       await cargar()
@@ -159,17 +185,46 @@ export default function PedidosPage() {
     }
   }
 
-  async function eliminar(pedido) {
-    if (!window.confirm(`¿Eliminar el pedido ${pedido.id}?`)) return
-    setMensaje(null)
+  function mostrarPedido(id) {
+    setOcultos((anteriores) => {
+      const siguientes = new Set(anteriores)
+      siguientes.delete(id)
+      return siguientes
+    })
+  }
+
+  /** Llama a la API cuando termina el tiempo de "Deshacer" (o antes, si se cambia de pantalla o se cierra la pestaña). */
+  async function ejecutarEliminacion(pedido, { alSalir }) {
     try {
-      await eliminarPedido(pedido.id)
-      setMensaje(`Pedido ${pedido.id} eliminado.`)
+      await eliminarPedido(pedido.id, { alSalir })
       await cargar()
+      mostrarPedido(pedido.id)
     } catch (error) {
+      mostrarPedido(pedido.id)
       await cargar() // recargar limpia el error de la lista, por eso se muestra después
-      setErrorLista(mensajeDeErrorPedido(error))
+      setErrorLista(`No se pudo eliminar el pedido ${pedido.id}. ${mensajeDeErrorPedido(error)}`)
     }
+  }
+
+  async function eliminar(pedido) {
+    const confirmado = await pedir({
+      titulo: `¿Eliminar el pedido ${pedido.id}?`,
+      descripcion: `El pedido desaparecerá de la lista y no se podrá recuperar. Tendrá ${DURACION_DESHACER_MS / 1000} segundos para deshacerlo antes de que se elimine.`,
+      detalles: [
+        ['Cliente', pedido.clienteNombres],
+        ['Dirección', pedido.direccion],
+        ['Entrega', `${formatearFecha(pedido.fechaEntrega)} ${pedido.horaEntrega?.slice(0, 5) ?? ''}`.trim()],
+      ],
+      textoConfirmar: 'Eliminar pedido',
+    })
+    if (!confirmado) return
+    setMensaje(null)
+    setOcultos((anteriores) => new Set(anteriores).add(pedido.id))
+    programar({
+      mensaje: `Pedido ${pedido.id} eliminado`,
+      ejecutar: (opciones) => ejecutarEliminacion(pedido, opciones),
+      alDeshacer: () => mostrarPedido(pedido.id),
+    })
   }
 
   function cambiarFiltro(evento) {
@@ -182,7 +237,9 @@ export default function PedidosPage() {
 
   const hoy = fechaIso(0)
   const manana = fechaIso(1)
-  const visibles = pedidos.filter((pedido) => coincide(busqueda, pedido.clienteNombres, pedido.direccion))
+  const sinOcultos = pedidos.filter((pedido) => !ocultos.has(pedido.id))
+  const visibles = sinOcultos.filter((pedido) => coincide(busqueda, pedido.clienteNombres, pedido.direccion))
+  const totalMostrado = total - (pedidos.length - sinOcultos.length)
 
   return (
     <section>
@@ -203,17 +260,23 @@ export default function PedidosPage() {
         onCerrarError={() => setErrorLista(null)}
       />
 
+      {avisosDeshacer}
+      {dialogo}
+
       {pedidoEnDetalle && <DetallePedido pedido={pedidoEnDetalle} onCerrar={() => setPedidoEnDetalle(null)} />}
 
       {mostrarForm && (
-        <Modal titulo={pedidoEnEdicion ? `Editar pedido ${pedidoEnEdicion.id}` : 'Nuevo pedido'} onCerrar={cerrarForm}>
+        <Modal titulo={pedidoEnEdicion ? `Editar pedido ${pedidoEnEdicion.id}` : 'Nuevo pedido'} onCerrar={pedirCierreForm}>
           <PedidoForm
             key={pedidoEnEdicion?.id ?? 'nuevo'}
             pedido={pedidoEnEdicion}
             zonas={zonasActivas}
             horaServidor={horaServidor}
             onSubmit={guardar}
-            onCancelar={cerrarForm}
+            onCancelar={pedirCierreForm}
+            onModificado={(modificado) => {
+              formModificado.current = modificado
+            }}
             enviando={enviando}
             error={errorForm}
           />
@@ -266,7 +329,7 @@ export default function PedidosPage() {
           placeholder="Nombre o calle"
         />
         <p className="total">
-          {total} pedido(s){total > pedidos.length ? ` (mostrando ${pedidos.length})` : ''}
+          {totalMostrado} pedido(s){totalMostrado > sinOcultos.length ? ` (mostrando ${sinOcultos.length})` : ''}
         </p>
       </div>
 

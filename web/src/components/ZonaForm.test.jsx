@@ -450,3 +450,91 @@ describe('ZonaForm (edición, CP-07)', () => {
     expect(onCancelar).toHaveBeenCalled()
   })
 })
+
+describe('ZonaForm: confirmaciones', () => {
+  test('desmarcar "Zona activa" de una zona activa pregunta antes; si se rechaza, sigue marcada', async () => {
+    const user = userEvent.setup()
+    const onConfirmarDesactivar = jest.fn().mockResolvedValue(false)
+    render(<ZonaForm zona={ZONA} onGuardar={jest.fn()} onConfirmarDesactivar={onConfirmarDesactivar} />)
+
+    await user.click(screen.getByLabelText('Zona activa'))
+
+    expect(onConfirmarDesactivar).toHaveBeenCalledWith(ZONA, 'desmarcar')
+    expect(screen.getByLabelText('Zona activa')).toBeChecked()
+  })
+
+  test('si se acepta, se desmarca; y al guardar vuelve a preguntar con el momento "guardar"', async () => {
+    const user = userEvent.setup()
+    const onGuardar = jest.fn()
+    const onConfirmarDesactivar = jest.fn().mockResolvedValue(true)
+    render(<ZonaForm zona={ZONA} onGuardar={onGuardar} onConfirmarDesactivar={onConfirmarDesactivar} />)
+    await user.click(screen.getByLabelText('Zona activa'))
+    expect(screen.getByLabelText('Zona activa')).not.toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(onConfirmarDesactivar).toHaveBeenNthCalledWith(2, ZONA, 'guardar')
+    expect(onGuardar).toHaveBeenCalledTimes(1)
+    expect(onGuardar.mock.calls[0][0].activa).toBe(false)
+  })
+
+  test('si al guardar se rechaza la desactivación, no se guarda', async () => {
+    const user = userEvent.setup()
+    const onGuardar = jest.fn()
+    const onConfirmarDesactivar = jest.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    render(<ZonaForm zona={ZONA} onGuardar={onGuardar} onConfirmarDesactivar={onConfirmarDesactivar} />)
+    await user.click(screen.getByLabelText('Zona activa'))
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(onGuardar).not.toHaveBeenCalled()
+  })
+
+  test('no pregunta al desactivar una zona nueva ni al tocar una zona que ya estaba inactiva', async () => {
+    const user = userEvent.setup()
+    const onConfirmarDesactivar = jest.fn().mockResolvedValue(false)
+    const { unmount } = render(<ZonaForm onGuardar={jest.fn()} onConfirmarDesactivar={onConfirmarDesactivar} />)
+    await user.click(screen.getByLabelText('Zona activa'))
+    expect(screen.getByLabelText('Zona activa')).not.toBeChecked()
+    unmount()
+
+    render(<ZonaForm zona={{ ...ZONA, activa: false }} onGuardar={jest.fn()} onConfirmarDesactivar={onConfirmarDesactivar} />)
+    await user.click(screen.getByLabelText('Zona activa')) // reactivar
+    await user.click(screen.getByLabelText('Zona activa')) // volver a dejarla inactiva
+
+    expect(onConfirmarDesactivar).not.toHaveBeenCalled()
+  })
+
+  test('sin onConfirmarDesactivar el formulario funciona como antes', async () => {
+    const user = userEvent.setup()
+    const onGuardar = jest.fn()
+    render(<ZonaForm zona={ZONA} onGuardar={onGuardar} />)
+
+    await user.click(screen.getByLabelText('Zona activa'))
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(onGuardar.mock.calls[0][0].activa).toBe(false)
+  })
+
+  test('"Guardar de todas formas" pregunta con el texto de la advertencia y solo reenvía si se acepta', async () => {
+    const user = userEvent.setup()
+    const onGuardar = jest.fn()
+    const onConfirmarSuperposicion = jest.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    render(
+      <ZonaForm
+        zona={ZONA}
+        onGuardar={onGuardar}
+        advertencia="El area se superpone con: Centro"
+        onConfirmarSuperposicion={onConfirmarSuperposicion}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Guardar de todas formas' }))
+    expect(onConfirmarSuperposicion).toHaveBeenCalledWith('El area se superpone con: Centro')
+    expect(onGuardar).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Guardar de todas formas' }))
+    expect(onGuardar).toHaveBeenCalledTimes(1)
+    expect(onGuardar.mock.calls[0][1]).toBe(true)
+  })
+})

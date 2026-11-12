@@ -1,7 +1,9 @@
 import { MapPinned, Pencil, Plus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { listarPedidos } from '../api/pedidosApi'
 import { actualizarZona, crearZona, listarZonas } from '../api/zonasApi'
 import { codigoDeError, estadoHttp, mensajeDeError } from '../utils/errores'
+import { zonasSuperpuestas } from '../utils/zonas'
 import Avisos from '../components/Avisos'
 import { colorDeZona } from '../components/constantesMapa'
 import EncabezadoPagina from '../components/EncabezadoPagina'
@@ -9,6 +11,7 @@ import EstadoVacio from '../components/EstadoVacio'
 import Interruptor from '../components/Interruptor'
 import Tabla from '../components/Tabla'
 import ZonaForm from '../components/ZonaForm'
+import { useConfirmacion } from '../hooks/useConfirmacion'
 
 const COLUMNAS = [
   { clave: 'id', titulo: '#' },
@@ -37,6 +40,7 @@ export default function ZonasPage() {
   const [mostrarInactivas, setMostrarInactivas] = useState(false)
   const [version, setVersion] = useState(0) // cambia tras guardar para vaciar el formulario
   const [cargando, setCargando] = useState(true)
+  const { pedir, dialogo } = useConfirmacion()
 
   const cargar = useCallback(async () => {
     try {
@@ -76,7 +80,8 @@ export default function ZonasPage() {
     try {
       if (zonaEnEdicion) {
         await actualizarZona(zonaEnEdicion.id, datos, confirmarSuperposicion)
-        setMensaje(`Zona "${datos.nombre}" actualizada.`)
+        const desactivada = zonaEnEdicion.activa && datos.activa === false
+        setMensaje(`Zona "${datos.nombre}" ${desactivada ? 'desactivada' : 'actualizada'}.`)
       } else {
         await crearZona(datos, confirmarSuperposicion)
         setMensaje(`Zona "${datos.nombre}" creada.`)
@@ -97,6 +102,52 @@ export default function ZonasPage() {
     }
   }
 
+  /** Pedidos PENDIENTE de la zona (de cualquier fecha); null si no se pudo consultar. */
+  async function contarPendientes(zona) {
+    try {
+      return (await listarPedidos({ zonaId: zona.id, estado: 'PENDIENTE', size: 1 })).total
+    } catch {
+      return null
+    }
+  }
+
+  function textoPendientes(pendientes) {
+    if (pendientes === null) return 'No se pudo consultar cuántos pedidos pendientes tiene la zona.'
+    if (pendientes === 0) return 'La zona no tiene pedidos pendientes.'
+    return `La zona tiene ${pendientes} pedido(s) pendiente(s): revíselos, porque quedarán en una zona inactiva.`
+  }
+
+  /** Confirma desactivar una zona activa, con cuántos pedidos pendientes tiene (al desmarcar y al guardar). */
+  async function confirmarDesactivar(zona, momento) {
+    const pendientes = await contarPendientes(zona)
+    const alGuardar = momento === 'guardar'
+    return pedir({
+      titulo: alGuardar ? `¿Guardar y desactivar la zona ${zona.nombre}?` : `¿Desactivar la zona ${zona.nombre}?`,
+      descripcion: `Una zona inactiva no se dibuja en el mapa ni se ofrece al registrar pedidos. ${textoPendientes(pendientes)}`,
+      detalles: [
+        ['Zona', zona.nombre],
+        ['Pedidos pendientes', pendientes === null ? 'No disponible' : String(pendientes)],
+      ],
+      textoConfirmar: alGuardar ? 'Guardar y desactivar' : 'Desactivar zona',
+      variante: 'advertencia',
+    })
+  }
+
+  /** Confirma "Guardar de todas formas" nombrando las zonas con las que se cruza la nueva. */
+  function confirmarSuperposicion(mensajeAdvertencia) {
+    const nombres = zonasSuperpuestas(mensajeAdvertencia)
+    return pedir({
+      titulo: '¿Guardar la zona aunque se superponga?',
+      descripcion:
+        nombres.length > 0
+          ? 'Dos zonas no deberían ocupar la misma superficie: un pedido ubicado en el cruce se asignará a una sola de ellas.'
+          : mensajeAdvertencia,
+      detalles: nombres.length > 0 ? [[nombres.length === 1 ? 'Se cruza con la zona' : 'Se cruza con las zonas', nombres.join(', ')]] : [],
+      textoConfirmar: 'Guardar de todas formas',
+      variante: 'advertencia',
+    })
+  }
+
   const zonasVisibles = zonas.filter((zona) => mostrarInactivas || zona.activa)
   const zonasReferencia = zonas.filter((zona) => zona.activa && zona.id !== zonaEnEdicion?.id)
 
@@ -114,6 +165,7 @@ export default function ZonasPage() {
         )}
       </EncabezadoPagina>
 
+      {dialogo}
       <Avisos
         mensaje={mensaje}
         error={errorLista}
@@ -187,6 +239,8 @@ export default function ZonasPage() {
             onGuardar={guardar}
             onCancelar={zonaEnEdicion ? terminarEdicion : undefined}
             onEditar={limpiarAvisos}
+            onConfirmarDesactivar={confirmarDesactivar}
+            onConfirmarSuperposicion={confirmarSuperposicion}
             guardando={guardando}
             error={errorForm}
             advertencia={advertencia}

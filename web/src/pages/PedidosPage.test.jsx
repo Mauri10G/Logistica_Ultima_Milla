@@ -87,7 +87,6 @@ beforeEach(() => {
   editarPedido.mockResolvedValue({ id: 1 })
   eliminarPedido.mockResolvedValue(undefined)
   obtenerHistorial.mockResolvedValue([])
-  jest.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
 describe('PedidosPage: lista y filtros', () => {
@@ -222,7 +221,7 @@ describe('PedidosPage: registrar', () => {
         }),
       ),
     )
-    expect(await screen.findByText('Pedido registrado.')).toBeInTheDocument()
+    expect(await screen.findByText('Pedido 3 registrado.')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(listarPedidos.mock.calls.length).toBeGreaterThan(cargasAntes)
   })
@@ -480,36 +479,6 @@ describe('PedidosPage: editar y eliminar', () => {
     expect(screen.getByLabelText('Nombres del cliente')).toHaveValue('')
   })
 
-  test('eliminar pide confirmación, borra y recarga', async () => {
-    const user = userEvent.setup()
-    await dibujar()
-
-    await user.click(screen.getByRole('button', { name: 'Eliminar pedido 1' }))
-
-    expect(window.confirm).toHaveBeenCalled()
-    await waitFor(() => expect(eliminarPedido).toHaveBeenCalledWith(1))
-    expect(await screen.findByText('Pedido 1 eliminado.')).toBeInTheDocument()
-  })
-
-  test('si no se confirma no se elimina', async () => {
-    const user = userEvent.setup()
-    window.confirm.mockReturnValue(false)
-    await dibujar()
-
-    await user.click(screen.getByRole('button', { name: 'Eliminar pedido 1' }))
-
-    expect(eliminarPedido).not.toHaveBeenCalled()
-  })
-
-  test('si el pedido ya no es PENDIENTE (409) lo explica', async () => {
-    const user = userEvent.setup()
-    eliminarPedido.mockRejectedValue(errorHttp(409, 'PEDIDO_NO_EDITABLE', 'Solo se eliminan pedidos PENDIENTE'))
-    await dibujar()
-
-    await user.click(screen.getByRole('button', { name: 'Eliminar pedido 1' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('ya no se puede modificar')
-  })
 })
 
 describe('PedidosPage: modal del formulario', () => {
@@ -611,16 +580,6 @@ describe('PedidosPage: modal del formulario', () => {
     expect(screen.queryByText('Bolívar y Mera')).not.toBeInTheDocument()
   })
 
-  test('tras eliminar un pedido desaparece de la lista', async () => {
-    const user = userEvent.setup()
-    await dibujar()
-    listarPedidos.mockResolvedValue({ pedidos: [PEDIDOS[1]], total: 1 })
-
-    await user.click(screen.getByRole('button', { name: 'Eliminar pedido 1' }))
-
-    await waitFor(() => expect(screen.queryByText('Maria Torres')).not.toBeInTheDocument())
-    expect(screen.getByText('1 pedido(s)')).toBeInTheDocument()
-  })
 })
 
 function pedidoNumero(n, extra = {}) {
@@ -640,6 +599,254 @@ const idsEnTabla = () =>
     .getAllByRole('row')
     .slice(1)
     .map((fila) => Number(fila.cells[0].textContent))
+
+describe('PedidosPage: eliminar con confirmación y deshacer', () => {
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => {
+    jest.clearAllTimers()
+    jest.useRealTimers()
+  })
+
+  const configurar = () => userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+  const avanzar = (ms) => act(() => jest.advanceTimersByTime(ms))
+
+  async function pedirEliminar(user, id = 1) {
+    await user.click(screen.getByRole('button', { name: `Eliminar pedido ${id}` }))
+    return screen.findByRole('alertdialog')
+  }
+
+  test('pide confirmación con un diálogo propio (no el del navegador) que nombra cliente, dirección y fecha', async () => {
+    const confirmar = jest.spyOn(window, 'confirm')
+    const user = configurar()
+    await dibujar()
+
+    const dialogo = await pedirEliminar(user)
+
+    expect(confirmar).not.toHaveBeenCalled()
+    expect(within(dialogo).getByRole('heading', { name: '¿Eliminar el pedido 1?' })).toBeInTheDocument()
+    expect(within(dialogo).getByText('Maria Torres')).toBeInTheDocument()
+    expect(within(dialogo).getByText('Bolívar y Mera')).toBeInTheDocument()
+    expect(within(dialogo).getByText('18/05/2031 10:00')).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Eliminar pedido' })).toHaveClass('peligro')
+    expect(eliminarPedido).not.toHaveBeenCalled()
+  })
+
+  test('el foco empieza en Cancelar: Enter no elimina', async () => {
+    const user = configurar()
+    await dibujar()
+    const dialogo = await pedirEliminar(user)
+
+    expect(within(dialogo).getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+    await user.keyboard('{Enter}')
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByText('Maria Torres')).toBeInTheDocument()
+    avanzar(10000)
+    expect(eliminarPedido).not.toHaveBeenCalled()
+  })
+
+  test('Cancelar y Esc dejan el pedido en la lista sin avisos', async () => {
+    const user = configurar()
+    await dibujar()
+
+    await pedirEliminar(user)
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await pedirEliminar(user)
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByText('Maria Torres')).toBeInTheDocument()
+    expect(screen.queryByText('Pedido 1 eliminado')).not.toBeInTheDocument()
+    avanzar(10000)
+    expect(eliminarPedido).not.toHaveBeenCalled()
+  })
+
+  test('al confirmar el pedido desaparece, sale el aviso con Deshacer y la API se llama a los 6 segundos', async () => {
+    const user = configurar()
+    await dibujar()
+    await pedirEliminar(user)
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar pedido' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Pedido 1 eliminado')
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByText('Maria Torres')).not.toBeInTheDocument()
+    expect(screen.getByText('1 pedido(s)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Deshacer' })).toBeInTheDocument()
+    expect(eliminarPedido).not.toHaveBeenCalled()
+
+    avanzar(5000)
+    expect(eliminarPedido).not.toHaveBeenCalled()
+    listarPedidos.mockResolvedValue({ pedidos: [PEDIDOS[1]], total: 1 })
+    avanzar(1000)
+
+    await waitFor(() => expect(eliminarPedido).toHaveBeenCalledWith(1, { alSalir: false }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Deshacer' })).not.toBeInTheDocument())
+    expect(screen.queryByText('Maria Torres')).not.toBeInTheDocument()
+    expect(screen.getByText('1 pedido(s)')).toBeInTheDocument()
+  })
+
+  test('Deshacer devuelve el pedido a la lista y no llama a la API', async () => {
+    const user = configurar()
+    await dibujar()
+    await pedirEliminar(user)
+    await user.click(screen.getByRole('button', { name: 'Eliminar pedido' }))
+    await screen.findByRole('status')
+    expect(screen.queryByText('Maria Torres')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Deshacer' }))
+
+    expect(screen.getByText('Maria Torres')).toBeInTheDocument()
+    expect(screen.getByText('2 pedido(s)')).toBeInTheDocument()
+    expect(screen.queryByText('Pedido 1 eliminado')).not.toBeInTheDocument()
+    avanzar(10000)
+    expect(eliminarPedido).not.toHaveBeenCalled()
+  })
+
+  test('si se cambia de página antes de que termine, la eliminación se ejecuta igual', async () => {
+    const user = configurar()
+    const { unmount } = render(<PedidosPage />)
+    await screen.findByText('Maria Torres')
+    await pedirEliminar(user)
+    await user.click(screen.getByRole('button', { name: 'Eliminar pedido' }))
+    expect(eliminarPedido).not.toHaveBeenCalled()
+
+    unmount()
+
+    expect(eliminarPedido).toHaveBeenCalledTimes(1)
+    expect(eliminarPedido).toHaveBeenCalledWith(1, { alSalir: true })
+  })
+
+  test('si se cierra la pestaña antes de que termine, la eliminación se ejecuta una sola vez', async () => {
+    const user = configurar()
+    await dibujar()
+    await pedirEliminar(user)
+    await user.click(screen.getByRole('button', { name: 'Eliminar pedido' }))
+
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'))
+    })
+    avanzar(10000)
+
+    expect(eliminarPedido).toHaveBeenCalledTimes(1)
+    expect(eliminarPedido).toHaveBeenCalledWith(1, { alSalir: true })
+  })
+
+  test('si el backend rechaza la eliminación (409) el pedido vuelve y se explica', async () => {
+    const user = configurar()
+    eliminarPedido.mockRejectedValue(errorHttp(409, 'PEDIDO_NO_EDITABLE', 'Solo se eliminan pedidos PENDIENTE'))
+    await dibujar()
+    await pedirEliminar(user)
+    await user.click(screen.getByRole('button', { name: 'Eliminar pedido' }))
+
+    avanzar(6000)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo eliminar el pedido 1. Este pedido ya no se puede modificar')
+    expect(screen.getByText('Maria Torres')).toBeInTheDocument()
+  })
+
+  test('se pueden eliminar dos pedidos seguidos: cada uno con su aviso y su deshacer', async () => {
+    const user = configurar()
+    listarPedidos.mockResolvedValue({ pedidos: [PEDIDOS[0], pedidoNumero(5)], total: 2 })
+    await dibujar()
+    await pedirEliminar(user, 1)
+    await user.click(screen.getByRole('button', { name: 'Eliminar pedido' }))
+    await screen.findByRole('status')
+    await pedirEliminar(user, 5)
+    await user.click(screen.getByRole('button', { name: 'Eliminar pedido' }))
+
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Deshacer' })).toHaveLength(2))
+    await user.click(screen.getAllByRole('button', { name: 'Deshacer' })[0])
+    avanzar(6000)
+
+    expect(screen.getByText('Maria Torres')).toBeInTheDocument()
+    expect(eliminarPedido).toHaveBeenCalledTimes(1)
+    expect(eliminarPedido).toHaveBeenCalledWith(5, { alSalir: false })
+  })
+})
+
+describe('PedidosPage: descartar cambios al cerrar el formulario', () => {
+  test('sin datos escritos se cierra directo, sin preguntar', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('con datos escritos Cancelar pregunta "¿Descartar los cambios?" y Seguir editando conserva lo escrito', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await user.type(screen.getByLabelText('Nombres del cliente'), 'Ana')
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    const pregunta = screen.getByRole('alertdialog', { name: '¿Descartar los cambios?' })
+    expect(within(pregunta).getByRole('button', { name: 'Descartar cambios' })).toHaveClass('peligro')
+    await user.click(within(pregunta).getByRole('button', { name: 'Seguir editando' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Nombres del cliente')).toHaveValue('Ana')
+  })
+
+  test('Descartar cambios cierra el formulario sin guardar', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await user.type(screen.getByLabelText('Nombres del cliente'), 'Ana')
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    await user.click(screen.getByRole('button', { name: 'Descartar cambios' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(crearPedido).not.toHaveBeenCalled()
+  })
+
+  test('Esc con datos escritos también pregunta, y el Esc de la pregunta solo cierra la pregunta', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Editar pedido 1' }))
+    await user.type(screen.getByLabelText('Dirección de entrega'), ' 2')
+
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('alertdialog', { name: '¿Descartar los cambios?' })).toBeInTheDocument()
+    expect(screen.getByText(/cambios en el pedido 1/)).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Editar pedido 1' })).toBeInTheDocument()
+  })
+
+  test('al editar, volver a escribir el valor original no cuenta como cambio', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Editar pedido 1' }))
+    await user.type(screen.getByLabelText('Dirección de entrega'), 'X')
+    await user.type(screen.getByLabelText('Dirección de entrega'), '{Backspace}')
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('tras guardar con éxito el formulario se cierra sin preguntar', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await llenarNuevoPedido(user)
+
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+    expect(await screen.findByText('Pedido 3 registrado.')).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
 
 describe('PedidosPage: filtro de fecha rápido', () => {
   test('al abrir el filtro de fecha está en hoy y se consulta con la fecha de hoy', async () => {

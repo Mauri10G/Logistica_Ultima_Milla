@@ -1,5 +1,6 @@
 import { Route, Zap } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { listarPedidos } from '../api/pedidosApi'
 import { listarRepartidores } from '../api/repartidoresApi'
 import {
   armarRutas,
@@ -19,8 +20,10 @@ import IndicadorConexion from '../components/IndicadorConexion'
 import MapaRutas from '../components/MapaRutas'
 import RutaCard from '../components/RutaCard'
 import { fechaIso } from '../hooks/fechas'
+import { useConfirmacion } from '../hooks/useConfirmacion'
 import { useWebSocketTopic } from '../hooks/useWebSocketTopic'
 import { TOPIC_RUTAS } from '../services/websocket'
+import { formatearFecha } from '../utils/formatos'
 
 export default function RutasPage() {
   const [fecha, setFecha] = useState(fechaIso(1))
@@ -32,6 +35,7 @@ export default function RutasPage() {
   const [mensaje, setMensaje] = useState(null)
   const [error, setError] = useState(null)
   const [cargando, setCargando] = useState(true)
+  const { pedir, dialogo } = useConfirmacion()
 
   const cargar = useCallback(async () => {
     try {
@@ -59,16 +63,23 @@ export default function RutasPage() {
     if (mensajeWs.fecha === fecha) cargar()
   })
 
-  async function armar() {
+  /** Pedidos PENDIENTE de la fecha que el armado va a agrupar; null si no se pudo consultar. */
+  async function contarPendientes() {
+    try {
+      return (await listarPedidos({ fecha, estado: 'PENDIENTE', size: 1 })).total
+    } catch {
+      return null
+    }
+  }
+
+  async function ejecutarArmado() {
     setArmando(true)
-    setMensaje(null)
-    setError(null)
     try {
       const nuevas = await armarRutas(fecha)
       setMensaje(
         nuevas.length === 0
-          ? 'No había pedidos pendientes para esa fecha.'
-          : `Se armaron ${nuevas.length} ruta(s).`,
+          ? `No había pedidos pendientes para el ${formatearFecha(fecha)}.`
+          : `Se armaron ${nuevas.length} ruta(s) para el ${formatearFecha(fecha)}.`,
       )
       await cargar()
     } catch (e) {
@@ -76,6 +87,35 @@ export default function RutasPage() {
     } finally {
       setArmando(false)
     }
+  }
+
+  /** Pide confirmación con la fecha y cuántos pedidos pendientes se van a agrupar, y recién entonces arma. */
+  async function armar() {
+    setMensaje(null)
+    setError(null)
+    setArmando(true) // mientras se consulta cuántos pedidos hay
+    const pendientes = await contarPendientes()
+    setArmando(false)
+    const fechaTexto = formatearFecha(fecha)
+    if (pendientes === 0) {
+      setMensaje(`No hay pedidos pendientes para el ${fechaTexto}: no hay rutas que armar.`)
+      return
+    }
+    await pedir({
+      titulo: `¿Armar las rutas del ${fechaTexto}?`,
+      descripcion:
+        pendientes === null
+          ? 'Se agruparán por zona los pedidos pendientes de esa fecha y se asignarán a repartidores disponibles.'
+          : `Se agruparán por zona ${pendientes} pedido(s) pendiente(s) de esa fecha y se asignarán a repartidores disponibles.`,
+      detalles: [
+        ['Fecha de entrega', fechaTexto],
+        ['Pedidos pendientes', pendientes === null ? 'No se pudo consultar' : String(pendientes)],
+      ],
+      textoConfirmar: 'Armar rutas',
+      textoCargando: 'Armando…',
+      variante: 'normal',
+      onConfirmar: ejecutarArmado,
+    })
   }
 
   /** Ejecuta un ajuste manual. Si el endpoint aún no existe (404/405) avisa sin romper la pantalla. */
@@ -102,17 +142,46 @@ export default function RutasPage() {
   const cambiarRepartidor = (ruta, repartidorId) =>
     ajustar(() => cambiarRepartidorDeRuta(ruta.id, repartidorId), `Se cambió el repartidor de la ruta ${ruta.id}.`)
 
-  const moverPedido = (ruta, pedido, rutaDestinoId) =>
-    ajustar(
-      () => moverPedidoARuta(rutaDestinoId, pedido.id),
-      `El pedido ${pedido.id} se movió a la ruta ${rutaDestinoId}.`,
-    )
+  const moverPedido = (ruta, pedido, rutaDestinoId) => {
+    const destino = rutas.find((otra) => otra.id === rutaDestinoId)
+    return pedir({
+      titulo: `¿Mover el pedido ${pedido.id} a la ruta ${rutaDestinoId}?`,
+      descripcion: 'El pedido dejará la ruta actual y pasará a la ruta elegida. Si esa ruta ya está llena, el sistema lo rechazará.',
+      detalles: [
+        ['Pedido', `${pedido.id} · ${pedido.direccion}`],
+        ['Sale de', `Ruta ${ruta.id} · ${ruta.zonaNombre} · ${ruta.repartidorNombre}`],
+        [
+          'Pasa a',
+          destino
+            ? `Ruta ${destino.id} · ${destino.zonaNombre} · ${destino.repartidorNombre} (${destino.pedidos.length}/${destino.maxPedidos} pedidos)`
+            : `Ruta ${rutaDestinoId}`,
+        ],
+      ],
+      textoConfirmar: 'Mover pedido',
+      textoCargando: 'Moviendo…',
+      variante: 'normal',
+      onConfirmar: () =>
+        ajustar(() => moverPedidoARuta(rutaDestinoId, pedido.id), `El pedido ${pedido.id} se movió a la ruta ${rutaDestinoId}.`),
+    })
+  }
 
   const sacarPedido = (ruta, pedido) =>
-    ajustar(
-      () => sacarPedidoDeRuta(ruta.id, pedido.id),
-      `El pedido ${pedido.id} salió de la ruta ${ruta.id} y volvió a PENDIENTE.`,
-    )
+    pedir({
+      titulo: `¿Sacar el pedido ${pedido.id} de la ruta ${ruta.id}?`,
+      descripcion: 'El pedido volverá a PENDIENTE y quedará sin ruta hasta que se arme otra o se mueva a una existente.',
+      detalles: [
+        ['Pedido', `${pedido.id} · ${pedido.direccion}`],
+        ['Ruta', `Ruta ${ruta.id} · ${ruta.zonaNombre} · ${ruta.repartidorNombre}`],
+      ],
+      textoConfirmar: 'Sacar pedido',
+      textoCargando: 'Sacando…',
+      variante: 'advertencia',
+      onConfirmar: () =>
+        ajustar(
+          () => sacarPedidoDeRuta(ruta.id, pedido.id),
+          `El pedido ${pedido.id} salió de la ruta ${ruta.id} y volvió a PENDIENTE.`,
+        ),
+    })
 
   const reordenar = (ruta, nuevoOrden) =>
     ajustar(() => reordenarRuta(ruta.id, nuevoOrden), `Se cambió el orden de las paradas de la ruta ${ruta.id}.`)
@@ -131,6 +200,8 @@ export default function RutasPage() {
           {armando ? 'Armando…' : 'Armar rutas'}
         </button>
       </EncabezadoPagina>
+
+      {dialogo}
 
       <div className="filtros">
         <div className="campo">

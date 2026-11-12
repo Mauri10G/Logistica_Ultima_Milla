@@ -371,3 +371,45 @@ describe('PedidoForm', () => {
     })
   })
 })
+
+describe('PedidoForm: onModificado', () => {
+  test('avisa false al abrir y true en cuanto se escribe algo', async () => {
+    const user = userEvent.setup()
+    const onModificado = jest.fn()
+    render(<PedidoForm onSubmit={jest.fn()} onModificado={onModificado} />)
+    expect(onModificado).toHaveBeenLastCalledWith(false)
+
+    await user.type(screen.getByLabelText('Nombres del cliente'), 'A')
+
+    expect(onModificado).toHaveBeenLastCalledWith(true)
+  })
+
+  test('al editar un pedido sin tocar nada no hay cambios, y al borrar lo escrito vuelve a no haberlos', async () => {
+    const user = userEvent.setup()
+    const onModificado = jest.fn()
+    render(<PedidoForm onSubmit={jest.fn()} pedido={PEDIDO_EXISTENTE} onModificado={onModificado} />)
+    expect(onModificado).toHaveBeenLastCalledWith(false)
+
+    await user.type(screen.getByLabelText('Dirección de entrega'), '!')
+    expect(onModificado).toHaveBeenLastCalledWith(true)
+    await user.type(screen.getByLabelText('Dirección de entrega'), '{Backspace}')
+
+    expect(onModificado).toHaveBeenLastCalledWith(false)
+  })
+
+  test('colocar el marcador en el mapa cuenta como cambio', () => {
+    const onModificado = jest.fn()
+    render(<PedidoForm onSubmit={jest.fn()} onModificado={onModificado} />)
+
+    clicEnMapa(-1.2412, -78.6197)
+
+    expect(onModificado).toHaveBeenLastCalledWith(true)
+  })
+
+  test('sin onModificado no falla', async () => {
+    const user = userEvent.setup()
+    render(<PedidoForm onSubmit={jest.fn()} />)
+
+    await expect(user.type(screen.getByLabelText('Nombres del cliente'), 'A')).resolves.not.toThrow()
+  })
+})
