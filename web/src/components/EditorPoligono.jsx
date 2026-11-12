@@ -37,12 +37,12 @@ export default function EditorPoligono({ puntos, cerrado, onAgregar, zonasRefere
     setVistaPrevia((anterior) => {
       if (!iman) return null
       // mismo punto que antes: se conserva el estado para no volver a renderizar en cada movimiento del mouse
-      return anterior && anterior.punto[0] === iman.punto[0] && anterior.punto[1] === iman.punto[1] ? anterior : iman
+      return anterior?.punto[0] === iman.punto[0] && anterior?.punto[1] === iman.punto[1] ? anterior : iman
     })
   }
 
   return (
-    <div role="group" aria-label="Mapa para dibujar el polígono de la zona">
+    <fieldset className="conjunto" aria-label="Mapa para dibujar el polígono de la zona">
       <MapContainer center={CENTRO_AMBATO} zoom={13} style={{ height: altura }} scrollWheelZoom>
         <TileLayer attribution={ATRIBUCION_OSM} url={URL_TILES_OSM} />
         <CapaZonas zonas={zonasReferencia} />
@@ -72,6 +72,6 @@ export default function EditorPoligono({ puntos, cerrado, onAgregar, zonasRefere
           </CircleMarker>
         )}
       </MapContainer>
-    </div>
+    </fieldset>
   )
 }

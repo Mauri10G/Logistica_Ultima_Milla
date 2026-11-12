@@ -8,6 +8,19 @@ export const MENSAJE_POCOS_PUNTOS = 'Dibuje al menos 3 puntos en el mapa'
 export const MENSAJE_SIN_CERRAR = 'Cierre el polígono antes de guardar'
 export const MINIMO_PUNTOS = 3
 
+/** Texto de "Guardar" según el estado del formulario. */
+function textoBoton(guardando, editando) {
+  if (guardando) return 'Guardando…'
+  return editando ? 'Guardar cambios' : 'Guardar zona'
+}
+
+/** Aviso de que un punto quedó pegado a un vértice o a un borde; null si no hubo imán. */
+function avisoDeIman(iman) {
+  if (!iman) return null
+  const destino = iman.tipo === 'vertice' ? 'a un vértice' : 'al borde'
+  return `Punto pegado ${destino} de la zona «${iman.zona}».`
+}
+
 /**
  * Formulario de zona (alta y edición). El polígono se dibuja con clics en el mapa; botones Deshacer punto,
  * Cerrar polígono y Limpiar. Es presentacional: entrega { nombre, area, activa } a `onGuardar`.
@@ -47,7 +60,7 @@ export default function ZonaForm({
     // pegado: el vértice exacto o el punto del borde de la otra zona (sin redondear); si no, el clic a 6 decimales
     const punto = iman ? iman.punto : [Number(latitud.toFixed(6)), Number(longitud.toFixed(6))]
     setPuntos((anteriores) => [...anteriores, punto])
-    setAvisoIman(iman ? `Punto pegado ${iman.tipo === 'vertice' ? 'a un vértice' : 'al borde'} de la zona «${iman.zona}».` : null)
+    setAvisoIman(avisoDeIman(iman))
     modificado()
   }
 
@@ -122,16 +135,16 @@ export default function ZonaForm({
 
       <div className="grupo-form ancho-completo">
         <h4 className="grupo-titulo">
-          Límites en el mapa
+          <span>Límites en el mapa</span>
           <span className="grupo-descripcion">Dibuje el polígono punto por punto y ciérrelo.</span>
         </h4>
         <div className="ancho-completo">
           <EditorPoligono puntos={puntos} cerrado={cerrado} onAgregar={agregarPunto} zonasReferencia={zonasReferencia} />
-          <p className="ayuda" role="status">
+          <output className="ayuda">
             {cerrado
               ? `Polígono cerrado con ${puntos.length} puntos.`
               : `Haga clic en el mapa para agregar puntos (${puntos.length} agregado(s), mínimo ${MINIMO_PUNTOS}).`}
-          </p>
+          </output>
           {!cerrado && zonasReferencia.length > 0 && (
             <p className="ayuda">
               Para que dos zonas queden pegadas, haga clic a menos de {RADIO_IMAN_METROS} m de otra zona: el punto se
@@ -140,9 +153,7 @@ export default function ZonaForm({
             </p>
           )}
           {avisoIman && (
-            <p className="ayuda aviso-iman" role="status">
-              {avisoIman}
-            </p>
+            <output className="ayuda aviso-iman">{avisoIman}</output>
           )}
           <div className="acciones-mapa">
             <button type="button" className="secundario pequeno" onClick={deshacer} disabled={puntos.length === 0}>
@@ -199,7 +210,7 @@ export default function ZonaForm({
         )}
         <button type="submit" disabled={guardando}>
           <Save size={18} aria-hidden="true" />
-          {guardando ? 'Guardando…' : editando ? 'Guardar cambios' : 'Guardar zona'}
+          {textoBoton(guardando, editando)}
         </button>
       </div>
     </form>

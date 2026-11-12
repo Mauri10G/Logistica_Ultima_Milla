@@ -14,6 +14,12 @@ const VALORES_INICIALES = {
   prioridad: 'NORMAL',
 }
 
+/** Texto del botón de envío según el estado del formulario. */
+function textoBoton(enviando, editando) {
+  if (enviando) return 'Guardando…'
+  return editando ? 'Guardar cambios' : 'Registrar pedido'
+}
+
 function valoresDesde(pedido) {
   if (!pedido) return { ...VALORES_INICIALES }
   return {
@@ -118,7 +124,7 @@ export default function PedidoForm({
     <form className="formulario" onSubmit={enviar} aria-label={editando ? 'Editar pedido' : 'Nuevo pedido'}>
       <div className="grupo-form ancho-completo">
         <h3 className="grupo-titulo">
-          Datos del cliente
+          <span>Datos del cliente</span>
           <span className="grupo-descripcion">Quién recibe el pedido y cómo contactarlo.</span>
         </h3>
         <div className="campo">
@@ -147,7 +153,7 @@ export default function PedidoForm({
 
       <div className="grupo-form ancho-completo">
         <h3 className="grupo-titulo">
-          Ubicación
+          <span>Ubicación</span>
           <span className="grupo-descripcion">El pedido se asigna a la zona donde cae el marcador del mapa.</span>
         </h3>
         <div className="campo ancho-completo">
@@ -190,7 +196,7 @@ export default function PedidoForm({
 
       <div className="grupo-form ancho-completo">
         <h3 className="grupo-titulo">
-          Fecha y hora
+          <span>Fecha y hora</span>
           <span className="grupo-descripcion">Cuándo debe llegar el pedido y con qué prioridad.</span>
         </h3>
         <div className="campo">
@@ -259,7 +265,7 @@ export default function PedidoForm({
           </button>
         )}
         <button type="submit" disabled={enviando}>
-          {enviando ? 'Guardando…' : editando ? 'Guardar cambios' : 'Registrar pedido'}
+          {textoBoton(enviando, editando)}
         </button>
       </div>
     </form>

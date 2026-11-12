@@ -16,7 +16,7 @@ function EscuchaClics({ onSeleccionar }) {
  */
 export default function SelectorUbicacion({ posicion, onSeleccionar, zonas = [], altura = 320 }) {
   return (
-    <div role="group" aria-label="Mapa para elegir la ubicación de entrega">
+    <fieldset className="conjunto" aria-label="Mapa para elegir la ubicación de entrega">
       <MapContainer center={posicion ?? CENTRO_AMBATO} zoom={13} style={{ height: altura }} scrollWheelZoom>
         <TileLayer attribution={ATRIBUCION_OSM} url={URL_TILES_OSM} />
         <CapaZonas zonas={zonas} />
@@ -29,6 +29,6 @@ export default function SelectorUbicacion({ posicion, onSeleccionar, zonas = [],
           />
         )}
       </MapContainer>
-    </div>
+    </fieldset>
   )
 }

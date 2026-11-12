@@ -424,7 +424,7 @@ describe('ZonasPage: el mapa se actualiza al instante, sin recargar la página',
 
     await act(async () => entregarLista([{ ...ZONAS[0], area: AREA_EDITADA }, ZONAS[1]]))
 
-    await waitFor(() => expect(screen.getByRole('form', { name: 'Nueva zona' })).toBeInTheDocument())
+    expect(await screen.findByRole('form', { name: 'Nueva zona' })).toBeInTheDocument()
     expect(areasDelMapa()).toEqual([AREA_EDITADA])
   })
 })

@@ -579,6 +579,19 @@ input[aria-invalid='true'] {
   margin: 0;
 }
 
+/* <output> hace de aviso de estado (role="status" implícito) y se ve como el párrafo de ayuda */
+output.ayuda {
+  display: block;
+}
+
+/* <fieldset> usado solo para agrupar (mapas, atajos): sin marco ni relleno del navegador */
+fieldset.conjunto {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 /* Error en rojo, pegado al campo */
 .error-campo {
   display: block;
@@ -1293,6 +1306,7 @@ button.aviso-cerrar:hover:not(:disabled) {
 .ruta {
   margin-bottom: 0;
   border-left: 5px solid var(--color-primario);
+  transition: box-shadow 0.15s;
 }
 
 .ruta header {
@@ -1461,11 +1475,12 @@ button.aviso-cerrar:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   gap: var(--espacio-2);
-  padding: var(--espacio-2) var(--espacio-4);
-  background: var(--color-tarjeta);
-  border: 1px solid var(--color-borde);
+  /* Pastillas de estado de Seguimiento: son botones que filtran, sin caja propia */
+  padding: 0;
+  background: none;
+  border: 0;
   border-radius: var(--radio-pildora);
-  box-shadow: var(--sombra-sm);
+  box-shadow: none;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -1869,14 +1884,6 @@ button.secundario[aria-pressed='true'] {
   margin-top: var(--espacio-4);
 }
 
-/* Pastillas de estado de Seguimiento: ahora son botones que filtran */
-.resumen li {
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-}
-
 .resumen button.pastilla-filtro {
   gap: var(--espacio-2);
   min-height: 2.5rem;
@@ -1906,10 +1913,6 @@ button.secundario[aria-pressed='true'] {
 
 .ruta-ajustar {
   margin-bottom: var(--espacio-1);
-}
-
-.ruta {
-  transition: box-shadow 0.15s;
 }
 
 .ruta-resaltada {

@@ -33,9 +33,12 @@ export default function Modal({ titulo, onCerrar, children }) {
     // Bloquea el scroll de la página sin que el contenido "salte" al desaparecer la barra.
     const anchoBarra = window.innerWidth - document.documentElement.clientWidth
     document.body.style.overflow = 'hidden'
-    if (anchoBarra > 0) document.body.style.paddingRight = `${anchoBarra}px`
+    if (anchoBarra > 0) {
+      document.body.style.paddingRight = `${anchoBarra}px`
+    }
 
-    ;(dialogo.querySelector(PRIMER_CAMPO) ?? dialogo).focus({ preventScroll: true })
+    const primerFocalizable = dialogo.querySelector(PRIMER_CAMPO) ?? dialogo
+    primerFocalizable.focus({ preventScroll: true })
 
     function alPulsarTecla(evento) {
       if (evento.key === 'Escape') {
@@ -50,7 +53,7 @@ export default function Modal({ titulo, onCerrar, children }) {
         return
       }
       const primero = focalizables[0]
-      const ultimo = focalizables[focalizables.length - 1]
+      const ultimo = focalizables.at(-1)
       const dentro = dialogo.contains(document.activeElement)
       if (evento.shiftKey && (document.activeElement === primero || !dentro)) {
         evento.preventDefault()
