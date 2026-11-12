@@ -81,6 +81,19 @@ ec.edu.uta.logistica
 - Armado manual (`POST /api/rutas/armar?fecha=`) y programado (`@Scheduled`, 18:00 diario, arma el día siguiente).
 - Pedido de último momento: se inserta en la ruta ARMADA con espacio más cercana, o se crea una ruta nueva.
 
+## Web: rutas y tablas
+
+- Rutas: la raíz `/` es **Inicio** y cualquier ruta desconocida (`*`) también redirige a Inicio (`web/src/App.jsx`).
+- Todas las tablas (Pedidos, Seguimiento, Zonas, Repartidores) usan `components/Tabla.jsx` + `hooks/useTabla.js`: 10 filas por
+  página (selector 10/25/50, "Mostrando 1 a 10 de 24", anterior/siguiente/números), orden al pulsar los encabezados y vuelta a la
+  página 1 al cambiar filtro, búsqueda u orden. Al cargar o recargar vienen ordenadas por `#` de menor a mayor; el orden elegido
+  por el usuario no se conserva. Hoy el orden y la paginación son del navegador: para pasarlos al backend se cambia solo
+  `useTabla`, no las páginas.
+- Pedidos: filtro de fecha en hoy al abrir (Hoy / Mañana / Todas), buscador por cliente o dirección, botón Ver (modal de solo
+  lectura con datos, ruta y historial) y, si el pedido no es PENDIENTE, un candado con tooltip en vez de Editar/Eliminar.
+- Rutas: cada ruta es un resumen; los controles de ajuste salen con "Ajustar ruta". El mapa queda fijo y resalta la ruta bajo el mouse.
+  El color de borde de cada ruta es el de su línea. Zonas: el color de una zona sale de su id (`colorDeZona`), igual en tabla y mapa.
+
 ## Concurrencia (crítico)
 
 El armado y la inserción de último momento son `@Transactional` y toman, por (zona, fecha): `pg_advisory_xact_lock`
