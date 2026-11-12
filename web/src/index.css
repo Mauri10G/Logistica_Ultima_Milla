@@ -1564,13 +1564,6 @@ button.disponibilidad.disponible::before {
     radial-gradient(700px 400px at 100% 110%, #e4defa 0%, transparent 55%), var(--color-fondo);
 }
 
-.formulario-login {
-  width: min(400px, 100%);
-  margin: 0;
-  padding: var(--espacio-5);
-  box-shadow: var(--sombra-md);
-}
-
 .pantalla-login > .tarjeta {
   width: min(440px, 100%);
   margin: 0;
@@ -1582,27 +1575,496 @@ button.disponibilidad.disponible::before {
   font-size: var(--texto-xl);
 }
 
-.login-marca {
+/* --- Login: dos columnas a pantalla completa (panel con ilustración + formulario) --- */
+
+.login-pagina {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--color-tarjeta);
+}
+
+.login-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--espacio-5);
+  padding: 3rem clamp(2rem, 5vw, 4.5rem);
+  overflow: hidden;
+  color: #ffffff;
+  background:
+    radial-gradient(520px 340px at 85% 8%, rgba(255, 255, 255, 0.16), transparent 70%),
+    radial-gradient(460px 320px at 0% 100%, rgba(143, 168, 255, 0.28), transparent 70%),
+    linear-gradient(155deg, #4268f0 0%, var(--color-primario) 42%, #17297d 100%);
+}
+
+.login-ilustracion {
+  display: block;
+  width: min(100%, 520px);
+  height: auto;
+  margin: 0 auto;
+  filter: drop-shadow(0 18px 28px rgba(8, 16, 70, 0.35));
+}
+
+.login-panel-texto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+  width: min(100%, 520px);
+  margin: 0 auto;
+}
+
+.login-panel-marca,
+.login-marca-movil {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  font-size: var(--texto-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.login-panel-marca .marca-logo,
+.login-marca-movil .marca-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+
+.login-panel-marca .marca-logo {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+.login-frase {
+  margin: 0;
+  max-width: 24ch;
+  font-size: var(--texto-2xl);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.login-puntos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--texto-base);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.login-puntos li {
   display: flex;
   align-items: center;
   gap: var(--espacio-3);
 }
 
-.login-marca .marca-logo {
-  width: 44px;
-  height: 44px;
+.login-punto-icono {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: var(--radio-md);
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.22);
 }
 
-.login-marca h1 {
-  margin: 0;
-  font-size: var(--texto-xl);
-  letter-spacing: -0.01em;
+.login-lado-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: var(--espacio-5);
+  background: var(--color-tarjeta);
 }
 
-.login-marca p {
+.login-contenido {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--espacio-5);
+  width: min(400px, 100%);
+}
+
+.login-marca-movil {
+  display: none;
+  color: var(--color-texto);
+}
+
+.login-formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+}
+
+.login-bienvenida h1 {
   margin: 0;
-  font-size: var(--texto-sm);
+  font-size: var(--texto-3xl);
+  letter-spacing: -0.02em;
+}
+
+.login-bienvenida p {
+  margin: var(--espacio-1) 0 0;
   color: var(--color-suave);
+}
+
+.campo-icono {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.campo-icono > svg {
+  position: absolute;
+  left: 0.8rem;
+  color: var(--color-suave);
+  pointer-events: none;
+}
+
+.campo-icono input {
+  width: 100%;
+  min-height: 2.9rem;
+  padding-left: 2.6rem;
+  padding-right: 2.9rem;
+}
+
+.campo-icono button.boton-ojo {
+  position: absolute;
+  right: 0.4rem;
+  width: 2.1rem;
+  min-height: 2.1rem;
+  padding: 0;
+  background: transparent;
+  color: var(--color-suave);
+}
+
+.campo-icono button.boton-ojo:hover:not(:disabled) {
+  background: var(--color-tarjeta-suave);
+  color: var(--color-texto);
+}
+
+.login-formulario .mensaje-error {
+  margin: 0;
+}
+
+.login-enviar {
+  width: 100%;
+  min-height: 2.9rem;
+  margin-top: var(--espacio-1);
+  font-size: var(--texto-base);
+  box-shadow: 0 6px 16px rgba(40, 81, 216, 0.28);
+}
+
+.login-girar {
+  animation: login-girar 0.8s linear infinite;
+}
+
+@keyframes login-girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.login-pie {
+  margin: var(--espacio-4) 0 0;
+  font-size: var(--texto-xs);
+  text-align: center;
+  color: var(--color-suave);
+}
+
+/* --- Ilustración del mapa (SVG; ver components/IlustracionLogin.jsx) --- */
+
+.login-mapa-fondo {
+  fill: rgba(8, 16, 80, 0.3);
+  stroke: rgba(255, 255, 255, 0.2);
+}
+
+.login-manzana {
+  fill: rgba(255, 255, 255, 0.12);
+}
+
+.login-parque {
+  fill: rgba(110, 231, 183, 0.3);
+}
+
+.login-calles line {
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1.2;
+  stroke-dasharray: 7 9;
+}
+
+.login-ruta-guia,
+.login-ruta-trazo {
+  stroke-width: 4.5;
+  stroke-dasharray: 1 9;
+}
+
+.login-ruta-guia {
+  stroke: rgba(255, 255, 255, 0.26);
+}
+
+.login-ruta-trazo {
+  stroke: #ffffff;
+}
+
+.login-ruta-mascara {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.login-pin {
+  transform-origin: 0 0;
+}
+
+.login-pin-onda {
+  transform-origin: 0 0;
+}
+
+.login-pin-cuerpo {
+  fill: #ffffff;
+}
+
+.login-pin-centro {
+  fill: var(--color-primario);
+}
+
+.login-pin-centro-final {
+  fill: #f59e0b;
+}
+
+.login-pin-sombra {
+  fill: rgba(8, 16, 70, 0.35);
+}
+
+.login-pin-onda {
+  fill: none;
+  stroke: #fbbf24;
+  stroke-width: 2;
+  opacity: 0;
+}
+
+.login-furgoneta-fondo {
+  fill: #ffffff;
+}
+
+.login-furgoneta-icono {
+  fill: var(--color-primario);
+}
+
+/* La furgoneta recorre la ruta con offset-path (el trazado se pone en línea desde el componente).
+   Sin soporte, se oculta en vez de quedarse en una esquina. */
+@supports not (offset-path: path('M0 0')) {
+  .login-furgoneta {
+    display: none;
+  }
+}
+
+/* Un ciclo de 10 s: la ruta se dibuja hasta el 65 %, los pines aparecen cuando la ruta los alcanza
+   (B 17 %, C 47 %, D 65 %) y todo se desvanece antes de repetir. */
+@media (prefers-reduced-motion: no-preference) {
+  .login-ruta-mascara {
+    animation: login-trazar 10s linear infinite;
+  }
+
+  .login-ruta-trazo {
+    animation: login-desvanecer 10s linear infinite;
+  }
+
+  .login-furgoneta {
+    animation: login-recorrer 10s linear infinite;
+  }
+
+  .login-pin-b {
+    animation: login-pin-b 10s ease-out infinite;
+  }
+
+  .login-pin-c {
+    animation: login-pin-c 10s ease-out infinite;
+  }
+
+  .login-pin-d {
+    animation: login-pin-d 10s ease-out infinite;
+  }
+
+  .login-pin-onda {
+    animation: login-onda 10s ease-out infinite;
+  }
+}
+
+/* Con movimiento reducido: ruta completa y furgoneta a mitad de camino, todo quieto. */
+@media (prefers-reduced-motion: reduce) {
+  .login-ruta-mascara {
+    stroke-dashoffset: 0;
+  }
+
+  .login-furgoneta {
+    offset-distance: 50%;
+  }
+
+  .login-girar {
+    animation: none;
+  }
+}
+
+@keyframes login-trazar {
+  0% {
+    stroke-dashoffset: 1;
+  }
+  65%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes login-desvanecer {
+  0%,
+  90% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes login-recorrer {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  65% {
+    offset-distance: 100%;
+    opacity: 1;
+  }
+  71%,
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes login-pin-b {
+  0%,
+  16% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  24%,
+  90% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes login-pin-c {
+  0%,
+  46% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  54%,
+  90% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes login-pin-d {
+  0%,
+  64% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  68% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  72%,
+  90% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes login-onda {
+  0%,
+  68% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  70% {
+    opacity: 0.6;
+    transform: scale(0.5);
+  }
+  80% {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+  81% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  83% {
+    opacity: 0.6;
+    transform: scale(0.5);
+  }
+  93%,
+  100% {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+@media (max-width: 899px) {
+  .login-pagina {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .login-panel {
+    display: none;
+  }
+
+  .login-marca-movil {
+    display: flex;
+  }
+
+  .login-lado-form {
+    min-height: 100vh;
+    background:
+      radial-gradient(700px 360px at 0% -10%, var(--color-primario-suave), transparent 65%),
+      var(--color-tarjeta);
+  }
 }
 
 /* ==========================================================================
