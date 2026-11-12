@@ -38,8 +38,13 @@ public interface ZonaRepository extends JpaRepository<Zona, Long> {
      *
      * <p>{@code ST_Relate(a, b, 'T********')} es verdadero cuando la interseccion de los interiores no es vacia
      * (celda II de la matriz DE-9IM). Dos zonas que solo comparten borde o vertices tienen II vacio y se aceptan;
-     * un cruce parcial, una zona contenida en otra o dos zonas iguales tienen II no vacio y se rechazan.
-     * {@code &&} (cajas envolventes) es solo un filtro previo que aprovecha el indice GIST: ST_Relate no lo usa.
+     * un cruce parcial, una zona contenida en otra o dos zonas iguales tienen II no vacio.
+     *
+     * <p>Ademas, para absorber las diferencias de decimales al pegar un borde al de la vecina (franjas de
+     * centimetros a lo largo del borde), la superposicion solo cuenta si el area de la interseccion, en metros
+     * cuadrados (cast a geography), supera {@code toleranciaM2}. Una zona totalmente contenida en otra (o que la
+     * contiene) se rechaza siempre, sin importar su area. {@code ST_CollectionExtract(..., 3)} deja solo los
+     * poligonos de la interseccion. {@code &&} (cajas envolventes) es un filtro previo que aprovecha el indice GIST.
      */
     @Query(value = """
             SELECT * FROM zona
@@ -47,7 +52,12 @@ public interface ZonaRepository extends JpaRepository<Zona, Long> {
               AND id <> :excluirId
               AND area && ST_GeomFromText(:wkt, 4326)
               AND ST_Relate(area, ST_GeomFromText(:wkt, 4326), 'T********')
+              AND (ST_Area(ST_CollectionExtract(ST_Intersection(area, ST_GeomFromText(:wkt, 4326)), 3)::geography)
+                       > :toleranciaM2
+                   OR ST_CoveredBy(area, ST_GeomFromText(:wkt, 4326))
+                   OR ST_CoveredBy(ST_GeomFromText(:wkt, 4326), area))
             ORDER BY nombre
             """, nativeQuery = true)
-    List<Zona> buscarSuperpuestas(@Param("wkt") String wkt, @Param("excluirId") long excluirId);
+    List<Zona> buscarSuperpuestas(@Param("wkt") String wkt, @Param("excluirId") long excluirId,
+                                  @Param("toleranciaM2") double toleranciaM2);
 }

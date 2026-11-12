@@ -29,6 +29,11 @@ management:
 # Propiedades propias del sistema (ver LogisticaProperties)
 logistica:
   zona-horaria: America/Guayaquil
+  zonas:
+    # Area minima (m2) de la interseccion de dos zonas para contar como superposicion. Absorbe las diferencias de
+    # decimales al pegar el borde de una zona al de su vecina (la web pega los puntos a vertices y bordes).
+    # Una zona totalmente dentro de otra se rechaza siempre. Se lee con @Value en ZonaService.
+    tolerancia-superposicion-m2: 500
   rutas:
     max-pedidos: 4 # maximo de pedidos por ruta
     armado:
