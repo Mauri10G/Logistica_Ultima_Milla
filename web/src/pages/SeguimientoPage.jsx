@@ -1,8 +1,13 @@
+import { Eye, PackageSearch } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { listarPedidos } from '../api/pedidosApi'
 import { obtenerHistorial } from '../api/seguimientoApi'
 import { mensajeDeError } from '../utils/errores'
+import Avisos from '../components/Avisos'
+import { FilasCarga } from '../components/Cargando'
+import EncabezadoPagina from '../components/EncabezadoPagina'
 import EstadoBadge from '../components/EstadoBadge'
+import EstadoVacio from '../components/EstadoVacio'
 import HistorialPedido from '../components/HistorialPedido'
 import IndicadorConexion from '../components/IndicadorConexion'
 import { fechaIso } from '../hooks/fechas'
@@ -23,6 +28,7 @@ export default function SeguimientoPage() {
   const [seleccionadoId, setSeleccionadoId] = useState(null)
   const [historial, setHistorial] = useState(null)
   const [errorHistorial, setErrorHistorial] = useState(null)
+  const [cargando, setCargando] = useState(true)
   const temporizadores = useRef([])
   const seleccionadoRef = useRef(null)
 
@@ -33,6 +39,8 @@ export default function SeguimientoPage() {
       setError(null)
     } catch (e) {
       setError(mensajeDeError(e))
+    } finally {
+      setCargando(false)
     }
   }, [fecha])
 
@@ -98,10 +106,14 @@ export default function SeguimientoPage() {
 
   return (
     <section>
-      <header className="encabezado">
-        <h2>Seguimiento de entregas</h2>
+      <EncabezadoPagina
+        titulo="Seguimiento de entregas"
+        descripcion="Estado de cada pedido en tiempo real; elija uno para ver su historial."
+      >
         <IndicadorConexion conectado={conectado} />
-      </header>
+      </EncabezadoPagina>
+
+      <Avisos error={error} onCerrarError={() => setError(null)} />
 
       <div className="filtros">
         <div className="campo">
@@ -124,67 +136,69 @@ export default function SeguimientoPage() {
         ))}
       </ul>
 
-      {error && (
-        <p className="mensaje-error" role="alert">
-          {error}
-        </p>
-      )}
-
-      <div className={seleccionado ? 'dos-columnas' : undefined}>
-        <table className="tabla">
-          <caption className="solo-lectores">Pedidos de la fecha con su estado actual</caption>
-          <thead>
-            <tr>
-              <th scope="col">#</th>
-              <th scope="col">Cliente</th>
-              <th scope="col">Dirección</th>
-              <th scope="col">Zona</th>
-              <th scope="col">Ruta</th>
-              <th scope="col">Estado</th>
-              <th scope="col">Historial</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pedidos.map((pedido) => (
-              <tr
-                key={pedido.id}
-                className={[
-                  recienActualizados.has(pedido.id) ? 'fila-actualizada' : '',
-                  pedido.id === seleccionadoId ? 'fila-seleccionada' : '',
-                ]
-                  .join(' ')
-                  .trim() || undefined}
-              >
-                <td>{pedido.id}</td>
-                <td>{pedido.clienteNombres}</td>
-                <td>{pedido.direccion}</td>
-                <td>{pedido.zonaNombre}</td>
-                <td>{pedido.rutaId ?? '—'}</td>
-                <td data-testid={`estado-pedido-${pedido.id}`}>
-                  <EstadoBadge estado={pedido.estado} />
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    className="secundario"
-                    aria-label={`Ver historial del pedido ${pedido.id}`}
-                    aria-pressed={pedido.id === seleccionadoId}
-                    onClick={() => seleccionar(pedido)}
-                  >
-                    Ver historial
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {pedidos.length === 0 && (
+      <div className={seleccionado ? 'dos-columnas dos-columnas-historial' : undefined}>
+        <div className="tabla-contenedor">
+          <table className="tabla" aria-busy={cargando}>
+            <caption className="solo-lectores">Pedidos de la fecha con su estado actual</caption>
+            <thead>
               <tr>
-                <td colSpan={7} className="vacio">
-                  No hay pedidos para esta fecha.
-                </td>
+                <th scope="col">#</th>
+                <th scope="col">Cliente</th>
+                <th scope="col">Dirección</th>
+                <th scope="col">Zona</th>
+                <th scope="col">Ruta</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Historial</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {cargando && <FilasCarga columnas={7} />}
+              {pedidos.map((pedido) => (
+                <tr
+                  key={pedido.id}
+                  className={[
+                    recienActualizados.has(pedido.id) ? 'fila-actualizada' : '',
+                    pedido.id === seleccionadoId ? 'fila-seleccionada' : '',
+                  ]
+                    .join(' ')
+                    .trim() || undefined}
+                >
+                  <td>{pedido.id}</td>
+                  <td>{pedido.clienteNombres}</td>
+                  <td>{pedido.direccion}</td>
+                  <td>{pedido.zonaNombre}</td>
+                  <td>{pedido.rutaId ?? '—'}</td>
+                  <td data-testid={`estado-pedido-${pedido.id}`}>
+                    <EstadoBadge estado={pedido.estado} />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="secundario pequeno"
+                      aria-label={`Ver historial del pedido ${pedido.id}`}
+                      aria-pressed={pedido.id === seleccionadoId}
+                      onClick={() => seleccionar(pedido)}
+                    >
+                      <Eye size={14} aria-hidden="true" />
+                      Ver historial
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!cargando && pedidos.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="vacio">
+                    <EstadoVacio
+                      icono={PackageSearch}
+                      titulo="No hay pedidos para esta fecha."
+                      ayuda="Elija otra fecha para ver sus entregas."
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {seleccionado && (
           <HistorialPedido pedido={seleccionado} historial={historial} error={errorHistorial} onCerrar={cerrarHistorial} />

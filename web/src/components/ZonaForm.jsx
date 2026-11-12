@@ -1,3 +1,4 @@
+import { Check, Eraser, Save, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 import { poligonoAPuntos, puntosAPoligono } from '../utils/geojson'
 import { buscarPuntoImantado, RADIO_IMAN_METROS } from '../utils/iman'
@@ -94,52 +95,74 @@ export default function ZonaForm({
 
   return (
     <form className="formulario" onSubmit={enviar} aria-label={editando ? 'Editar zona' : 'Nueva zona'}>
-      <h3 className="ancho-completo">{editando ? `Editar zona ${zona.nombre}` : 'Nueva zona'}</h3>
-      <div className="campo ancho-completo">
-        <label htmlFor="zonaNombre">Nombre de la zona</label>
-        <input
-          id="zonaNombre"
-          value={nombre}
-          onChange={(e) => {
-            setNombre(e.target.value)
-            modificado()
-          }}
-          required
-        />
-      </div>
-      <div className="campo ancho-completo campo-check">
-        <input id="zonaActiva" type="checkbox" checked={activa} onChange={(e) => setActiva(e.target.checked)} />
-        <label htmlFor="zonaActiva">Zona activa</label>
+      <h3 className="ancho-completo modal-titulo">{editando ? `Editar zona ${zona.nombre}` : 'Nueva zona'}</h3>
+      <div className="grupo-form ancho-completo">
+        <h4 className="grupo-titulo">Datos de la zona</h4>
+        <div className="campo">
+          <label htmlFor="zonaNombre">Nombre de la zona</label>
+          <input
+            id="zonaNombre"
+            value={nombre}
+            onChange={(e) => {
+              setNombre(e.target.value)
+              modificado()
+            }}
+            aria-describedby="ayudaZonaNombre"
+            required
+          />
+          <p id="ayudaZonaNombre" className="ayuda">
+            Debe ser distinto al de las demás zonas.
+          </p>
+        </div>
+        <div className="campo campo-check">
+          <input id="zonaActiva" type="checkbox" checked={activa} onChange={(e) => setActiva(e.target.checked)} />
+          <label htmlFor="zonaActiva">Zona activa</label>
+        </div>
       </div>
 
-      <div className="ancho-completo">
-        <EditorPoligono puntos={puntos} cerrado={cerrado} onAgregar={agregarPunto} zonasReferencia={zonasReferencia} />
-        <p className="ayuda" role="status">
-          {cerrado
-            ? `Polígono cerrado con ${puntos.length} puntos.`
-            : `Haga clic en el mapa para agregar puntos (${puntos.length} agregado(s), mínimo ${MINIMO_PUNTOS}).`}
-        </p>
-        {!cerrado && zonasReferencia.length > 0 && (
-          <p className="ayuda">
-            Para que dos zonas queden pegadas, haga clic a menos de {RADIO_IMAN_METROS} m de otra zona: el punto se pega
-            solo al vértice más cercano o, si no hay, al borde. Un círculo verde en el mapa muestra dónde se pegará.
+      <div className="grupo-form ancho-completo">
+        <h4 className="grupo-titulo">
+          Límites en el mapa
+          <span className="grupo-descripcion">Dibuje el polígono punto por punto y ciérrelo.</span>
+        </h4>
+        <div className="ancho-completo">
+          <EditorPoligono puntos={puntos} cerrado={cerrado} onAgregar={agregarPunto} zonasReferencia={zonasReferencia} />
+          <p className="ayuda" role="status">
+            {cerrado
+              ? `Polígono cerrado con ${puntos.length} puntos.`
+              : `Haga clic en el mapa para agregar puntos (${puntos.length} agregado(s), mínimo ${MINIMO_PUNTOS}).`}
           </p>
-        )}
-        {avisoIman && (
-          <p className="ayuda aviso-iman" role="status">
-            {avisoIman}
-          </p>
-        )}
-        <div className="acciones-mapa">
-          <button type="button" className="secundario" onClick={deshacer} disabled={puntos.length === 0}>
-            Deshacer punto
-          </button>
-          <button type="button" className="secundario" onClick={cerrar} disabled={cerrado || puntos.length === 0}>
-            Cerrar polígono
-          </button>
-          <button type="button" className="secundario" onClick={limpiar} disabled={puntos.length === 0}>
-            Limpiar
-          </button>
+          {!cerrado && zonasReferencia.length > 0 && (
+            <p className="ayuda">
+              Para que dos zonas queden pegadas, haga clic a menos de {RADIO_IMAN_METROS} m de otra zona: el punto se
+              pega solo al vértice más cercano o, si no hay, al borde. Un círculo verde en el mapa muestra dónde se
+              pegará.
+            </p>
+          )}
+          {avisoIman && (
+            <p className="ayuda aviso-iman" role="status">
+              {avisoIman}
+            </p>
+          )}
+          <div className="acciones-mapa">
+            <button type="button" className="secundario pequeno" onClick={deshacer} disabled={puntos.length === 0}>
+              <Undo2 size={16} aria-hidden="true" />
+              Deshacer punto
+            </button>
+            <button
+              type="button"
+              className="secundario pequeno"
+              onClick={cerrar}
+              disabled={cerrado || puntos.length === 0}
+            >
+              <Check size={16} aria-hidden="true" />
+              Cerrar polígono
+            </button>
+            <button type="button" className="secundario pequeno" onClick={limpiar} disabled={puntos.length === 0}>
+              <Eraser size={16} aria-hidden="true" />
+              Limpiar
+            </button>
+          </div>
         </div>
       </div>
 
@@ -175,6 +198,7 @@ export default function ZonaForm({
           </button>
         )}
         <button type="submit" disabled={guardando}>
+          <Save size={18} aria-hidden="true" />
           {guardando ? 'Guardando…' : editando ? 'Guardar cambios' : 'Guardar zona'}
         </button>
       </div>

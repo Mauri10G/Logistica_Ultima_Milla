@@ -1,12 +1,17 @@
 import L from 'leaflet'
 
-/** Marcador redondo del color de la ruta con el número de parada dentro. */
-export function crearIconoParada(numero, color) {
+/**
+ * Marcador redondo con el número de parada. El aro es del color de la ruta; si se indica el `estado` del pedido,
+ * el relleno toma el color de ese estado (las mismas variables CSS de las tablas y los badges). Sin estado,
+ * el relleno es del color de la ruta.
+ */
+export function crearIconoParada(numero, color, estado) {
+  const clase = estado ? ` class="parada-${estado}"` : ''
   return L.divIcon({
     className: 'parada-marcador',
-    html: `<span style="background:${color}">${numero}</span>`,
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
+    html: `<span${clase} style="--ruta:${color}">${numero}</span>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
   })
 }
 

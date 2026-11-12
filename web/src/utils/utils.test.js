@@ -251,6 +251,16 @@ describe('paradas', () => {
     expect(icono.options.html).toContain('>3<')
     expect(icono.options.html).toContain('#16a34a')
   })
+
+  test('crearIconoParada con estado deja el relleno al color de ese estado y el aro al de la ruta', () => {
+    const icono = crearIconoParada(2, '#16a34a', 'EN_CAMINO')
+    expect(icono.options.html).toContain('class="parada-EN_CAMINO"')
+    expect(icono.options.html).toContain('--ruta:#16a34a')
+  })
+
+  test('crearIconoParada sin estado no agrega clase de estado', () => {
+    expect(crearIconoParada(1, '#2563eb').options.html).not.toContain('class=')
+  })
 })
 
 describe('claveDeZona', () => {

@@ -1,6 +1,11 @@
+import { MapPinned, Pencil, Plus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { actualizarZona, crearZona, listarZonas } from '../api/zonasApi'
 import { codigoDeError, estadoHttp, mensajeDeError } from '../utils/errores'
+import Avisos from '../components/Avisos'
+import { FilasCarga } from '../components/Cargando'
+import EncabezadoPagina from '../components/EncabezadoPagina'
+import EstadoVacio from '../components/EstadoVacio'
 import ZonaForm from '../components/ZonaForm'
 
 export default function ZonasPage() {
@@ -12,6 +17,7 @@ export default function ZonasPage() {
   const [mensaje, setMensaje] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [version, setVersion] = useState(0) // cambia tras guardar para vaciar el formulario
+  const [cargando, setCargando] = useState(true)
 
   const cargar = useCallback(async () => {
     try {
@@ -19,6 +25,8 @@ export default function ZonasPage() {
       setErrorLista(null)
     } catch (e) {
       setErrorLista(mensajeDeError(e))
+    } finally {
+      setCargando(false)
     }
   }, [])
 
@@ -74,29 +82,28 @@ export default function ZonasPage() {
 
   return (
     <section>
-      <header className="encabezado">
-        <h2>Zonas</h2>
+      <EncabezadoPagina
+        titulo="Zonas"
+        descripcion="Defina las zonas de reparto dibujando su polígono en el mapa; los pedidos se agrupan por zona."
+      >
         {zonaEnEdicion && (
           <button type="button" className="secundario" onClick={terminarEdicion}>
+            <Plus size={18} aria-hidden="true" />
             Nueva zona
           </button>
         )}
-      </header>
+      </EncabezadoPagina>
 
-      {mensaje && (
-        <p className="mensaje-ok" role="status">
-          {mensaje}
-        </p>
-      )}
-      {errorLista && (
-        <p className="mensaje-error" role="alert">
-          {errorLista}
-        </p>
-      )}
+      <Avisos
+        mensaje={mensaje}
+        error={errorLista}
+        onCerrarMensaje={() => setMensaje(null)}
+        onCerrarError={() => setErrorLista(null)}
+      />
 
       <div className="dos-columnas">
-        <div>
-          <table className="tabla">
+        <div className="tabla-contenedor">
+          <table className="tabla" aria-busy={cargando}>
             <caption className="solo-lectores">Zonas de reparto</caption>
             <thead>
               <tr>
@@ -107,27 +114,35 @@ export default function ZonasPage() {
               </tr>
             </thead>
             <tbody>
+              {cargando && <FilasCarga columnas={4} />}
               {zonas.map((zona) => (
                 <tr key={zona.id}>
                   <td>{zona.id}</td>
                   <td>{zona.nombre}</td>
-                  <td>{zona.activa ? 'Sí' : 'No'}</td>
+                  <td>
+                    <span className={zona.activa ? 'pastilla pastilla-ok' : 'pastilla'}>{zona.activa ? 'Sí' : 'No'}</span>
+                  </td>
                   <td>
                     <button
                       type="button"
-                      className="secundario"
+                      className="secundario pequeno"
                       aria-label={`Editar zona ${zona.nombre}`}
                       onClick={() => editar(zona)}
                     >
+                      <Pencil size={14} aria-hidden="true" />
                       Editar
                     </button>
                   </td>
                 </tr>
               ))}
-              {zonas.length === 0 && (
+              {!cargando && zonas.length === 0 && (
                 <tr>
                   <td colSpan={4} className="vacio">
-                    No hay zonas configuradas.
+                    <EstadoVacio
+                      icono={MapPinned}
+                      titulo="No hay zonas configuradas."
+                      ayuda="Dibuje la primera zona en el mapa del formulario."
+                    />
                   </td>
                 </tr>
               )}
