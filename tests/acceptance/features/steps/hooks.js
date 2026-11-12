@@ -9,7 +9,10 @@ Before(async function () {
   this.web = process.env.WEB_URL || 'http://localhost:5173'
   this.api = process.env.API_URL || 'http://localhost:8080'
 
-  this.navegador = await chromium.launch({ headless: process.env.HEADED !== '1' })
+  // SLOWMO (ms) frena cada acción del navegador para poder seguir los pasos: con HEADED=1 es 250 por defecto, sin HEADED es 0
+  const conVentana = process.env.HEADED === '1'
+  const slowMo = Number(process.env.SLOWMO ?? (conVentana ? 250 : 0))
+  this.navegador = await chromium.launch({ headless: !conVentana, slowMo })
   this.pagina = await this.navegador.newPage()
 
   // Todo lo que crea el escenario lleva esta etiqueta en su nombre: así es único y se puede limpiar al final.
