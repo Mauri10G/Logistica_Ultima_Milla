@@ -26,6 +26,15 @@ const RUTA =
   'M70 270V214Q70 200 84 200H136Q150 200 150 186V144Q150 130 164 130H226Q240 130 240 144V186Q240 200 254 200' +
   'H316Q330 200 330 186V144Q330 130 344 130H396Q410 130 410 116V60'
 
+// Río curvo de norte a sur, como el Ambato; los nombres van sobre manzanas libres de la ruta.
+const RIO = 'M205-10C205 40 140 70 168 120S292 172 268 232S216 300 244 350'
+
+const SECTORES = [
+  { nombre: 'Ficoa', x: 110, y: 98 },
+  { nombre: 'Centro', x: 285, y: 168 },
+  { nombre: 'Huachi', x: 110, y: 238 },
+]
+
 const PINES = [
   { id: 'a', x: 70, y: 270, clase: 'login-pin-a' },
   { id: 'b', x: 150, y: 165, clase: 'login-pin-b' },
@@ -86,6 +95,17 @@ export default function IlustracionLogin() {
             height={m.alto}
             rx="8"
           />
+        ))}
+
+        {/* río que cruza la ciudad, como el Ambato: va por debajo de las calles (los cruces son puentes) */}
+        <path className="login-rio" d={RIO} fill="none" strokeLinecap="round" />
+        <path className="login-rio-brillo" d={RIO} fill="none" strokeLinecap="round" />
+
+        {/* sectores */}
+        {SECTORES.map((sector) => (
+          <text key={sector.nombre} className="login-sector" x={sector.x} y={sector.y} textAnchor="middle">
+            {sector.nombre}
+          </text>
         ))}
 
         {/* calles */}

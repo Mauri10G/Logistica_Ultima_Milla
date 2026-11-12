@@ -26,10 +26,10 @@ function dibujarLogin() {
 }
 
 describe('LoginPage (diseño)', () => {
-  test('muestra la bienvenida, la frase del panel, los tres puntos y el pie', () => {
+  test('muestra el saludo, la frase del panel, los tres puntos y el pie', () => {
     dibujarLogin()
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Bienvenido' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: /^(Buenos días|Buenas tardes|Buenas noches)$/ })).toBeInTheDocument()
     expect(screen.getByText('Ingrese con su usuario de personal')).toBeInTheDocument()
     expect(screen.getByText('Organiza tus entregas de última milla en tiempo real')).toBeInTheDocument()
     expect(screen.getByText(/Rutas automáticas/)).toBeInTheDocument()
@@ -47,6 +47,36 @@ describe('LoginPage (diseño)', () => {
     expect(ilustracion.querySelectorAll('.login-pin')).toHaveLength(4)
     expect(ilustracion.querySelector('.login-ruta-trazo')).not.toBeNull()
     expect(ilustracion.querySelector('.login-furgoneta')).not.toBeNull()
+  })
+
+  test('el mapa tiene el río y los sectores Centro, Huachi y Ficoa', () => {
+    const { container } = dibujarLogin()
+
+    const ilustracion = container.querySelector('svg.login-ilustracion')
+    expect(ilustracion.querySelector('.login-rio')).not.toBeNull()
+    const sectores = [...ilustracion.querySelectorAll('.login-sector')].map((t) => t.textContent)
+    expect(sectores).toEqual(['Ficoa', 'Centro', 'Huachi'])
+  })
+
+  test('el fondo de rutas del formulario es decorativo', () => {
+    const { container } = dibujarLogin()
+
+    expect(container.querySelector('svg.login-fondo-rutas')).toHaveAttribute('aria-hidden', 'true')
+  })
+})
+
+describe('LoginPage: saludo según la hora', () => {
+  afterEach(() => jest.useRealTimers())
+
+  test.each([
+    [9, 'Buenos días'],
+    [15, 'Buenas tardes'],
+    [21, 'Buenas noches'],
+  ])('a las %i h el título dice "%s"', (hora, saludo) => {
+    jest.useFakeTimers({ now: new Date(2026, 10, 12, hora, 0) })
+    dibujarLogin()
+
+    expect(screen.getByRole('heading', { level: 1, name: saludo })).toBeInTheDocument()
   })
 })
 

@@ -4,9 +4,11 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { iniciarSesionApi } from '../api/authApi'
 import { guardarSesion } from '../auth/sesion'
 import IlustracionLogin from '../components/IlustracionLogin'
+import FondoRutas from '../components/FondoRutas'
 import Logo from '../components/Logo'
 import { ROL_STAFF, useSesion } from '../auth/useSesion'
 import { estadoHttp, mensajeDeError } from '../utils/errores'
+import { saludoSegunHora } from '../utils/saludo'
 
 export const MENSAJE_CREDENCIALES = 'Usuario o clave incorrectos'
 
@@ -24,6 +26,7 @@ export default function LoginPage() {
   const [verClave, setVerClave] = useState(false)
   const [error, setError] = useState(null)
   const [enviando, setEnviando] = useState(false)
+  const [saludo] = useState(() => saludoSegunHora())
 
   // Sin login habilitado, o con una sesión de personal ya iniciada, no hay nada que hacer aquí.
   if (!authHabilitada || sesion?.rol === ROL_STAFF) return <Navigate to="/" replace />
@@ -67,6 +70,7 @@ export default function LoginPage() {
       </section>
 
       <section className="login-lado-form">
+        <FondoRutas />
         <div className="login-contenido">
           <div className="login-marca-movil">
             <Logo />
@@ -75,7 +79,7 @@ export default function LoginPage() {
 
           <form className="login-formulario" onSubmit={enviar} aria-label="Iniciar sesión">
             <div className="login-bienvenida">
-              <h1>Bienvenido</h1>
+              <h1>{saludo}</h1>
               <p>Ingrese con su usuario de personal</p>
             </div>
 
