@@ -31,6 +31,10 @@ function avisoDeIman(iman) {
  *   (zonas contiguas, sin huecos)
  * @param {string|null} [advertencia] mensaje de ZONA_SUPERPUESTA; muestra "Guardar de todas formas" (CP-08)
  * @param {() => void} [onEditar] se llama cuando el usuario cambia algo (para limpiar avisos anteriores)
+ * @param {(zona: object, momento: 'desmarcar'|'guardar') => Promise<boolean>} [onConfirmarDesactivar] se llama antes de
+ *   desactivar una zona activa, al desmarcar "Zona activa" y otra vez al guardar; si da false no se desactiva
+ * @param {(advertencia: string) => Promise<boolean>} [onConfirmarSuperposicion] se llama antes de
+ *   "Guardar de todas formas"; si da false no se guarda
  */
 export default function ZonaForm({
   zona = null,
@@ -38,6 +42,8 @@ export default function ZonaForm({
   onGuardar,
   onCancelar,
   onEditar,
+  onConfirmarDesactivar,
+  onConfirmarSuperposicion,
   guardando = false,
   error = null,
   advertencia = null,
@@ -98,12 +104,31 @@ export default function ZonaForm({
     return { nombre: nombre.trim(), area: puntosAPoligono(puntos), activa }
   }
 
-  function enviar(evento) {
+  /** Desactivar una zona activa pide confirmación; false si la persona canceló. */
+  async function confirmarDesactivacion(momento) {
+    const desactiva = editando && zona.activa && !activa
+    return !desactiva || !onConfirmarDesactivar || (await onConfirmarDesactivar(zona, momento))
+  }
+
+  async function cambiarActiva(marcada) {
+    if (!marcada && editando && zona.activa && onConfirmarDesactivar && !(await onConfirmarDesactivar(zona, 'desmarcar'))) {
+      return // sigue activa
+    }
+    setActiva(marcada)
+  }
+
+  async function enviar(evento) {
     evento.preventDefault()
     const problema = validar()
     setErrorLocal(problema)
     if (problema) return
+    if (!(await confirmarDesactivacion('guardar'))) return
     onGuardar(construirDatos(), false)
+  }
+
+  async function guardarDeTodasFormas() {
+    if (onConfirmarSuperposicion && !(await onConfirmarSuperposicion(advertencia))) return
+    onGuardar(construirDatos(), true)
   }
 
   return (
@@ -128,7 +153,7 @@ export default function ZonaForm({
           </p>
         </div>
         <div className="campo campo-check">
-          <input id="zonaActiva" type="checkbox" checked={activa} onChange={(e) => setActiva(e.target.checked)} />
+          <input id="zonaActiva" type="checkbox" checked={activa} onChange={(e) => cambiarActiva(e.target.checked)} />
           <label htmlFor="zonaActiva">Zona activa</label>
         </div>
       </div>
@@ -196,7 +221,7 @@ export default function ZonaForm({
             Para que queden pegadas sin cruzarse, dibuje los puntos del borde común cerca de la zona vecina: se pegan
             solos a sus vértices o a su borde. Se tolera una superposición mínima por diferencias de decimales.
           </p>
-          <button type="button" className="advertencia" onClick={() => onGuardar(construirDatos(), true)} disabled={guardando}>
+          <button type="button" className="advertencia" onClick={guardarDeTodasFormas} disabled={guardando}>
             Guardar de todas formas
           </button>
         </div>

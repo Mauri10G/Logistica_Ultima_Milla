@@ -1,11 +1,13 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { manejadoresMapa } from 'react-leaflet'
+import { listarPedidos } from '../api/pedidosApi'
 import { actualizarZona, crearZona, listarZonas } from '../api/zonasApi'
 import { colorDeZona } from '../components/constantesMapa'
 import ZonasPage from './ZonasPage'
 
 jest.mock('../api/zonasApi')
+jest.mock('../api/pedidosApi')
 
 const AREA = {
   type: 'Polygon',
@@ -76,6 +78,7 @@ beforeEach(() => {
   listarZonas.mockResolvedValue(ZONAS)
   crearZona.mockResolvedValue({ id: 3 })
   actualizarZona.mockResolvedValue({ id: 1 })
+  listarPedidos.mockResolvedValue({ pedidos: [], total: 0 })
 })
 
 describe('ZonasPage', () => {
@@ -217,6 +220,9 @@ describe('ZonasPage', () => {
 
     expect(await screen.findByText(/El area se superpone con: Centro/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Guardar de todas formas' }))
+    const dialogo = await screen.findByRole('alertdialog', { name: '¿Guardar la zona aunque se superponga?' })
+    expect(crearZona).toHaveBeenCalledTimes(1) // todavía no se reenvió
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar de todas formas' }))
 
     await waitFor(() => expect(crearZona).toHaveBeenCalledTimes(2))
     expect(crearZona.mock.calls[1][1]).toBe(true)
@@ -316,6 +322,8 @@ describe('ZonasPage', () => {
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
 
     await user.click(await screen.findByRole('button', { name: 'Guardar de todas formas' }))
+    const dialogo = await screen.findByRole('alertdialog')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar de todas formas' }))
 
     await waitFor(() => expect(actualizarZona).toHaveBeenCalledTimes(2))
     expect(actualizarZona.mock.calls[1][2]).toBe(true)
@@ -391,7 +399,9 @@ describe('ZonasPage: el mapa se actualiza al instante, sin recargar la página',
     await user.click(screen.getByRole('button', { name: 'Editar zona Centro' }))
     listarZonas.mockResolvedValue([{ ...ZONAS[0], activa: false }, activas[1]])
     await user.click(screen.getByLabelText('Zona activa'))
+    await user.click(await screen.findByRole('button', { name: 'Desactivar zona' }))
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await user.click(await screen.findByRole('button', { name: 'Guardar y desactivar' }))
 
     await waitFor(() => expect(screen.getAllByTestId('geojson')).toHaveLength(1))
     expect(screen.getByText('Norte', { selector: '[data-testid="tooltip"]' })).toBeInTheDocument()
@@ -426,5 +436,148 @@ describe('ZonasPage: el mapa se actualiza al instante, sin recargar la página',
 
     expect(await screen.findByRole('form', { name: 'Nueva zona' })).toBeInTheDocument()
     expect(areasDelMapa()).toEqual([AREA_EDITADA])
+  })
+})
+
+describe('ZonasPage: confirmaciones', () => {
+  async function editarCentro(user) {
+    await user.click(screen.getByRole('button', { name: 'Editar zona Centro' }))
+  }
+
+  test('"Guardar de todas formas" nombra las zonas con las que se cruza y Cancelar no guarda', async () => {
+    const user = userEvent.setup()
+    crearZona.mockRejectedValueOnce(
+      errorHttp(409, 'ZONA_SUPERPUESTA', 'El area se superpone con: Centro, Ingahurco (se cruza, la contiene o queda dentro de ella).'),
+    )
+    await dibujar()
+    await dibujarYGuardarZonaNueva(user)
+    await user.click(await screen.findByRole('button', { name: 'Guardar de todas formas' }))
+
+    const dialogo = await screen.findByRole('alertdialog')
+    expect(within(dialogo).getByText('Se cruza con las zonas')).toBeInTheDocument()
+    expect(within(dialogo).getByText('Centro, Ingahurco')).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+    await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(crearZona).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Guardar de todas formas' })).toBeInTheDocument() // la advertencia sigue
+  })
+
+  test('si el mensaje de superposición no trae nombres, el diálogo muestra el mensaje completo', async () => {
+    const user = userEvent.setup()
+    crearZona.mockRejectedValueOnce(errorHttp(409, 'ZONA_SUPERPUESTA', 'Zona repetida en el área'))
+    await dibujar()
+    await dibujarYGuardarZonaNueva(user)
+    await user.click(await screen.findByRole('button', { name: 'Guardar de todas formas' }))
+
+    expect(within(await screen.findByRole('alertdialog')).getByText('Zona repetida en el área')).toBeInTheDocument()
+  })
+
+  test('desmarcar "Zona activa" pide confirmación con los pedidos pendientes de la zona', async () => {
+    const user = userEvent.setup()
+    listarPedidos.mockResolvedValue({ pedidos: [], total: 7 })
+    await dibujar()
+    await editarCentro(user)
+
+    await user.click(screen.getByLabelText('Zona activa'))
+
+    const dialogo = await screen.findByRole('alertdialog', { name: '¿Desactivar la zona Centro?' })
+    expect(listarPedidos).toHaveBeenCalledWith({ zonaId: 1, estado: 'PENDIENTE', size: 1 })
+    expect(within(dialogo).getByText(/La zona tiene 7 pedido\(s\) pendiente\(s\)/)).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Desactivar zona' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Zona activa')).toBeChecked() // aún no cambia
+  })
+
+  test('cancelar la desactivación deja la zona activa', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await editarCentro(user)
+    await user.click(screen.getByLabelText('Zona activa'))
+
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancelar' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Zona activa')).toBeChecked()
+  })
+
+  test('confirmar la desactivación desmarca la casilla; al guardar pide confirmar otra vez y guarda inactiva', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await editarCentro(user)
+    await user.click(screen.getByLabelText('Zona activa'))
+    const primera = await screen.findByRole('alertdialog')
+    expect(within(primera).getByText(/no tiene pedidos pendientes/)).toBeInTheDocument()
+    await user.click(within(primera).getByRole('button', { name: 'Desactivar zona' }))
+    expect(screen.getByLabelText('Zona activa')).not.toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    const segunda = await screen.findByRole('alertdialog', { name: '¿Guardar y desactivar la zona Centro?' })
+    expect(actualizarZona).not.toHaveBeenCalled()
+    await user.click(within(segunda).getByRole('button', { name: 'Guardar y desactivar' }))
+
+    await waitFor(() => expect(actualizarZona).toHaveBeenCalledTimes(1))
+    expect(actualizarZona.mock.calls[0][1].activa).toBe(false)
+    expect(await screen.findByText('Zona "Centro" desactivada.')).toBeInTheDocument()
+  })
+
+  test('cancelar la confirmación al guardar no desactiva ni guarda', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await editarCentro(user)
+    await user.click(screen.getByLabelText('Zona activa'))
+    await user.click(await screen.findByRole('button', { name: 'Desactivar zona' }))
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancelar' }))
+
+    expect(actualizarZona).not.toHaveBeenCalled()
+    expect(screen.queryByText(/desactivada/)).not.toBeInTheDocument()
+  })
+
+  test('si no se puede consultar cuántos pedidos hay, igual pregunta y lo dice', async () => {
+    const user = userEvent.setup()
+    listarPedidos.mockRejectedValue(new Error('sin conexión'))
+    await dibujar()
+    await editarCentro(user)
+
+    await user.click(screen.getByLabelText('Zona activa'))
+
+    const dialogo = await screen.findByRole('alertdialog')
+    expect(within(dialogo).getAllByText(/No se pudo consultar/).length).toBeGreaterThan(0)
+  })
+
+  test('guardar una zona que sigue activa no pide confirmar la desactivación', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await editarCentro(user)
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    await waitFor(() => expect(actualizarZona).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(listarPedidos).not.toHaveBeenCalled()
+  })
+
+  test('reactivar una zona inactiva y crear una zona nueva sin activar no piden confirmación', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await mostrarInactivas(user)
+    await user.click(screen.getByRole('button', { name: 'Editar zona Norte' }))
+    await user.click(screen.getByLabelText('Zona activa'))
+    await user.click(screen.getByLabelText('Zona activa'))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Nueva zona' }))
+    await user.click(screen.getByLabelText('Zona activa'))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Zona activa')).not.toBeChecked()
+  })
+
+  test('crear una zona termina con un aviso con su nombre', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await dibujarYGuardarZonaNueva(user)
+    expect(await screen.findByText('Zona "Ficoa" creada.')).toBeInTheDocument()
   })
 })

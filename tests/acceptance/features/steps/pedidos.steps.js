@@ -76,6 +76,35 @@ When('pulsa Editar en el pedido del cliente de la prueba', async function () {
   await this.pagina.getByRole('button', { name: `Editar pedido ${this.pedido.id}` }).click()
 })
 
+When('pulsa Eliminar en el pedido del cliente de la prueba', async function () {
+  await this.pagina.getByRole('button', { name: `Eliminar pedido ${this.pedido.id}` }).click()
+})
+
+Then('ve el diálogo para eliminar el pedido del cliente de la prueba', async function () {
+  const dialogo = this.pagina.getByRole('alertdialog', { name: `¿Eliminar el pedido ${this.pedido.id}?` })
+  await dialogo.waitFor()
+  await dialogo.getByText(this.cliente).waitFor()
+  await dialogo.getByText(`Calle original ${this.etiqueta}`).waitFor()
+})
+
+Then('el pedido del cliente de la prueba ya no está en la lista', async function () {
+  await this.pagina.getByRole('row', { name: this.cliente }).waitFor({ state: 'detached' })
+})
+
+Then('ve el aviso de que el pedido de la prueba fue eliminado con la opción Deshacer', async function () {
+  await this.pagina.getByText(`Pedido ${this.pedido.id} eliminado`, { exact: true }).waitFor()
+  await this.pagina.getByRole('button', { name: 'Deshacer' }).waitFor()
+})
+
+Then('el formulario de pedido sigue abierto con el cliente de la prueba', async function () {
+  await this.pagina.getByRole('dialog', { name: 'Nuevo pedido' }).waitFor()
+  assert.strictEqual(await this.pagina.locator('#clienteNombres').inputValue(), this.cliente)
+})
+
+Then('el formulario de pedido está cerrado', async function () {
+  await this.pagina.getByRole('dialog', { name: 'Nuevo pedido' }).waitFor({ state: 'detached' })
+})
+
 Then('ve al cliente de la prueba en la lista con estado {string} y zona {string}', async function (estado, zona) {
   const fila = this.pagina.getByRole('row', { name: this.cliente })
   await fila.waitFor()
@@ -90,6 +119,10 @@ Then('ve en la lista del cliente de la prueba la dirección {string}', async fun
 
 Then('el detalle del pedido muestra {string}', async function (texto) {
   await this.pagina.getByRole('dialog').getByText(texto, { exact: true }).waitFor()
+})
+
+Then('ve el aviso de que el pedido fue registrado con su número', async function () {
+  await this.pagina.getByText(/Pedido \d+ registrado\./).first().waitFor()
 })
 
 Then('ve el aviso de que el pedido de la prueba fue actualizado', async function () {
@@ -127,6 +160,22 @@ Then('el pedido de la prueba quedó registrado por el personal del negocio', asy
 Then('el sistema no registró ningún pedido del cliente de la prueba', async function () {
   const lista = await (await fetch(`${this.api}/api/pedidos?size=1000`)).json()
   assert.strictEqual(lista.filter((pedido) => pedido.clienteNombres === this.cliente).length, 0)
+})
+
+Then('el sistema conserva el pedido de la prueba pendiente', async function () {
+  const respuesta = await fetch(`${this.api}/api/pedidos/${this.pedido.id}`)
+  assert.strictEqual(respuesta.status, 200, 'el pedido ya no existe')
+  assert.strictEqual((await respuesta.json()).estado, 'PENDIENTE')
+})
+
+Then('el sistema eliminó el pedido de la prueba', async function () {
+  // la web llama a la API recién al terminar los 6 segundos de "Deshacer": se consulta hasta que el pedido desaparece
+  for (let intento = 0; intento < 20; intento++) {
+    const respuesta = await fetch(`${this.api}/api/pedidos/${this.pedido.id}`)
+    if (respuesta.status === 404) return
+    await this.pagina.waitForTimeout(500)
+  }
+  assert.fail(`el pedido ${this.pedido.id} sigue existiendo en el sistema`)
 })
 
 Then('el pedido de la prueba sigue pendiente con la dirección {string}', async function (direccion) {

@@ -10,6 +10,7 @@ import Interruptor from '../components/Interruptor'
 import Modal from '../components/Modal'
 import Tabla from '../components/Tabla'
 import { fechaIso } from '../hooks/fechas'
+import { useConfirmacion } from '../hooks/useConfirmacion'
 import { coincide } from '../utils/busqueda'
 import { mensajeDeError } from '../utils/errores'
 
@@ -50,6 +51,7 @@ export default function RepartidoresPage() {
   const [mensaje, setMensaje] = useState(null)
   const [enviando, setEnviando] = useState(false)
   const [cargando, setCargando] = useState(true)
+  const { pedir, dialogo } = useConfirmacion()
 
   const cargar = useCallback(async () => {
     try {
@@ -89,6 +91,22 @@ export default function RepartidoresPage() {
     setErrorForm(null)
   }
 
+  /** Cerrar el formulario (Cancelar o Esc): si hay datos escritos sin guardar, primero se pregunta. */
+  function pedirCierreForm() {
+    if (enviando) return
+    if (!nombres.trim() && !telefono.trim()) {
+      cerrarForm()
+      return
+    }
+    pedir({
+      titulo: '¿Descartar los cambios?',
+      descripcion: 'Escribió datos del repartidor que todavía no guardó. Si cierra ahora, se perderán.',
+      textoConfirmar: 'Descartar cambios',
+      textoCancelar: 'Seguir editando',
+      onConfirmar: cerrarForm,
+    })
+  }
+
   async function crear(evento) {
     evento.preventDefault()
     setErrorForm(null)
@@ -105,13 +123,36 @@ export default function RepartidoresPage() {
     }
   }
 
-  async function alternar(repartidor) {
+  async function aplicarDisponibilidad(repartidor, disponible) {
+    setMensaje(null)
     try {
-      await cambiarDisponibilidad(repartidor.id, !repartidor.disponible)
+      await cambiarDisponibilidad(repartidor.id, disponible)
+      setMensaje(`${repartidor.nombres} ahora ${disponible ? 'está disponible' : 'no está disponible'}.`)
       await cargar()
     } catch (e) {
-      setError(mensajeDeError(e))
+      setError(`No se pudo cambiar la disponibilidad de ${repartidor.nombres}. ${mensajeDeError(e)}`)
     }
+  }
+
+  /** Marcar como no disponible a quien tiene ruta hoy pide confirmación, nombrando la ruta; lo demás se aplica directo. */
+  async function alternar(repartidor) {
+    const disponible = !repartidor.disponible
+    const ruta = rutasHoy?.[repartidor.id]
+    if (!disponible && ruta) {
+      const confirmado = await pedir({
+        titulo: `¿Marcar a ${repartidor.nombres} como no disponible?`,
+        descripcion:
+          'Tiene una ruta asignada para hoy. Si deja de estar disponible dejará de recibir rutas nuevas; revise si hace falta reasignar la que ya tiene.',
+        detalles: [
+          ['Repartidor', repartidor.nombres],
+          ['Ruta de hoy', textoRuta(ruta)],
+        ],
+        textoConfirmar: 'Marcar no disponible',
+        variante: 'advertencia',
+      })
+      if (!confirmado) return
+    }
+    await aplicarDisponibilidad(repartidor, disponible)
   }
 
   const visibles = repartidores.filter((repartidor) => coincide(busqueda, repartidor.nombres, repartidor.telefono))
@@ -139,6 +180,7 @@ export default function RepartidoresPage() {
         </button>
       </EncabezadoPagina>
 
+      {dialogo}
       <Avisos
         mensaje={mensaje}
         error={error}
@@ -192,7 +234,7 @@ export default function RepartidoresPage() {
       />
 
       {mostrarForm && (
-        <Modal titulo="Nuevo repartidor" onCerrar={cerrarForm}>
+        <Modal titulo="Nuevo repartidor" onCerrar={pedirCierreForm}>
           <form className="formulario" onSubmit={crear} aria-label="Nuevo repartidor">
             <div className="campo">
               <label htmlFor="repNombres">Nombres</label>
@@ -226,7 +268,7 @@ export default function RepartidoresPage() {
               </p>
             )}
             <div className="acciones ancho-completo">
-              <button type="button" className="secundario" onClick={cerrarForm}>
+              <button type="button" className="secundario" onClick={pedirCierreForm}>
                 Cancelar
               </button>
               <button type="submit" disabled={enviando}>

@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { listarPedidos } from '../api/pedidosApi'
 import { listarRepartidores } from '../api/repartidoresApi'
 import {
   armarRutas,
@@ -10,10 +11,12 @@ import {
   sacarPedidoDeRuta,
 } from '../api/rutasApi'
 import { fechaIso } from '../hooks/fechas'
+import { formatearFecha } from '../utils/formatos'
 import { useWebSocketTopic } from '../hooks/useWebSocketTopic'
 import RutasPage from './RutasPage'
 
 jest.mock('../api/rutasApi')
+jest.mock('../api/pedidosApi')
 jest.mock('../api/repartidoresApi')
 jest.mock('../hooks/useWebSocketTopic', () => ({ useWebSocketTopic: jest.fn() }))
 
@@ -70,6 +73,12 @@ async function dibujar() {
   await screen.findByText('Ruta 5 · Centro')
 }
 
+/** Pulsa un botón del diálogo de confirmación (no el de la página con el mismo nombre). */
+async function pulsarEnDialogo(user, nombre) {
+  const dialogo = await screen.findByRole('alertdialog')
+  await user.click(within(dialogo).getByRole('button', { name: nombre }))
+}
+
 beforeEach(() => {
   jest.resetAllMocks()
   mockConectado = true
@@ -79,6 +88,7 @@ beforeEach(() => {
   })
   listarRutas.mockResolvedValue(RUTAS)
   listarRepartidores.mockResolvedValue(REPARTIDORES)
+  listarPedidos.mockResolvedValue({ pedidos: [], total: 6 })
   armarRutas.mockResolvedValue([{ id: 5 }, { id: 6 }])
   for (const ajuste of [cambiarRepartidorDeRuta, moverPedidoARuta, sacarPedidoDeRuta, reordenarRuta]) {
     ajuste.mockResolvedValue({})
@@ -133,32 +143,100 @@ describe('RutasPage: lista y armado', () => {
     await waitFor(() => expect(listarRutas).toHaveBeenLastCalledWith(fechaIso(1)))
   })
 
-  test('Armar rutas informa cuántas se armaron', async () => {
+  test('Armar rutas pide confirmar con la fecha y cuántos pedidos pendientes se van a agrupar', async () => {
     const user = userEvent.setup()
     await dibujar()
 
     await user.click(screen.getByRole('button', { name: 'Armar rutas' }))
 
-    expect(armarRutas).toHaveBeenCalledWith(fechaIso(1))
-    expect(await screen.findByText('Se armaron 2 ruta(s).')).toBeInTheDocument()
+    const fecha = formatearFecha(fechaIso(1))
+    const dialogo = await screen.findByRole('alertdialog', { name: `¿Armar las rutas del ${fecha}?` })
+    expect(listarPedidos).toHaveBeenCalledWith({ fecha: fechaIso(1), estado: 'PENDIENTE', size: 1 })
+    expect(within(dialogo).getByText(/Se agruparán por zona 6 pedido\(s\) pendiente\(s\)/)).toBeInTheDocument()
+    expect(within(dialogo).getByText(fecha, { selector: 'dd' })).toBeInTheDocument()
+    expect(within(dialogo).getByText('6', { selector: 'dd' })).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+    expect(armarRutas).not.toHaveBeenCalled()
   })
 
-  test('Armar rutas sin pedidos pendientes lo dice', async () => {
+  test('cancelar la confirmación no arma nada', async () => {
     const user = userEvent.setup()
-    armarRutas.mockResolvedValue([])
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Armar rutas' }))
+
+    await pulsarEnDialogo(user, 'Cancelar')
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(armarRutas).not.toHaveBeenCalled()
+  })
+
+  test('Armar rutas informa cuántas se armaron y para qué fecha', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Armar rutas' }))
+
+    await pulsarEnDialogo(user, 'Armar rutas')
+
+    await waitFor(() => expect(armarRutas).toHaveBeenCalledWith(fechaIso(1)))
+    expect(await screen.findByText(`Se armaron 2 ruta(s) para el ${formatearFecha(fechaIso(1))}.`)).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  test('mientras se arma, el diálogo muestra "Armando…" y no se puede pulsar dos veces', async () => {
+    const user = userEvent.setup()
+    let terminar
+    armarRutas.mockReturnValue(new Promise((resolver) => (terminar = resolver)))
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Armar rutas' }))
+    const dialogo = await screen.findByRole('alertdialog')
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Armar rutas' }))
+
+    const armando = within(dialogo).getByRole('button', { name: 'Armando…' })
+    expect(armando).toBeDisabled()
+    expect(within(dialogo).getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+    await user.keyboard('{Escape}') // tampoco se cancela a mitad del armado
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+    await user.click(armando)
+    expect(armarRutas).toHaveBeenCalledTimes(1)
+
+    await act(async () => terminar([{ id: 5 }]))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(await screen.findByText(/Se armaron 1 ruta\(s\)/)).toBeInTheDocument()
+  })
+
+  test('sin pedidos pendientes lo dice y no pide confirmar ni arma', async () => {
+    const user = userEvent.setup()
+    listarPedidos.mockResolvedValue({ pedidos: [], total: 0 })
     await dibujar()
 
     await user.click(screen.getByRole('button', { name: 'Armar rutas' }))
 
-    expect(await screen.findByText('No había pedidos pendientes para esa fecha.')).toBeInTheDocument()
+    expect(await screen.findByText(`No hay pedidos pendientes para el ${formatearFecha(fechaIso(1))}: no hay rutas que armar.`)).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(armarRutas).not.toHaveBeenCalled()
+  })
+
+  test('si no se puede contar los pendientes igual pide confirmar', async () => {
+    const user = userEvent.setup()
+    listarPedidos.mockRejectedValue(new Error('sin conexión'))
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Armar rutas' }))
+
+    const dialogo = await screen.findByRole('alertdialog')
+    expect(within(dialogo).getByText('No se pudo consultar')).toBeInTheDocument()
+    await user.click(within(dialogo).getByRole('button', { name: 'Armar rutas' }))
+    await waitFor(() => expect(armarRutas).toHaveBeenCalledTimes(1))
   })
 
   test('Armar rutas muestra el error del backend', async () => {
     const user = userEvent.setup()
     armarRutas.mockRejectedValue(errorHttp(422, 'SIN_REPARTIDORES', 'No hay repartidores disponibles para armar rutas'))
     await dibujar()
-
     await user.click(screen.getByRole('button', { name: 'Armar rutas' }))
+
+    await pulsarEnDialogo(user, 'Armar rutas')
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No hay repartidores disponibles')
   })
@@ -226,15 +304,35 @@ describe('RutasPage: ajustes manuales', () => {
     expect(listarRutas.mock.calls.length).toBeGreaterThan(cargas)
   })
 
-  test('mover un pedido a otra ruta', async () => {
+  test('mover un pedido a otra ruta pide confirmar nombrando origen y destino, y luego mueve', async () => {
     const user = userEvent.setup()
     await dibujar()
     await abrirAjustes(user)
 
     await user.selectOptions(screen.getByLabelText('Mover el pedido 11 a otra ruta'), '6')
 
+    const dialogo = await screen.findByRole('alertdialog', { name: '¿Mover el pedido 11 a la ruta 6?' })
+    expect(within(dialogo).getByText('11 · Calle 11')).toBeInTheDocument()
+    expect(within(dialogo).getByText('Ruta 5 · Centro · Ana Pérez')).toBeInTheDocument()
+    expect(within(dialogo).getByText('Ruta 6 · Norte · Luis Mora (1/4 pedidos)')).toBeInTheDocument()
+    expect(moverPedidoARuta).not.toHaveBeenCalled()
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Mover pedido' }))
+
     await waitFor(() => expect(moverPedidoARuta).toHaveBeenCalledWith(6, 11))
     expect(await screen.findByText('El pedido 11 se movió a la ruta 6.')).toBeInTheDocument()
+  })
+
+  test('cancelar el movimiento no llama al endpoint y el selector vuelve a "Mover a…"', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await abrirAjustes(user)
+    await user.selectOptions(screen.getByLabelText('Mover el pedido 11 a otra ruta'), '6')
+
+    await pulsarEnDialogo(user, 'Cancelar')
+
+    expect(moverPedidoARuta).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Mover el pedido 11 a otra ruta')).toHaveValue('')
   })
 
   test('mover a una ruta llena muestra el error del backend', async () => {
@@ -244,19 +342,42 @@ describe('RutasPage: ajustes manuales', () => {
     await abrirAjustes(user)
 
     await user.selectOptions(screen.getByLabelText('Mover el pedido 11 a otra ruta'), '6')
+    await pulsarEnDialogo(user, 'Mover pedido')
 
     expect(await screen.findByRole('alert')).toHaveTextContent('La ruta ya tiene el maximo de 4 pedidos')
   })
 
-  test('sacar un pedido de la ruta', async () => {
+  test('sacar un pedido de la ruta pide confirmar y luego lo saca', async () => {
     const user = userEvent.setup()
     await dibujar()
     await abrirAjustes(user)
 
     await user.click(screen.getByRole('button', { name: 'Sacar el pedido 12 de la ruta' }))
 
+    const dialogo = await screen.findByRole('alertdialog', { name: '¿Sacar el pedido 12 de la ruta 5?' })
+    expect(within(dialogo).getByText('12 · Calle 12')).toBeInTheDocument()
+    expect(within(dialogo).getByText('Ruta 5 · Centro · Ana Pérez')).toBeInTheDocument()
+    expect(sacarPedidoDeRuta).not.toHaveBeenCalled()
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Sacar pedido' }))
+
     await waitFor(() => expect(sacarPedidoDeRuta).toHaveBeenCalledWith(5, 12))
     expect(await screen.findByText(/El pedido 12 salió de la ruta 5 y volvió a PENDIENTE/)).toBeInTheDocument()
+  })
+
+  test('cancelar o pulsar Esc en la confirmación de sacar no llama al endpoint', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await abrirAjustes(user)
+
+    await user.click(screen.getByRole('button', { name: 'Sacar el pedido 12 de la ruta' }))
+    await pulsarEnDialogo(user, 'Cancelar')
+    await user.click(screen.getByRole('button', { name: 'Sacar el pedido 12 de la ruta' }))
+    await screen.findByRole('alertdialog')
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(sacarPedidoDeRuta).not.toHaveBeenCalled()
   })
 
   test('subir una parada envía el nuevo orden', async () => {
@@ -301,6 +422,7 @@ describe('RutasPage: ajustes manuales', () => {
     await abrirAjustes(user)
 
     await user.click(screen.getByRole('button', { name: 'Sacar el pedido 12 de la ruta' }))
+    await pulsarEnDialogo(user, 'Sacar pedido')
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No existe el pedido con id 12')
   })

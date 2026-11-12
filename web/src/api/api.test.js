@@ -65,6 +65,11 @@ describe('pedidosApi', () => {
 
     await eliminarPedido(4)
     expect(api.delete).toHaveBeenCalledWith('/pedidos/4')
+    api.delete.mockClear()
+
+    // al cerrar la pestaña va con fetch + keepalive para que el navegador no la cancele
+    await eliminarPedido(4, { alSalir: true })
+    expect(api.delete).toHaveBeenCalledWith('/pedidos/4', { adapter: 'fetch', fetchOptions: { keepalive: true } })
 
     await cambiarEstadoPedido(4, 'RECOGIDO')
     expect(api.patch).toHaveBeenCalledWith('/pedidos/4/estado', { estado: 'RECOGIDO', origen: 'WEB' })

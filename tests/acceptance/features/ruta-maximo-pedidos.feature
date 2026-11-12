@@ -6,7 +6,10 @@ Característica: Armado de rutas
 
   Escenario: CP-09 Armar automáticamente una ruta respetando el máximo de pedidos
     Dado que existen 9 pedidos pendientes en la zona "Centro" para una fecha futura
-    Cuando el personal arma las rutas de esa fecha desde la web
+    Cuando el personal pide armar las rutas de esa fecha desde la web
+    Entonces ve el diálogo de confirmación con 9 pedidos pendientes para armar
+    Cuando pulsa "Armar rutas" en el diálogo de confirmación
+    Entonces ve las rutas armadas
     Entonces ninguna ruta tiene más de 4 pedidos
     Y se crearon 3 rutas
     Y los 9 pedidos quedaron repartidos entre las rutas

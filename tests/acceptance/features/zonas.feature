@@ -60,6 +60,9 @@ Característica: Gestión de zonas de reparto
     Entonces ve la advertencia de superposición con la zona existente
     Y el sistema no guardó la zona de la prueba
     Cuando pulsa el botón "Guardar de todas formas"
+    Entonces ve el diálogo de confirmación "¿Guardar la zona aunque se superponga?"
+    Y el diálogo de confirmación menciona "existente"
+    Cuando pulsa "Guardar de todas formas" en el diálogo de confirmación
     Entonces ve el aviso de que la zona de la prueba fue "creada"
     Y el sistema guardó la zona de la prueba como activa
 

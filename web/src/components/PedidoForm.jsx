@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { fechaPorDefecto, horaMinimaEntrega, validarEntrega, validarPedido } from '../utils/validacionPedido'
 import SelectorUbicacion from './SelectorUbicacion'
 
@@ -44,6 +44,8 @@ function valoresDesde(pedido) {
  * @param {object|null} [horaServidor] respuesta de GET /api/servidor/hora. Con ella se fija la fecha mínima, la hora
  *   mínima del día de hoy y el aviso de hora inválida; es la hora del servidor, no la del computador. Si es null
  *   (el endpoint no responde) el formulario no valida fecha ni hora y el backend decide y explica el rechazo.
+ * @param {(modificado: boolean) => void} [onModificado] avisa si hay datos escritos que difieren de los iniciales
+ *   (el modal pregunta "¿Descartar los cambios?" antes de cerrar)
  */
 export default function PedidoForm({
   onSubmit,
@@ -53,10 +55,16 @@ export default function PedidoForm({
   zonas = [],
   pedido = null,
   horaServidor = null,
+  onModificado,
 }) {
   const [valores, setValores] = useState(() => valoresDesde(pedido))
   const [errores, setErrores] = useState({})
   const editando = pedido !== null
+  const modificado = JSON.stringify(valores) !== JSON.stringify(valoresDesde(pedido))
+
+  useEffect(() => {
+    onModificado?.(modificado)
+  }, [modificado, onModificado])
   const fechaEntrega = valores.fechaEntrega ?? fechaPorDefecto(horaServidor)
   const avisos = validarEntrega(fechaEntrega, valores.horaEntrega, horaServidor)
   const fechaMinima = horaServidor?.entregaMinimaFecha

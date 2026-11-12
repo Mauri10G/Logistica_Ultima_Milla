@@ -16,7 +16,7 @@ Característica: Registro de pedidos
     Y escribe "10:30" en la hora de entrega
     Y elige la prioridad "Alta"
     Y pulsa el botón "Registrar pedido"
-    Entonces ve el aviso "Pedido registrado."
+    Entonces ve el aviso de que el pedido fue registrado con su número
     Y el sistema guardó el pedido del cliente de la prueba como "PENDIENTE" en la zona "Centro"
     Y el pedido de la prueba tiene prioridad "ALTA"
     Cuando pulsa el botón "Mañana"
@@ -37,7 +37,7 @@ Característica: Registro de pedidos
     Y elige la fecha de entrega "mañana"
     Y escribe "15:00" en la hora de entrega
     Y pulsa el botón "Registrar pedido"
-    Entonces ve el aviso "Pedido registrado."
+    Entonces ve el aviso de que el pedido fue registrado con su número
     Y el sistema guardó el pedido del cliente de la prueba como "PENDIENTE" en la zona "Centro"
     Y el pedido de la prueba quedó registrado por el personal del negocio
     Cuando pulsa el botón "Mañana"
@@ -94,3 +94,45 @@ Característica: Registro de pedidos
     Entonces ve el aviso de hora "La hora de entrega debe ser al menos 30 minutos después de la hora actual del servidor" bajo el campo de hora de entrega
     Cuando pulsa el botón "Registrar pedido"
     Entonces el sistema no registró ningún pedido del cliente de la prueba
+
+  Escenario: CP-14 Eliminar un pedido pendiente con confirmación y poder deshacerlo
+    Dado que existe un pedido pendiente del cliente de la prueba en la zona "Centro" para mañana
+    Y que el personal abre la pantalla de "Pedidos"
+    Cuando pulsa el botón "Mañana"
+    Y busca al cliente de la prueba en la lista de pedidos
+    Y pulsa Eliminar en el pedido del cliente de la prueba
+    Entonces ve el diálogo para eliminar el pedido del cliente de la prueba
+    Cuando pulsa "Cancelar" en el diálogo de confirmación
+    Entonces ve al cliente de la prueba en la lista con estado "Pendiente" y zona "Centro"
+    Cuando pulsa Eliminar en el pedido del cliente de la prueba
+    Y pulsa "Eliminar pedido" en el diálogo de confirmación
+    Entonces el pedido del cliente de la prueba ya no está en la lista
+    Y ve el aviso de que el pedido de la prueba fue eliminado con la opción Deshacer
+    Cuando pulsa el botón "Deshacer"
+    Entonces ve al cliente de la prueba en la lista con estado "Pendiente" y zona "Centro"
+    Cuando pasan 7 segundos
+    Entonces el sistema conserva el pedido de la prueba pendiente
+
+  Escenario: CP-15 Eliminar un pedido pendiente y dejar que termine el tiempo para deshacer
+    Dado que existe un pedido pendiente del cliente de la prueba en la zona "Centro" para mañana
+    Y que el personal abre la pantalla de "Pedidos"
+    Cuando pulsa el botón "Mañana"
+    Y busca al cliente de la prueba en la lista de pedidos
+    Y pulsa Eliminar en el pedido del cliente de la prueba
+    Y pulsa "Eliminar pedido" en el diálogo de confirmación
+    Entonces el pedido del cliente de la prueba ya no está en la lista
+    Y ve el aviso de que el pedido de la prueba fue eliminado con la opción Deshacer
+    Y el sistema eliminó el pedido de la prueba
+
+  Escenario: CP-16 Cerrar el formulario de pedido con datos escritos pide confirmar el descarte
+    Dado que el personal abre la pantalla de "Pedidos"
+    Cuando pulsa el botón "Nuevo pedido"
+    Y escribe el nombre del cliente de la prueba
+    Y pulsa el botón "Cancelar"
+    Entonces ve el diálogo de confirmación "¿Descartar los cambios?"
+    Cuando pulsa "Seguir editando" en el diálogo de confirmación
+    Entonces el formulario de pedido sigue abierto con el cliente de la prueba
+    Cuando pulsa el botón "Cancelar"
+    Y pulsa "Descartar cambios" en el diálogo de confirmación
+    Entonces el formulario de pedido está cerrado
+    Y el sistema no registró ningún pedido del cliente de la prueba

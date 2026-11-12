@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import { useRef } from 'react'
 import userEvent from '@testing-library/user-event'
 import Modal from './Modal'
 
@@ -165,5 +166,147 @@ describe('Modal', () => {
     await user.keyboard('{Escape}')
 
     expect(onCerrar).not.toHaveBeenCalled()
+  })
+})
+
+describe('Modal: confirmaciones y modales apilados', () => {
+  test('rol="alertdialog" con aria-describedby apuntando a su descripción', () => {
+    render(
+      <Modal titulo="¿Eliminar?" onCerrar={jest.fn()} rol="alertdialog" idDescripcion="descripcion-modal">
+        <p id="descripcion-modal">Se borrará el pedido.</p>
+      </Modal>,
+    )
+
+    const dialogo = screen.getByRole('alertdialog', { name: '¿Eliminar?' })
+    expect(dialogo).toHaveAttribute('aria-describedby', 'descripcion-modal')
+    expect(dialogo).toHaveAccessibleDescription('Se borrará el pedido.')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('sin idDescripcion no lleva aria-describedby y por defecto es un dialog', () => {
+    dibujar()
+
+    const dialogo = screen.getByRole('dialog')
+    expect(dialogo).not.toHaveAttribute('aria-describedby')
+  })
+
+  test('el foco inicial puede ir a un elemento elegido en vez del primer campo', () => {
+    function ConFoco() {
+      const ref = useRef(null)
+      return (
+        <Modal titulo="Con foco" onCerrar={jest.fn()} foco={ref}>
+          <input aria-label="Campo" />
+          <button ref={ref} type="button">
+            Cancelar
+          </button>
+        </Modal>
+      )
+    }
+    render(<ConFoco />)
+
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+  })
+
+  test('la clase extra se agrega al diálogo', () => {
+    render(
+      <Modal titulo="Angosto" onCerrar={jest.fn()} clase="modal-confirmar">
+        <p>x</p>
+      </Modal>,
+    )
+    expect(screen.getByRole('dialog')).toHaveClass('modal', 'modal-confirmar')
+  })
+
+  test('con dos modales abiertos, Esc solo cierra el de encima', async () => {
+    const user = userEvent.setup()
+    const cerrarFondo = jest.fn()
+    const cerrarEncima = jest.fn()
+    render(
+      <>
+        <Modal titulo="Formulario" onCerrar={cerrarFondo}>
+          <input aria-label="Campo del formulario" />
+        </Modal>
+        <Modal titulo="Confirmar" onCerrar={cerrarEncima} rol="alertdialog">
+          <button type="button">Cancelar</button>
+        </Modal>
+      </>,
+    )
+
+    await user.keyboard('{Escape}')
+
+    expect(cerrarEncima).toHaveBeenCalledTimes(1)
+    expect(cerrarFondo).not.toHaveBeenCalled()
+  })
+
+  test('al cerrarse el de encima, Esc vuelve a cerrar el de abajo y el scroll sigue bloqueado hasta el final', async () => {
+    const user = userEvent.setup()
+    const cerrarFondo = jest.fn()
+    function Dos({ conConfirmacion }) {
+      return (
+        <>
+          <Modal titulo="Formulario" onCerrar={cerrarFondo}>
+            <input aria-label="Campo del formulario" />
+          </Modal>
+          {conConfirmacion && (
+            <Modal titulo="Confirmar" onCerrar={jest.fn()} rol="alertdialog">
+              <button type="button">Cancelar</button>
+            </Modal>
+          )}
+        </>
+      )
+    }
+    const { rerender, unmount } = render(<Dos conConfirmacion />)
+
+    rerender(<Dos conConfirmacion={false} />)
+    expect(document.body.style.overflow).toBe('hidden')
+    await user.keyboard('{Escape}')
+
+    expect(cerrarFondo).toHaveBeenCalledTimes(1)
+    unmount()
+    expect(document.body.style.overflow).not.toBe('hidden')
+  })
+
+  test('el foco vuelve al campo del formulario al cerrarse la confirmación', () => {
+    function Dos({ conConfirmacion }) {
+      return (
+        <>
+          <Modal titulo="Formulario" onCerrar={jest.fn()}>
+            <input aria-label="Campo del formulario" />
+          </Modal>
+          {conConfirmacion && (
+            <Modal titulo="Confirmar" onCerrar={jest.fn()} rol="alertdialog">
+              <button type="button">Cancelar</button>
+            </Modal>
+          )}
+        </>
+      )
+    }
+    const { rerender } = render(<Dos conConfirmacion={false} />)
+    expect(screen.getByLabelText('Campo del formulario')).toHaveFocus()
+    rerender(<Dos conConfirmacion />)
+    expect(screen.getByRole('alertdialog')).toHaveFocus() // sin campos, el foco queda en el propio diálogo
+
+    rerender(<Dos conConfirmacion={false} />)
+
+    expect(screen.getByLabelText('Campo del formulario')).toHaveFocus()
+  })
+
+  test('si se cierran los dos a la vez, en cualquier orden, la página queda desbloqueada', () => {
+    document.body.style.overflow = 'scroll'
+    const { unmount } = render(
+      <>
+        <Modal titulo="Formulario" onCerrar={jest.fn()}>
+          <input aria-label="Campo" />
+        </Modal>
+        <Modal titulo="Confirmar" onCerrar={jest.fn()} rol="alertdialog">
+          <button type="button">Cancelar</button>
+        </Modal>
+      </>,
+    )
+    expect(document.body.style.overflow).toBe('hidden')
+
+    unmount()
+
+    expect(document.body.style.overflow).toBe('scroll')
+    document.body.style.overflow = ''
   })
 })
