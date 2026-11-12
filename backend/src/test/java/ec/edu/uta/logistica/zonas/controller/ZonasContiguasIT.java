@@ -1,5 +1,6 @@
 package ec.edu.uta.logistica.zonas.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -29,6 +31,9 @@ class ZonasContiguasIT extends IntegrationTestBase {
 
     @Autowired
     private MockMvc mvc;
+
+    @Value("${logistica.zonas.tolerancia-superposicion-m2}")
+    private double toleranciaM2;
 
     private final List<Long> creadas = new ArrayList<>();
 
@@ -103,5 +108,59 @@ class ZonasContiguasIT extends IntegrationTestBase {
                         .contentType(MediaType.APPLICATION_JSON).content(grande))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         creadas.add(((Number) JsonPath.read(respuesta, "$.id")).longValue());
+    }
+
+    @Test
+    @DisplayName("la tolerancia viene de application.yml (logistica.zonas.tolerancia-superposicion-m2 = 500)")
+    void toleranciaConfigurada() {
+        assertThat(toleranciaM2).isEqualTo(500d);
+    }
+
+    /** Cuerpo de una zona con vertices arbitrarios; cada vertice es {lng, lat} y el anillo se cierra solo. */
+    private static String poligono(String nombre, double[]... vertices) {
+        StringBuilder anillo = new StringBuilder();
+        for (double[] v : vertices) {
+            anillo.append("[%s,%s],".formatted(v[0], v[1]));
+        }
+        anillo.append("[%s,%s]".formatted(vertices[0][0], vertices[0][1]));
+        return "{\"nombre\": \"%s\", \"area\": {\"type\": \"Polygon\", \"coordinates\": [[%s]]}}"
+                .formatted(nombre, anillo);
+    }
+
+    /**
+     * Zona A con un borde oblicuo de (-59.99, 10.00) a (-59.98, 10.01) (~1.6 km) y una zona B cuyos dos vertices
+     * se "pegaron" sobre ese borde (t = 0.2 y 0.8), como hace el imán de la web, pero con una diferencia de
+     * decimales de 0.000001 grados hacia adentro de A (~0.16 m): una franja de ~150 m2, bajo la tolerancia.
+     */
+    @Test
+    @DisplayName("un borde pegado a puntos del borde del vecino, con diferencia de decimales, se acepta")
+    void bordePegadoConDiferenciaDeDecimalesSeAcepta() throws Exception {
+        crear(poligono("IT-Pegada-A", new double[]{-60.00, 10.00}, new double[]{-59.99, 10.00},
+                new double[]{-59.98, 10.01}, new double[]{-60.00, 10.01}));
+
+        crear(poligono("IT-Pegada-B", new double[]{-59.988001, 10.002001}, new double[]{-59.975, 10.002},
+                new double[]{-59.975, 10.008}, new double[]{-59.982001, 10.008001}));
+    }
+
+    @Test
+    @DisplayName("la misma forma con una invasion real de ~16 m (>> 500 m2) se rechaza")
+    void invasionRealSeRechaza() throws Exception {
+        crear(poligono("IT-Invasion-A", new double[]{-60.00, 10.00}, new double[]{-59.99, 10.00},
+                new double[]{-59.98, 10.01}, new double[]{-60.00, 10.01}));
+
+        enviar(poligono("IT-Invasion-B", new double[]{-59.988100, 10.002100}, new double[]{-59.975, 10.002},
+                new double[]{-59.975, 10.008}, new double[]{-59.982100, 10.008100}))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.codigo").value("ZONA_SUPERPUESTA"));
+    }
+
+    @Test
+    @DisplayName("una zona nueva que contiene a una diminuta (< 500 m2) ya existente se rechaza")
+    void zonaQueContieneAUnaDiminutaSeRechaza() throws Exception {
+        // ~11 m x 11 m = ~120 m2, mucho menos que la tolerancia
+        crear(zona("IT-Mini", -60.0000, 10.0000, -59.9999, 10.0001));
+
+        enviar(zona("IT-Mini-Grande", -60.01, 9.99, -59.99, 10.01)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("ZONA_SUPERPUESTA"))
+                .andExpect(jsonPath("$.mensaje").value(containsString("IT-Mini")));
     }
 }

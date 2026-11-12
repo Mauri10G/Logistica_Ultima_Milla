@@ -27,6 +27,9 @@ class ZonaRepositoryIT extends IntegrationTestBase {
             List.of("Centro", "Ingahurco"), List.of("Centro", "Sur/Huachi"), List.of("Ingahurco", "Ficoa/Atocha"),
             List.of("Ingahurco", "Norte/Izamba"), List.of("Ficoa/Atocha", "Norte/Izamba"));
 
+    /** Igual al valor por defecto de logistica.zonas.tolerancia-superposicion-m2. */
+    private static final double TOLERANCIA_M2 = 500d;
+
     @Autowired
     private ZonaRepository zonaRepository;
 
@@ -38,7 +41,7 @@ class ZonaRepositoryIT extends IntegrationTestBase {
     }
 
     private List<String> superpuestas(String wkt) {
-        return zonaRepository.buscarSuperpuestas(wkt, 0L).stream().map(Zona::getNombre).toList();
+        return zonaRepository.buscarSuperpuestas(wkt, 0L, TOLERANCIA_M2).stream().map(Zona::getNombre).toList();
     }
 
     private String zonaDe(double latitud, double longitud) {
@@ -132,6 +135,42 @@ class ZonaRepositoryIT extends IntegrationTestBase {
         assertThat(superpuestas(wkt(-78.6520, -1.2454, -78.6420, -1.2354))).isEmpty();
     }
 
+    // Borde este de Centro: x = -78.6050, de lat -1.2474 a -1.2346. Una franja de 0.000002 grados de ancho (~0.22 m)
+    // por ~1.2 km de largo (lat -1.2470 a -1.2360) mide unos 270 m2; una de 0.00001 grados (~1.1 m), unos 1350 m2.
+    private static final double BORDE_ESTE_CENTRO = -78.6050;
+
+    @Test
+    @DisplayName("una franja de superposicion bajo la tolerancia (~270 m2 < 500 m2) se acepta")
+    void franjaBajoLaToleranciaSeAcepta() {
+        String franja = wkt(BORDE_ESTE_CENTRO - 0.000002, -1.2470, -78.5900, -1.2360);
+
+        assertThat(superpuestas(franja)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("la misma franja se rechaza si la tolerancia es 0, y una franja sobre la tolerancia (~1350 m2) se rechaza")
+    void franjaSobreLaToleranciaSeRechaza() {
+        String delgada = wkt(BORDE_ESTE_CENTRO - 0.000002, -1.2470, -78.5900, -1.2360);
+        String ancha = wkt(BORDE_ESTE_CENTRO - 0.00001, -1.2470, -78.5900, -1.2360);
+
+        assertThat(zonaRepository.buscarSuperpuestas(delgada, 0L, 0d)).extracting(Zona::getNombre)
+                .containsExactly("Centro");
+        assertThat(superpuestas(ancha)).containsExactly("Centro");
+    }
+
+    @Test
+    @DisplayName("un cruce real y una zona diminuta dentro de otra se rechazan")
+    void cruceRealYContencionSeRechazan() {
+        // cruce real: unos 5 km2 de Centro e Ingahurco, mucho mas que 500 m2
+        assertThat(superpuestas(wkt(-78.6200, -1.2400, -78.6150, -1.2300))).containsExactly("Centro", "Ingahurco");
+        // una zona diminuta (< 500 m2) totalmente dentro de Centro se rechaza igual
+        assertThat(zonaRepository.buscarSuperpuestas(wkt(-78.6150, -1.2420, -78.61499, -1.24199), 0L, TOLERANCIA_M2))
+                .extracting(Zona::getNombre).containsExactly("Centro");
+        // ... incluso con una tolerancia enorme: contenida es contenida
+        assertThat(zonaRepository.buscarSuperpuestas(wkt(-78.6150, -1.2420, -78.61499, -1.24199), 0L, 1e12))
+                .extracting(Zona::getNombre).containsExactly("Centro");
+    }
+
     @Test
     @DisplayName("un poligono alejado de las zonas no se superpone con ninguna")
     void sinSuperposicion() {
@@ -143,9 +182,9 @@ class ZonaRepositoryIT extends IntegrationTestBase {
     void excluyeLaPropiaZona() {
         Zona centro = zonaRepository.findByNombreIgnoreCase("Centro").orElseThrow();
 
-        assertThat(zonaRepository.buscarSuperpuestas(centro.getArea().toText(), 0L)).extracting(Zona::getNombre)
+        assertThat(zonaRepository.buscarSuperpuestas(centro.getArea().toText(), 0L, TOLERANCIA_M2)).extracting(Zona::getNombre)
                 .containsExactly("Centro");
-        assertThat(zonaRepository.buscarSuperpuestas(centro.getArea().toText(), centro.getId())).isEmpty();
+        assertThat(zonaRepository.buscarSuperpuestas(centro.getArea().toText(), centro.getId(), TOLERANCIA_M2)).isEmpty();
     }
 
     // ---------------------------------------------------------------- las 5 zonas base (V3)
@@ -155,7 +194,7 @@ class ZonaRepositoryIT extends IntegrationTestBase {
     void zonasBaseSinSuperposicion() {
         for (String nombre : ZONAS_BASE) {
             Zona zona = zonaRepository.findByNombreIgnoreCase(nombre).orElseThrow();
-            assertThat(zonaRepository.buscarSuperpuestas(zona.getArea().toText(), zona.getId()))
+            assertThat(zonaRepository.buscarSuperpuestas(zona.getArea().toText(), zona.getId(), TOLERANCIA_M2))
                     .as("zonas que se superponen con %s", nombre).isEmpty();
         }
     }
