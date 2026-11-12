@@ -1,4 +1,4 @@
-import { LogIn } from 'lucide-react'
+import { CircleAlert, LogIn } from 'lucide-react'
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { iniciarSesionApi } from '../api/authApi'
@@ -53,6 +53,8 @@ export default function LoginPage() {
             autoComplete="username"
             value={usuario}
             onChange={(e) => setUsuario(e.target.value)}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'errorLogin' : undefined}
             required
           />
         </div>
@@ -65,12 +67,15 @@ export default function LoginPage() {
             autoComplete="current-password"
             value={clave}
             onChange={(e) => setClave(e.target.value)}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'errorLogin' : undefined}
             required
           />
         </div>
         {error && (
-          <p className="mensaje-error ancho-completo" role="alert">
-            {error}
+          <p id="errorLogin" className="mensaje-error mensaje-con-icono ancho-completo" role="alert">
+            <CircleAlert size={18} aria-hidden="true" />
+            <span>{error}</span>
           </p>
         )}
         <div className="acciones ancho-completo">

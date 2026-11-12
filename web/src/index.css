@@ -549,6 +549,15 @@ textarea:focus {
   outline-offset: 0;
 }
 
+/* Foco de teclado: aro sólido del color principal más un halo, visible sobre cualquier fondo */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-primario);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 5px var(--color-primario-borde);
+}
+
 input[readonly] {
   background: var(--color-tarjeta-suave);
   color: var(--color-suave);
@@ -954,6 +963,17 @@ button.aviso-cerrar:hover:not(:disabled) {
   color: var(--color-aviso-texto);
   background: var(--color-aviso-fondo);
   border-color: var(--color-aviso-borde);
+}
+
+.mensaje-con-icono {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espacio-2);
+  font-weight: 500;
+}
+
+.mensaje-con-icono svg {
+  margin-top: 0.15rem;
 }
 
 .mensaje-advertencia p {
@@ -1534,6 +1554,17 @@ button.disponibilidad.disponible::before {
   margin: 0;
   padding: var(--espacio-5);
   box-shadow: var(--sombra-md);
+}
+
+.pantalla-login > .tarjeta {
+  width: min(440px, 100%);
+  margin: 0;
+  padding: var(--espacio-5);
+  box-shadow: var(--sombra-md);
+}
+
+.pantalla-login > .tarjeta h1 {
+  font-size: var(--texto-xl);
 }
 
 .login-marca {

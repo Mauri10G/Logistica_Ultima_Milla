@@ -87,6 +87,23 @@ describe('LoginPage', () => {
     expect(obtenerSesion()).toBeNull()
   })
 
+  test('con error los campos quedan marcados como inválidos y apuntan al mensaje', async () => {
+    const user = userEvent.setup()
+    iniciarSesionApi.mockRejectedValue(errorHttp(401, { mensaje: 'Credenciales invalidas' }))
+    dibujarLogin()
+
+    expect(screen.getByLabelText('Usuario')).toHaveAttribute('aria-invalid', 'false')
+    await user.type(screen.getByLabelText('Usuario'), 'admin')
+    await user.type(screen.getByLabelText('Clave'), 'mala')
+    await user.click(screen.getByRole('button', { name: 'Ingresar' }))
+
+    const alerta = await screen.findByRole('alert')
+    for (const campo of ['Usuario', 'Clave']) {
+      expect(screen.getByLabelText(campo)).toHaveAttribute('aria-invalid', 'true')
+      expect(screen.getByLabelText(campo)).toHaveAttribute('aria-describedby', alerta.id)
+    }
+  })
+
   test('otro error del servidor muestra su mensaje', async () => {
     const user = userEvent.setup()
     iniciarSesionApi.mockRejectedValue(errorHttp(500, { mensaje: 'Ocurrio un error interno' }))
