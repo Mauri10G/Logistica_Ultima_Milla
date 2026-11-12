@@ -2,8 +2,9 @@
 
 Los *features* están en **español** (`# language: es`) y los pasos son deliberadamente simples (pocos imports).
 Estilo de los pasos: el mismo del taller del Vivero Hoja Verde: `page.locator('#id').fill(...)`,
-`page.getByRole('button', { name: ... }).click()`, `selectOption`, `nth`, y las comprobaciones con las esperas de Playwright
-(`waitFor`) más `assert` de Node. Sin page objects, sin helpers y sin librerías extra.
+`page.getByRole('button', { name: ... }).click()`, `getByText`, `selectOption`, `nth`, y las comprobaciones con las esperas de
+Playwright (`waitFor`) más `assert` de Node. Sin page objects, sin helpers y sin librerías extra. La única excepción es CP-11,
+que usa `page.request` para simular a la app móvil llamando a la API.
 
 ```bash
 # 1. Backend y web corriendo (docker compose up -d · ./mvnw spring-boot:run · npm run dev)
@@ -15,13 +16,30 @@ npm run navegador        # descarga Chromium para Playwright
 npm test                 # ejecuta los escenarios (todo menos @pendiente)
 npm run test:dry         # solo valida que todos los pasos estén definidos (no necesita backend)
 npm run test:pendientes  # ejecuta solo los @pendiente (hoy fallan: faltan endpoints)
-HEADED=1 npm test        # con el navegador visible
 npx cucumber-js features/zonas.feature:7   # un escenario por su línea
 ```
+
+### Ver las pruebas con el navegador visible (`HEADED` y `SLOWMO`)
+
+`HEADED=1` abre el navegador con ventana. `SLOWMO` frena cada acción de Playwright esa cantidad de milisegundos, para poder
+seguir los pasos: con `HEADED=1` y sin `SLOWMO` se usa **250**; sin `HEADED` es **0** (pruebas normales y CI, a toda velocidad).
+
+PowerShell (las variables duran lo que dure la sesión; se limpian al terminar):
+
+```powershell
+$env:HEADED = '1'; npm test                          # ventana visible, 250 ms por acción
+$env:HEADED = '1'; $env:SLOWMO = '600'; npm test     # más lento
+$env:HEADED = '1'; $env:SLOWMO = '0'; npm test       # con ventana pero sin frenar
+Remove-Item Env:HEADED, Env:SLOWMO -ErrorAction SilentlyContinue
+```
+
+Git Bash: `HEADED=1 SLOWMO=600 npm test`. Conviene combinarlo con un solo escenario:
+`$env:HEADED = '1'; npx cucumber-js --name "CP-11"`.
 
 Variables: `WEB_URL` (por defecto `http://localhost:5173`), `API_URL` (por defecto `http://localhost:8080`) y
 `DB_CONTENEDOR` (por defecto `logistica-postgis`, el contenedor del `docker compose`).
 El reporte HTML queda en `reports/cucumber.html` (`reports/cucumber-pendientes.html` para los `@pendiente`); `reports/` no se versiona.
+Una copia con la fecha en el nombre se guarda como evidencia en `docs/evidencias/aceptacion/cucumber-AAAA-MM-DD.html`.
 
 ## Escenarios
 
