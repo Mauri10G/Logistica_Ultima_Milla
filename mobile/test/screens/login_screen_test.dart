@@ -235,4 +235,17 @@ void main() {
 
     expect(find.byType(SeleccionRepartidorScreen), findsOneWidget);
   });
+
+  testWidgets('ignora sesion previa con rol STAFF al iniciar LogisticaApp', (tester) async {
+    final sesionService = SesionService();
+    await sesionService.guardarSesion(
+      const Sesion(token: 'jwt-staff', rol: 'STAFF', repartidorId: null),
+    );
+
+    await tester.pumpWidget(LogisticaApp(sesionService: sesionService));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.byType(RutaScreen), findsNothing);
+  });
 }
