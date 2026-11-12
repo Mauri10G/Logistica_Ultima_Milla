@@ -1564,13 +1564,6 @@ button.disponibilidad.disponible::before {
     radial-gradient(700px 400px at 100% 110%, #e4defa 0%, transparent 55%), var(--color-fondo);
 }
 
-.formulario-login {
-  width: min(400px, 100%);
-  margin: 0;
-  padding: var(--espacio-5);
-  box-shadow: var(--sombra-md);
-}
-
 .pantalla-login > .tarjeta {
   width: min(440px, 100%);
   margin: 0;
@@ -1582,27 +1575,459 @@ button.disponibilidad.disponible::before {
   font-size: var(--texto-xl);
 }
 
-.login-marca {
+/* --- Login: dos columnas a pantalla completa (panel con ilustración + formulario) --- */
+
+.login-pagina {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--color-tarjeta);
+}
+
+.login-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--espacio-5);
+  padding: 3rem clamp(2rem, 5vw, 4.5rem);
+  overflow: hidden;
+  color: #ffffff;
+  background:
+    radial-gradient(520px 340px at 85% 8%, rgba(255, 255, 255, 0.16), transparent 70%),
+    radial-gradient(460px 320px at 0% 100%, rgba(143, 168, 255, 0.28), transparent 70%),
+    linear-gradient(155deg, #4268f0 0%, var(--color-primario) 42%, #17297d 100%);
+}
+
+.login-ilustracion {
+  display: block;
+  width: min(100%, 520px);
+  height: auto;
+  margin: 0 auto;
+  filter: drop-shadow(0 18px 28px rgba(8, 16, 70, 0.35));
+}
+
+.login-panel-texto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+  width: min(100%, 520px);
+  margin: 0 auto;
+}
+
+.login-panel-marca,
+.login-marca-movil {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  font-size: var(--texto-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.login-panel-marca .marca-logo,
+.login-marca-movil .marca-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+
+.login-panel-marca .marca-logo {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+.login-frase {
+  margin: 0;
+  max-width: 24ch;
+  font-size: var(--texto-2xl);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.login-puntos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--texto-base);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.login-puntos li {
   display: flex;
   align-items: center;
   gap: var(--espacio-3);
 }
 
-.login-marca .marca-logo {
-  width: 44px;
-  height: 44px;
+.login-punto-icono {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: var(--radio-md);
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.22);
 }
 
-.login-marca h1 {
-  margin: 0;
-  font-size: var(--texto-xl);
-  letter-spacing: -0.01em;
+.login-lado-form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--espacio-5);
+  background: var(--color-tarjeta);
 }
 
-.login-marca p {
+.login-contenido,
+.login-pie {
+  position: relative;
+  z-index: 1;
+}
+
+.login-contenido {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--espacio-5);
+  width: min(400px, 100%);
+}
+
+.login-marca-movil {
+  display: none;
+  color: var(--color-texto);
+}
+
+.login-formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+}
+
+.login-bienvenida h1 {
   margin: 0;
-  font-size: var(--texto-sm);
+  font-size: var(--texto-3xl);
+  letter-spacing: -0.02em;
+}
+
+.login-bienvenida p {
+  margin: var(--espacio-1) 0 0;
   color: var(--color-suave);
+}
+
+.campo-icono {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.campo-icono > svg {
+  position: absolute;
+  left: 0.8rem;
+  color: var(--color-suave);
+  pointer-events: none;
+}
+
+.campo-icono input {
+  width: 100%;
+  min-height: 2.9rem;
+  padding-left: 2.6rem;
+  padding-right: 2.9rem;
+}
+
+.campo-icono button.boton-ojo {
+  position: absolute;
+  right: 0.4rem;
+  width: 2.1rem;
+  min-height: 2.1rem;
+  padding: 0;
+  background: transparent;
+  color: var(--color-suave);
+}
+
+.campo-icono button.boton-ojo:hover:not(:disabled) {
+  background: var(--color-tarjeta-suave);
+  color: var(--color-texto);
+}
+
+.login-formulario .mensaje-error {
+  margin: 0;
+}
+
+.login-enviar {
+  width: 100%;
+  min-height: 2.9rem;
+  margin-top: var(--espacio-1);
+  font-size: var(--texto-base);
+  box-shadow: 0 6px 16px rgba(40, 81, 216, 0.28);
+}
+
+.login-girar {
+  animation: login-girar 0.8s linear infinite;
+}
+
+@keyframes login-girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.login-pie {
+  margin: var(--espacio-4) 0 0;
+  font-size: var(--texto-xs);
+  text-align: center;
+  color: var(--color-suave);
+}
+
+.login-fondo-rutas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.login-fondo-linea {
+  stroke: var(--color-primario);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 1 11;
+  opacity: 0.12;
+}
+
+.login-fondo-parada {
+  fill: var(--color-primario);
+  opacity: 0.1;
+}
+
+.login-fondo-parada .login-fondo-halo {
+  fill: none;
+  stroke: var(--color-primario);
+  stroke-width: 2;
+}
+
+/* --- Ilustración: postal de Ambato (SVG; ver components/IlustracionLogin.jsx) ---
+   Lo de aquí es el aspecto en reposo (también el de movimiento reducido); las animaciones van más abajo. */
+
+.login-nube {
+  fill: #ffffff;
+  opacity: 0.92;
+}
+
+.login-cordillera {
+  fill: #8fa8f0;
+  opacity: 0.5;
+}
+
+.login-nieve {
+  fill: #ffffff;
+}
+
+.login-humo-bola {
+  fill: #eef2ff;
+  opacity: 0.6;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.login-humo-1 {
+  transform: translate(2px, -6px) scale(1);
+}
+
+.login-humo-2 {
+  transform: translate(8px, -20px) scale(1.3);
+}
+
+.login-humo-3 {
+  transform: translate(2px, -36px) scale(1.6);
+  opacity: 0.35;
+}
+
+.login-ciudad-fondo rect {
+  fill: #a9bcee;
+  opacity: 0.75;
+}
+
+.login-ventana {
+  fill: #2b4aa8;
+  opacity: 0.85;
+}
+
+.login-ventana-luz {
+  fill: #ffb347;
+}
+
+.login-pin-rebote {
+  transform-origin: 0 0;
+}
+
+/* Quieta: la furgoneta se queda a media calle. */
+.login-furgoneta {
+  transform: translateX(240px);
+}
+
+.login-rueda {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Movimiento suave en bucle (si la persona no pidió reducirlo) */
+@media (prefers-reduced-motion: no-preference) {
+  .login-nube-1 {
+    animation: login-nube 52s ease-in-out infinite alternate;
+  }
+
+  .login-nube-2 {
+    animation: login-nube 70s ease-in-out infinite alternate-reverse;
+  }
+
+  .login-nube-3 {
+    animation: login-nube 60s ease-in-out infinite alternate;
+  }
+
+  .login-humo-bola {
+    animation: login-humo 7s ease-out infinite;
+  }
+
+  .login-humo-2 {
+    animation-delay: -2.3s;
+  }
+
+  .login-humo-3 {
+    animation-delay: -4.6s;
+  }
+
+  .login-furgoneta {
+    transform: none;
+    animation: login-recorrer 16s linear infinite;
+  }
+
+  .login-furgoneta-cuerpo {
+    animation: login-vaiven 0.5s ease-in-out infinite alternate;
+  }
+
+  .login-rueda {
+    animation: login-rueda 0.7s linear infinite;
+  }
+
+  .login-pin-rebote {
+    animation: login-rebote 3s ease-out infinite;
+  }
+
+  .login-pin-2 {
+    animation-delay: 1s;
+  }
+
+  .login-pin-3 {
+    animation-delay: 2s;
+  }
+}
+
+@keyframes login-nube {
+  from {
+    transform: translateX(-24px);
+  }
+  to {
+    transform: translateX(46px);
+  }
+}
+
+@keyframes login-humo {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+  15% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(22px, -66px) scale(1.8);
+  }
+}
+
+@keyframes login-recorrer {
+  from {
+    transform: translateX(-140px);
+  }
+  to {
+    transform: translateX(660px);
+  }
+}
+
+@keyframes login-vaiven {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes login-rueda {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes login-rebote {
+  0% {
+    transform: translateY(0) scale(1, 1);
+  }
+  6% {
+    transform: translateY(0) scale(1.1, 0.88);
+  }
+  16% {
+    transform: translateY(-14px) scale(0.94, 1.08);
+  }
+  26% {
+    transform: translateY(0) scale(1.06, 0.93);
+  }
+  32% {
+    transform: translateY(-4px) scale(1, 1);
+  }
+  38%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+}
+
+@media (min-width: 1700px) {
+  .login-ilustracion,
+  .login-panel-texto {
+    width: min(100%, 640px);
+  }
+
+  .login-contenido {
+    width: min(440px, 100%);
+  }
+}
+
+@media (max-width: 899px) {
+  .login-pagina {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .login-panel {
+    display: none;
+  }
+
+  .login-marca-movil {
+    display: flex;
+  }
+
+  .login-lado-form {
+    min-height: 100vh;
+    background:
+      radial-gradient(700px 360px at 0% -10%, var(--color-primario-suave), transparent 65%),
+      var(--color-tarjeta);
+  }
 }
 
 /* ==========================================================================

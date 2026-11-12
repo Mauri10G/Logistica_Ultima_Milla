@@ -18,6 +18,16 @@ volumen, carga y estrés.
 - Fuera de alcance: pasarelas de pago. El login no existe aún (la app móvil elige repartidor por id); el código está
   preparado para agregarlo (CORS centralizado en `common/config/WebConfig`, sin Spring Security todavía).
 
+## Estado actual
+
+- **Hecho por Mauricio y en `develop`:** web completa con diseño, tablas, confirmaciones y deshacer, login rediseñado, zonas
+  contiguas con imán, validación de hora del servidor, pruebas Jest, aceptación CP-01 a CP-13 y análisis SonarQube.
+- **Login:** existe en la web pero está apagado (`VITE_AUTH_HABILITADA=false`), esperando el backend.
+- **Pendiente de Joseph:** `POST /api/auth/login`, los 4 endpoints de ajustes de rutas, paginación en `GET /api/pedidos` y las
+  correcciones de Sonar en `docs/evidencias/sonar/issues-backend.md`. La migración V3 ya está usada: él empieza en **V4**.
+- **Pendiente de Mauricio cuando Joseph termine:** encender el login, verificar el contrato y quitar `@pendiente` de las pruebas
+  de aceptación.
+
 ## Stack — NO CAMBIARLO
 
 | Capa | Tecnología |
