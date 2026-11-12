@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
-import { crearPedido, editarPedido, eliminarPedido, listarPedidos } from '../api/pedidosApi'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { crearPedido, editarPedido, eliminarPedido, listarPedidos, obtenerHoraServidor } from '../api/pedidosApi'
 import { listarZonas } from '../api/zonasApi'
 import { mensajeDeError, mensajeDeErrorPedido } from '../utils/errores'
 import EstadoBadge from '../components/EstadoBadge'
 import Modal from '../components/Modal'
 import PedidoForm from '../components/PedidoForm'
 import { ESTADOS_PEDIDO } from '../utils/estados'
+import { horaServidorValida } from '../utils/validacionPedido'
 
 export default function PedidosPage() {
   const [pedidos, setPedidos] = useState([])
   const [total, setTotal] = useState(0)
   const [zonas, setZonas] = useState([])
+  const [horaServidor, setHoraServidor] = useState(null)
+  const consultaHora = useRef(0)
   const [filtros, setFiltros] = useState({ fecha: '', zonaId: '', estado: '' })
   const [mostrarForm, setMostrarForm] = useState(false)
   const [pedidoEnEdicion, setPedidoEnEdicion] = useState(null)
@@ -50,12 +53,29 @@ export default function PedidosPage() {
 
   const zonasActivas = zonas.filter((zona) => zona.activa)
 
+  // La hora se pide al servidor cada vez que se abre el formulario: la fecha mínima y la hora mínima salen de ella,
+  // no del reloj del computador (que el usuario puede cambiar). Si no responde, el formulario no valida fecha ni
+  // hora y el backend decide y explica el rechazo.
+  async function cargarHoraServidor() {
+    const consulta = ++consultaHora.current
+    setHoraServidor(null)
+    let hora = null
+    try {
+      const datos = await obtenerHoraServidor()
+      if (horaServidorValida(datos)) hora = datos
+    } catch {
+      hora = null
+    }
+    if (consulta === consultaHora.current) setHoraServidor(hora)
+  }
+
   function abrirNuevo() {
     setPedidoEnEdicion(null)
     setErrorForm(null)
     setMensaje(null)
     setMostrarForm(true)
     cargarZonas()
+    cargarHoraServidor()
   }
 
   function abrirEdicion(pedido) {
@@ -64,6 +84,7 @@ export default function PedidosPage() {
     setMensaje(null)
     setMostrarForm(true)
     cargarZonas()
+    cargarHoraServidor()
   }
 
   function cerrarForm() {
@@ -131,6 +152,7 @@ export default function PedidosPage() {
             key={pedidoEnEdicion?.id ?? 'nuevo'}
             pedido={pedidoEnEdicion}
             zonas={zonasActivas}
+            horaServidor={horaServidor}
             onSubmit={guardar}
             onCancelar={cerrarForm}
             enviando={enviando}

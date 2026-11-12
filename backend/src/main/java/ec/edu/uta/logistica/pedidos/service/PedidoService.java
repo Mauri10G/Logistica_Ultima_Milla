@@ -3,12 +3,16 @@ package ec.edu.uta.logistica.pedidos.service;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 
 import ec.edu.uta.logistica.common.exception.RecursoNoEncontradoException;
 import ec.edu.uta.logistica.common.exception.ReglaNegocioException;
 import ec.edu.uta.logistica.common.exception.SolicitudInvalidaException;
 import ec.edu.uta.logistica.common.geo.GeoUtil;
 import ec.edu.uta.logistica.pedidos.dto.EstadoPedidoRequest;
+import ec.edu.uta.logistica.pedidos.dto.HoraServidorResponse;
 import ec.edu.uta.logistica.pedidos.dto.PedidoRequest;
 import ec.edu.uta.logistica.pedidos.dto.PedidoResponse;
 import ec.edu.uta.logistica.pedidos.entity.Cliente;
@@ -20,6 +24,7 @@ import ec.edu.uta.logistica.seguimiento.service.SeguimientoService;
 import ec.edu.uta.logistica.zonas.entity.Zona;
 import ec.edu.uta.logistica.zonas.repository.ZonaRepository;
 import org.locationtech.jts.geom.Point;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -28,24 +33,33 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PedidoService {
 
+    private static final DateTimeFormatter HORA_MINUTOS = DateTimeFormatter.ofPattern("HH:mm");
+
     private final PedidoRepository pedidoRepository;
     private final ClienteRepository clienteRepository;
     private final ZonaRepository zonaRepository;
     private final SeguimientoService seguimientoService;
     private final Clock reloj;
+    private final int anticipacionMinimaMinutos;
 
+    /**
+     * @param anticipacionMinimaMinutos minutos que debe haber entre la hora actual del servidor y la hora de entrega
+     *                                  ({@code logistica.pedidos.anticipacion-minima-minutos}, 30 por defecto)
+     */
     public PedidoService(PedidoRepository pedidoRepository, ClienteRepository clienteRepository,
-                         ZonaRepository zonaRepository, SeguimientoService seguimientoService, Clock reloj) {
+                         ZonaRepository zonaRepository, SeguimientoService seguimientoService, Clock reloj,
+                         @Value("${logistica.pedidos.anticipacion-minima-minutos:30}") int anticipacionMinimaMinutos) {
         this.pedidoRepository = pedidoRepository;
         this.clienteRepository = clienteRepository;
         this.zonaRepository = zonaRepository;
         this.seguimientoService = seguimientoService;
         this.reloj = reloj;
+        this.anticipacionMinimaMinutos = Math.max(anticipacionMinimaMinutos, 0);
     }
 
     @Transactional
     public PedidoResponse registrar(PedidoRequest solicitud) {
-        validarFechaEntrega(solicitud.fechaEntrega());
+        validarEntrega(solicitud.fechaEntrega(), solicitud.horaEntrega());
         Point ubicacion = GeoUtil.punto(solicitud.latitud(), solicitud.longitud());
         Zona zona = calcularZona(solicitud.latitud(), solicitud.longitud());
         Cliente cliente = resolverClienteNuevo(solicitud);
@@ -60,7 +74,7 @@ public class PedidoService {
     public PedidoResponse editar(Long id, PedidoRequest solicitud) {
         Pedido pedido = buscar(id);
         pedido.exigirEditable(); // CP-05
-        validarFechaEntrega(solicitud.fechaEntrega());
+        validarEntrega(solicitud.fechaEntrega(), solicitud.horaEntrega());
         Point ubicacion = GeoUtil.punto(solicitud.latitud(), solicitud.longitud());
         Zona zona = calcularZona(solicitud.latitud(), solicitud.longitud());
         Cliente cliente = resolverClienteEdicion(pedido, solicitud);
@@ -105,11 +119,33 @@ public class PedidoService {
         return PedidoResponse.desde(pedido);
     }
 
-    /** CP-04: no se permite una fecha de entrega anterior a hoy. */
-    private void validarFechaEntrega(LocalDate fechaEntrega) {
-        if (fechaEntrega.isBefore(LocalDate.now(reloj))) {
+    /** Hora actual del servidor (America/Guayaquil) y anticipacion minima: GET /api/servidor/hora. */
+    public HoraServidorResponse horaServidor() {
+        LocalDateTime ahora = ahoraEnMinutos();
+        LocalDateTime minima = ahora.plusMinutes(anticipacionMinimaMinutos);
+        return new HoraServidorResponse(ahora.toLocalDate(), ahora.toLocalTime(), reloj.getZone().getId(),
+                anticipacionMinimaMinutos, minima.toLocalDate(), minima.toLocalTime());
+    }
+
+    /**
+     * CP-04: la fecha de entrega no puede ser anterior a hoy. Ademas, la fecha y hora de entrega deben ser al menos
+     * {@code anticipacionMinimaMinutos} despues de ahora. Ahora sale siempre del Clock del backend, nunca del cliente.
+     */
+    private void validarEntrega(LocalDate fechaEntrega, LocalTime horaEntrega) {
+        LocalDateTime ahora = ahoraEnMinutos();
+        if (fechaEntrega.isBefore(ahora.toLocalDate())) {
             throw new ReglaNegocioException("FECHA_ENTREGA_PASADA", "La fecha de entrega no puede ser anterior a hoy");
         }
+        if (LocalDateTime.of(fechaEntrega, horaEntrega).isBefore(ahora.plusMinutes(anticipacionMinimaMinutos))) {
+            throw new ReglaNegocioException("HORA_ENTREGA_INVALIDA", "La hora de entrega debe ser al menos "
+                    + anticipacionMinimaMinutos + " minutos después de la hora actual del servidor, "
+                    + ahora.toLocalTime().format(HORA_MINUTOS));
+        }
+    }
+
+    /** Ahora segun el reloj del backend, sin segundos: la hora de entrega del pedido tambien es de precision minuto. */
+    private LocalDateTime ahoraEnMinutos() {
+        return LocalDateTime.now(reloj).truncatedTo(ChronoUnit.MINUTES);
     }
 
     /** CP-03: la zona se calcula con ST_Contains del punto. */

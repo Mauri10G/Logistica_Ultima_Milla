@@ -1,9 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { manejadoresMapa } from 'react-leaflet'
-import { crearPedido, editarPedido, eliminarPedido, listarPedidos } from '../api/pedidosApi'
+import { crearPedido, editarPedido, eliminarPedido, listarPedidos, obtenerHoraServidor } from '../api/pedidosApi'
 import { listarZonas } from '../api/zonasApi'
-import { fechaIso } from '../hooks/fechas'
 import PedidosPage from './PedidosPage'
 
 jest.mock('../api/pedidosApi')
@@ -13,6 +12,18 @@ const ZONAS = [
   { id: 1, nombre: 'Centro', activa: true, area: { type: 'Polygon', coordinates: [] } },
   { id: 2, nombre: 'Norte', activa: false, area: { type: 'Polygon', coordinates: [] } },
 ]
+
+// Respuesta simulada de GET /api/servidor/hora: 07:00 del servidor, la primera entrega de hoy es a las 07:30.
+// Las fechas son fijas y distintas de las del computador de la prueba.
+const HORA_SERVIDOR = {
+  fecha: '2031-05-17',
+  hora: '07:00:00',
+  zonaHoraria: 'America/Guayaquil',
+  anticipacionMinimaMinutos: 30,
+  entregaMinimaFecha: '2031-05-17',
+  entregaMinimaHora: '07:30:00',
+}
+const MENSAJE_HORA = 'La hora de entrega debe ser al menos 30 minutos después de la hora actual del servidor, 07:00'
 
 const PEDIDOS = [
   {
@@ -24,7 +35,7 @@ const PEDIDOS = [
     latitud: -1.24,
     longitud: -78.62,
     zonaNombre: 'Centro',
-    fechaEntrega: fechaIso(1),
+    fechaEntrega: '2031-05-18', // mañana según la hora simulada del servidor
     horaEntrega: '10:00:00',
     fechaRegistro: '2026-03-01T08:15:30',
     estado: 'PENDIENTE',
@@ -39,7 +50,7 @@ const PEDIDOS = [
     latitud: -1.25,
     longitud: -78.61,
     zonaNombre: 'Centro',
-    fechaEntrega: fechaIso(1),
+    fechaEntrega: '2031-05-18', // mañana según la hora simulada del servidor
     horaEntrega: '11:30:00',
     fechaRegistro: '2026-03-01T09:00:00',
     estado: 'ASIGNADO',
@@ -68,6 +79,7 @@ beforeEach(() => {
   jest.resetAllMocks()
   listarPedidos.mockResolvedValue({ pedidos: PEDIDOS, total: 2 })
   listarZonas.mockResolvedValue(ZONAS)
+  obtenerHoraServidor.mockResolvedValue(HORA_SERVIDOR)
   crearPedido.mockResolvedValue({ id: 3 })
   editarPedido.mockResolvedValue({ id: 1 })
   eliminarPedido.mockResolvedValue(undefined)
@@ -231,12 +243,12 @@ describe('PedidosPage: registrar', () => {
     await llenarNuevoPedido(user)
 
     fireEvent.change(screen.getByLabelText('Fecha de entrega', { selector: '#fechaEntrega' }), {
-      target: { value: fechaIso(-2) },
+      target: { value: '2031-05-15' }, // dos días antes de "hoy" según el servidor
     })
     await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
 
     expect(crearPedido).not.toHaveBeenCalled()
-    expect(screen.getByRole('alert')).toHaveTextContent('no puede ser anterior a hoy')
+    expect(screen.getByText('La fecha de entrega no puede ser anterior a hoy')).toBeInTheDocument()
   })
 
   test('un error de validación del backend muestra el detalle de los campos', async () => {
@@ -251,6 +263,145 @@ describe('PedidosPage: registrar', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('clienteTelefono: muy largo')
+  })
+})
+
+describe('PedidosPage: hora del servidor', () => {
+  const fecha = () => screen.getByLabelText('Fecha de entrega', { selector: '#fechaEntrega' })
+  const hora = () => screen.getByLabelText('Hora aproximada')
+
+  test('al abrir Nuevo pedido pide la hora a /api/servidor/hora y la usa en fecha y hora mínimas', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+
+    expect(obtenerHoraServidor).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(fecha()).toHaveValue('2031-05-17')) // no la fecha del computador
+    expect(fecha()).toHaveAttribute('min', '2031-05-17')
+    expect(hora()).toHaveAttribute('min', '07:30')
+  })
+
+  test('al abrir Editar también la pide', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Editar pedido 1' }))
+
+    expect(obtenerHoraServidor).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(fecha()).toHaveAttribute('min', '2031-05-17'))
+  })
+
+  test('cada vez que se abre el formulario la vuelve a pedir', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    obtenerHoraServidor.mockResolvedValue({ ...HORA_SERVIDOR, fecha: '2031-05-18', entregaMinimaFecha: '2031-05-18' })
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+
+    expect(obtenerHoraServidor).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(fecha()).toHaveAttribute('min', '2031-05-18'))
+  })
+
+  test('una respuesta atrasada de una apertura anterior no pisa la de la actual', async () => {
+    const user = userEvent.setup()
+    let responderPrimera
+    obtenerHoraServidor.mockReturnValueOnce(new Promise((resolver) => (responderPrimera = resolver)))
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    obtenerHoraServidor.mockResolvedValue({ ...HORA_SERVIDOR, entregaMinimaFecha: '2031-05-20' })
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await waitFor(() => expect(fecha()).toHaveAttribute('min', '2031-05-20'))
+
+    await act(async () => responderPrimera({ ...HORA_SERVIDOR, entregaMinimaFecha: '2031-05-17' }))
+
+    expect(fecha()).toHaveAttribute('min', '2031-05-20')
+  })
+
+  test('hoy con una hora pasada avisa con la hora del servidor y no envía', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await waitFor(() => expect(fecha()).toHaveValue('2031-05-17'))
+    await llenarNuevoPedido(user)
+
+    fireEvent.change(hora(), { target: { value: '06:00' } })
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+    expect(screen.getByText(MENSAJE_HORA)).toBeInTheDocument()
+    expect(crearPedido).not.toHaveBeenCalled()
+  })
+
+  test('hoy con una hora válida o mañana a cualquier hora se envía', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await waitFor(() => expect(fecha()).toHaveValue('2031-05-17'))
+    await llenarNuevoPedido(user) // 09:15, después de las 07:30
+
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+    await waitFor(() =>
+      expect(crearPedido).toHaveBeenCalledWith(expect.objectContaining({ fechaEntrega: '2031-05-17', horaEntrega: '09:15' })),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await waitFor(() => expect(fecha()).toHaveValue('2031-05-17'))
+    await llenarNuevoPedido(user)
+    fireEvent.change(fecha(), { target: { value: '2031-05-18' } })
+    fireEvent.change(hora(), { target: { value: '05:00' } })
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+    await waitFor(() =>
+      expect(crearPedido).toHaveBeenLastCalledWith(expect.objectContaining({ fechaEntrega: '2031-05-18', horaEntrega: '05:00' })),
+    )
+  })
+
+  test('si el endpoint no responde el formulario abre sin mínimos y el backend valida y muestra su mensaje', async () => {
+    const user = userEvent.setup()
+    obtenerHoraServidor.mockRejectedValue(errorHttp(500, 'ERROR_INTERNO', 'Ocurrio un error interno'))
+    crearPedido.mockRejectedValue(errorHttp(422, 'HORA_ENTREGA_INVALIDA', MENSAJE_HORA))
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+    await llenarNuevoPedido(user)
+
+    expect(screen.getByRole('dialog', { name: 'Nuevo pedido' })).toBeInTheDocument()
+    expect(fecha()).not.toHaveAttribute('min')
+    expect(hora()).not.toHaveAttribute('min')
+    expect(screen.queryByText('Ocurrio un error interno')).not.toBeInTheDocument() // el fallo de la hora no estorba
+
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+    expect(crearPedido).toHaveBeenCalledTimes(1) // el formulario no bloquea: decide el backend
+    expect(await screen.findByRole('alert')).toHaveTextContent(MENSAJE_HORA)
+    expect(screen.getByRole('dialog', { name: 'Nuevo pedido' })).toBeInTheDocument()
+  })
+
+  test('una respuesta incompleta se trata como si el endpoint no respondiera', async () => {
+    const user = userEvent.setup()
+    obtenerHoraServidor.mockResolvedValue({ fecha: '2031-05-17' })
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
+
+    await waitFor(() => expect(obtenerHoraServidor).toHaveBeenCalled())
+    expect(fecha()).not.toHaveAttribute('min')
+    expect(hora()).not.toHaveAttribute('min')
+  })
+
+  test('el backend rechaza la hora al editar: se muestra su mensaje y el formulario sigue abierto', async () => {
+    const user = userEvent.setup()
+    editarPedido.mockRejectedValue(errorHttp(422, 'HORA_ENTREGA_INVALIDA', MENSAJE_HORA))
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Editar pedido 1' }))
+    await waitFor(() => expect(fecha()).toHaveAttribute('min', '2031-05-17'))
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(MENSAJE_HORA)
+    expect(screen.getByRole('dialog', { name: 'Editar pedido 1' })).toBeInTheDocument()
   })
 })
 

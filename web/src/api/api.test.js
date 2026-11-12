@@ -1,6 +1,13 @@
 import { iniciarSesionApi } from './authApi'
 import { api } from './client'
-import { cambiarEstadoPedido, crearPedido, editarPedido, eliminarPedido, listarPedidos } from './pedidosApi'
+import {
+  cambiarEstadoPedido,
+  crearPedido,
+  editarPedido,
+  eliminarPedido,
+  listarPedidos,
+  obtenerHoraServidor,
+} from './pedidosApi'
 import { cambiarDisponibilidad, crearRepartidor, listarRepartidores } from './repartidoresApi'
 import {
   armarRutas,
@@ -61,6 +68,22 @@ describe('pedidosApi', () => {
 
     await cambiarEstadoPedido(4, 'RECOGIDO')
     expect(api.patch).toHaveBeenCalledWith('/pedidos/4/estado', { estado: 'RECOGIDO', origen: 'WEB' })
+  })
+})
+
+describe('hora del servidor', () => {
+  test('obtenerHoraServidor lee GET /servidor/hora', async () => {
+    const hora = { fecha: '2031-05-17', hora: '19:15:00', zonaHoraria: 'America/Guayaquil' }
+    api.get.mockResolvedValue({ data: hora })
+
+    expect(await obtenerHoraServidor()).toEqual(hora)
+    expect(api.get).toHaveBeenCalledWith('/servidor/hora')
+  })
+
+  test('obtenerHoraServidor propaga el error si el endpoint no responde', async () => {
+    api.get.mockRejectedValue(new Error('Network Error'))
+
+    await expect(obtenerHoraServidor()).rejects.toThrow('Network Error')
   })
 })
 

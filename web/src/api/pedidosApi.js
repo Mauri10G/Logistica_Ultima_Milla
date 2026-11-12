@@ -29,6 +29,15 @@ export async function eliminarPedido(id) {
   await api.delete(`/pedidos/${id}`)
 }
 
+/**
+ * Hora oficial del sistema: { fecha, hora, zonaHoraria, anticipacionMinimaMinutos, entregaMinimaFecha,
+ * entregaMinimaHora }. Se usa en lugar de la hora del computador, que el usuario puede modificar.
+ */
+export async function obtenerHoraServidor() {
+  const respuesta = await api.get('/servidor/hora')
+  return respuesta.data
+}
+
 export async function cambiarEstadoPedido(id, estado, origen = 'WEB') {
   const respuesta = await api.patch(`/pedidos/${id}/estado`, { estado, origen })
   return respuesta.data

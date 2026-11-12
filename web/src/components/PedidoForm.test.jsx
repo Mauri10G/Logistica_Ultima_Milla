@@ -16,6 +16,18 @@ async function llenarFormulario(user) {
   await user.selectOptions(screen.getByLabelText('Prioridad'), 'ALTA')
 }
 
+// Hora del servidor simulada. Las fechas son fijas y distintas de las del computador: si el formulario usara el reloj
+// del computador en lugar de esta respuesta, las pruebas fallarían.
+const HORA_SERVIDOR = {
+  fecha: '2031-05-17',
+  hora: '19:15:00',
+  zonaHoraria: 'America/Guayaquil',
+  anticipacionMinimaMinutos: 30,
+  entregaMinimaFecha: '2031-05-17',
+  entregaMinimaHora: '19:45:00',
+}
+const MENSAJE_HORA = 'La hora de entrega debe ser al menos 30 minutos después de la hora actual del servidor, 19:15'
+
 const PEDIDO_EXISTENTE = {
   id: 7,
   clienteId: 3,
@@ -123,15 +135,15 @@ describe('PedidoForm', () => {
   test('rechaza una fecha de entrega anterior a hoy (CP-04)', async () => {
     const user = userEvent.setup()
     const onSubmit = jest.fn()
-    render(<PedidoForm onSubmit={onSubmit} />)
+    render(<PedidoForm onSubmit={onSubmit} horaServidor={HORA_SERVIDOR} />)
 
     await llenarFormulario(user)
     clicEnMapa(-1.2412, -78.6197)
-    fireEvent.change(screen.getByLabelText('Fecha de entrega'), { target: { value: fechaIso(-1) } })
+    fireEvent.change(screen.getByLabelText('Fecha de entrega'), { target: { value: '2031-05-16' } })
     await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
 
     expect(onSubmit).not.toHaveBeenCalled()
-    expect(screen.getByRole('alert')).toHaveTextContent('La fecha de entrega no puede ser anterior a hoy')
+    expect(screen.getByText('La fecha de entrega no puede ser anterior a hoy')).toBeInTheDocument()
     expect(screen.getByLabelText('Fecha de entrega')).toHaveAttribute('aria-invalid', 'true')
   })
 
@@ -148,6 +160,162 @@ describe('PedidoForm', () => {
 
     expect(screen.getByTestId('geojson')).toBeInTheDocument()
     expect(screen.getByTestId('tooltip')).toHaveTextContent('Centro')
+  })
+
+  describe('con la hora del servidor', () => {
+    const fecha = () => screen.getByLabelText('Fecha de entrega')
+    const hora = () => screen.getByLabelText('Hora aproximada')
+
+    function elegir(campo, valor) {
+      fireEvent.change(campo(), { target: { value: valor } })
+    }
+
+    test('la fecha por defecto y la fecha mínima salen del servidor, no del computador', () => {
+      render(<PedidoForm onSubmit={jest.fn()} horaServidor={HORA_SERVIDOR} />)
+
+      expect(fecha()).toHaveValue('2031-05-17')
+      expect(fecha()).toHaveAttribute('min', '2031-05-17')
+    })
+
+    test('si la hora del servidor llega con el formulario ya abierto, la fecha por defecto se actualiza', () => {
+      const { rerender } = render(<PedidoForm onSubmit={jest.fn()} horaServidor={null} />)
+      expect(fecha()).toHaveValue(fechaIso(0)) // mientras tanto, solo como valor inicial: el backend valida
+
+      rerender(<PedidoForm onSubmit={jest.fn()} horaServidor={HORA_SERVIDOR} />)
+
+      expect(fecha()).toHaveValue('2031-05-17')
+    })
+
+    test('una fecha elegida por el usuario no se pisa cuando llega la hora del servidor', () => {
+      const { rerender } = render(<PedidoForm onSubmit={jest.fn()} horaServidor={null} />)
+      elegir(fecha, '2031-06-01')
+
+      rerender(<PedidoForm onSubmit={jest.fn()} horaServidor={HORA_SERVIDOR} />)
+
+      expect(fecha()).toHaveValue('2031-06-01')
+    })
+
+    test('cerca de la medianoche la fecha por defecto y la mínima pasan a mañana', () => {
+      const casiMedianoche = {
+        ...HORA_SERVIDOR,
+        hora: '23:50:00',
+        entregaMinimaFecha: '2031-05-18',
+        entregaMinimaHora: '00:20:00',
+      }
+      render(<PedidoForm onSubmit={jest.fn()} horaServidor={casiMedianoche} />)
+
+      expect(fecha()).toHaveValue('2031-05-18')
+      expect(fecha()).toHaveAttribute('min', '2031-05-18')
+      expect(hora()).toHaveAttribute('min', '00:20')
+    })
+
+    test('si la fecha es hoy, la hora mínima es la hora del servidor más la anticipación', () => {
+      render(<PedidoForm onSubmit={jest.fn()} horaServidor={HORA_SERVIDOR} />)
+
+      expect(hora()).toHaveAttribute('min', '19:45')
+    })
+
+    test('si la fecha es otro día, la hora no tiene mínima', () => {
+      render(<PedidoForm onSubmit={jest.fn()} horaServidor={HORA_SERVIDOR} />)
+
+      elegir(fecha, '2031-05-18')
+
+      expect(hora()).not.toHaveAttribute('min')
+    })
+
+    test('hoy con una hora pasada avisa con el mensaje del servidor y no deja enviar', async () => {
+      const user = userEvent.setup()
+      const onSubmit = jest.fn()
+      render(<PedidoForm onSubmit={onSubmit} horaServidor={HORA_SERVIDOR} />)
+
+      await llenarFormulario(user)
+      clicEnMapa(-1.2412, -78.6197)
+      elegir(hora, '07:00')
+
+      expect(screen.getByText(MENSAJE_HORA)).toBeInTheDocument()
+      expect(hora()).toHaveAttribute('aria-invalid', 'true')
+      await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+      expect(onSubmit).not.toHaveBeenCalled()
+    })
+
+    test('hoy con una hora dentro de la anticipación avisa (19:44) y en el límite (19:45) no', () => {
+      render(<PedidoForm onSubmit={jest.fn()} horaServidor={HORA_SERVIDOR} />)
+
+      elegir(hora, '19:44')
+      expect(screen.getByText(MENSAJE_HORA)).toBeInTheDocument()
+
+      elegir(hora, '19:45')
+      expect(screen.queryByText(MENSAJE_HORA)).not.toBeInTheDocument()
+      expect(hora()).toHaveAttribute('aria-invalid', 'false')
+    })
+
+    test('el aviso desaparece al pasar a mañana, donde cualquier hora vale', () => {
+      render(<PedidoForm onSubmit={jest.fn()} horaServidor={HORA_SERVIDOR} />)
+      elegir(hora, '07:00')
+      expect(screen.getByText(MENSAJE_HORA)).toBeInTheDocument()
+
+      elegir(fecha, '2031-05-18')
+
+      expect(screen.queryByText(MENSAJE_HORA)).not.toBeInTheDocument()
+    })
+
+    test('hoy con una hora válida se envía con la fecha del servidor', async () => {
+      const user = userEvent.setup()
+      const onSubmit = jest.fn()
+      render(<PedidoForm onSubmit={onSubmit} horaServidor={HORA_SERVIDOR} />)
+
+      await llenarFormulario(user) // la hora que escribe llenarFormulario (10:30) es anterior: se corrige
+      clicEnMapa(-1.2412, -78.6197)
+      elegir(hora, '20:00')
+      await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+      expect(onSubmit).toHaveBeenCalledTimes(1)
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ fechaEntrega: '2031-05-17', horaEntrega: '20:00' }),
+      )
+    })
+
+    test('mañana a cualquier hora se envía', async () => {
+      const user = userEvent.setup()
+      const onSubmit = jest.fn()
+      render(<PedidoForm onSubmit={onSubmit} horaServidor={HORA_SERVIDOR} />)
+
+      await llenarFormulario(user)
+      clicEnMapa(-1.2412, -78.6197)
+      elegir(fecha, '2031-05-18')
+      elegir(hora, '07:00')
+      await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ fechaEntrega: '2031-05-18', horaEntrega: '07:00' }),
+      )
+    })
+
+    test('al editar también aplica la hora del servidor', () => {
+      const pedido = { ...PEDIDO_EXISTENTE, fechaEntrega: '2031-05-17', horaEntrega: '08:00:00' }
+      render(<PedidoForm pedido={pedido} onSubmit={jest.fn()} horaServidor={HORA_SERVIDOR} />)
+
+      expect(hora()).toHaveAttribute('min', '19:45')
+      expect(screen.getByText(MENSAJE_HORA)).toBeInTheDocument()
+    })
+
+    test('sin respuesta del servidor no valida fecha ni hora: el backend decide y muestra su mensaje', async () => {
+      const user = userEvent.setup()
+      const onSubmit = jest.fn()
+      render(<PedidoForm onSubmit={onSubmit} horaServidor={null} error={MENSAJE_HORA} />)
+
+      await llenarFormulario(user)
+      clicEnMapa(-1.2412, -78.6197)
+      elegir(fecha, '2001-01-01')
+      await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+      expect(fecha()).not.toHaveAttribute('min')
+      expect(hora()).not.toHaveAttribute('min')
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ fechaEntrega: '2001-01-01', horaEntrega: '10:30' }),
+      )
+      expect(screen.getByRole('alert')).toHaveTextContent(MENSAJE_HORA)
+    })
   })
 
   describe('al editar un pedido', () => {

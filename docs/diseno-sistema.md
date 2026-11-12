@@ -97,8 +97,9 @@ Ruta:   ARMADA → EN_CURSO (se recoge el primer pedido) → FINALIZADA (todos E
 
 ## 4. Flujo de datos principal
 
-1. **Registrar pedido** (`POST /api/pedidos`): valida (Bean Validation) → fecha de entrega ≥ hoy (CP-04) → zona por
-   `ST_Covers` (CP-03) → crea/usa cliente → guarda `PENDIENTE` con `fecha_registro = ahora`.
+1. **Registrar pedido** (`POST /api/pedidos`): valida (Bean Validation) → fecha de entrega ≥ hoy (CP-04) → fecha y hora
+   de entrega ≥ ahora + anticipación mínima (ver "Hora de entrega" en la sección 7) → zona por `ST_Covers` (CP-03) →
+   crea/usa cliente → guarda `PENDIENTE` con `fecha_registro = ahora`. `PUT /api/pedidos/{id}` aplica las mismas reglas.
 2. **Armar rutas** (`POST /api/rutas/armar?fecha=` o `@Scheduled`): ver sección 5.
 3. **Repartidor** consulta `GET /api/repartidores/{id}/ruta-actual` y marca `RECOGIDO → EN_CAMINO → ENTREGADO`
    (cada `PATCH` valida la transición, guarda historial y publica en `/topic/pedidos`; la ruta cambia de estado sola).
@@ -163,10 +164,12 @@ dos rutas.
 
 | Tema | Decisión |
 |---|---|
-| Errores | Cuerpo uniforme `{timestamp, status, codigo, mensaje, errores?}`. 400 validación/solicitud mal formada · 404 no existe · **409** conflicto de estado (pedido no editable, transición inválida, zona superpuesta, concurrencia) · **422** regla de negocio (fuera de zona, fecha pasada, sin repartidores) |
+| Errores | Cuerpo uniforme `{timestamp, status, codigo, mensaje, errores?}`. 400 validación/solicitud mal formada · 404 no existe · **409** conflicto de estado (pedido no editable, transición inválida, zona superpuesta, concurrencia) · **422** regla de negocio (fuera de zona, fecha u hora de entrega pasada, sin repartidores) |
 | Superposición de zonas | `ST_Relate(..., 'T********')` sobre zonas activas: solo cuenta si los **interiores** se cruzan (cruce, zona dentro de otra o que contiene a otra). Compartir borde o vértices **no** es superposición, ni tampoco una franja de intersección menor a `logistica.zonas.tolerancia-superposicion-m2` (500 m² por defecto, para absorber diferencias de decimales al pegar bordes). Si se cruzan, requiere `confirmarSuperposicion=true` |
 | Bajas | Zonas y repartidores se dan de baja lógica (`activa`/`activo = false`) para no romper el historial |
 | Hora y fecha | Un `Clock` único en `America/Guayaquil` (`logistica.zona-horaria`); el servidor y CI en UTC no cambian "hoy" |
+| Hora de entrega | La fecha y hora de entrega deben ser ≥ **ahora + `logistica.pedidos.anticipacion-minima-minutos`** (30 por defecto, `@Value` en `PedidoService`), al registrar y al editar; si no, **422** `HORA_ENTREGA_INVALIDA` con la hora del servidor en el mensaje. "Ahora" es el `Clock` del backend truncado a minutos (la hora del pedido es de precisión minuto); **no se confía en el reloj del computador del usuario**, que puede cambiarse. Una fecha anterior a hoy sigue dando `FECHA_ENTREGA_PASADA`. Mañana en adelante acepta cualquier hora |
+| Hora del servidor | `GET /api/servidor/hora` → `{fecha, hora, zonaHoraria, anticipacionMinimaMinutos, entregaMinimaFecha, entregaMinimaHora}`, sin datos sensibles. `entregaMinima*` es la primera entrega aceptada (ahora + anticipación; a las 23:50 ya es mañana 00:20). La web la pide cada vez que abre el modal de pedido y de ella saca la fecha por defecto y mínima, la hora mínima si la fecha es esa primera fecha y el aviso de hora inválida. Si no responde o llega incompleta, la web no valida fecha ni hora y el backend decide y explica el rechazo |
 | Tiempo real | Se publica `AFTER_COMMIT`: nunca se envía un cambio que luego se revierta |
 | Autenticación | Aún no; CORS en un solo lugar y sin Spring Security para agregarlo después |
 | Paginación | `GET /api/pedidos` devuelve una lista y el total en `X-Total-Count` |
@@ -176,7 +179,7 @@ dos rutas.
 | CP | Regla | Dónde se prueba |
 |---|---|---|
 | CP-03 | Dirección fuera de zona → 422 | `PedidoServiceTest`, `ZonaRepositoryIT`, `ApiRestIT` |
-| CP-04 | Fecha de entrega anterior a hoy | `PedidoServiceTest`, `ApiRestIT` |
+| CP-04 | Fecha de entrega anterior a hoy, y hora de entrega anterior a ahora + anticipación mínima (registrar y editar; `Clock` fijo) | `PedidoServiceTest`, `ApiRestIT`; web: `PedidoForm.test`, `PedidosPage.test`, `utils.test` |
 | CP-05 | Solo se edita un pedido PENDIENTE | `PedidoServiceTest`, `ApiRestIT` |
 | CP-06 a CP-08 | Superposición de zonas (interiores que se cruzan) y `confirmarSuperposicion` | `ZonaServiceTest`, `ZonaRepositoryIT`, `ZonasContiguasIT`, `ApiRestIT` |
 | CP-09 | Ruta no supera el máximo | `RutaTest`, `ConcurrenciaRutasIT`, feature de aceptación |

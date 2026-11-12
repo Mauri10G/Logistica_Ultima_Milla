@@ -34,6 +34,10 @@ logistica:
     # decimales al pegar el borde de una zona al de su vecina (la web pega los puntos a vertices y bordes).
     # Una zona totalmente dentro de otra se rechaza siempre. Se lee con @Value en ZonaService.
     tolerancia-superposicion-m2: 500
+  pedidos:
+    # Minutos minimos entre la hora actual del servidor (logistica.zona-horaria) y la fecha/hora de entrega de un
+    # pedido, al registrar y al editar. Se lee con @Value en PedidoService.
+    anticipacion-minima-minutos: 30
   rutas:
     max-pedidos: 4 # maximo de pedidos por ruta
     armado:

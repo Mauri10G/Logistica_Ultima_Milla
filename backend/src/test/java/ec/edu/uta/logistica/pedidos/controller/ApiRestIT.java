@@ -41,10 +41,14 @@ class ApiRestIT extends IntegrationTestBase {
     }
 
     private static String pedidoJson(LocalDate fecha, String coordenadas) {
+        return pedidoJson(fecha, "10:30", coordenadas);
+    }
+
+    private static String pedidoJson(LocalDate fecha, String hora, String coordenadas) {
         return """
                 {"clienteNombres": "Cliente API", "clienteTelefono": "0991112223", "direccion": "Bolivar y Mera",
-                 %s, "fechaEntrega": "%s", "horaEntrega": "10:30"}
-                """.formatted(coordenadas, fecha);
+                 %s, "fechaEntrega": "%s", "horaEntrega": "%s"}
+                """.formatted(coordenadas, fecha, hora);
     }
 
     private ResultActions postJson(String url, String cuerpo) throws Exception {
@@ -88,6 +92,35 @@ class ApiRestIT extends IntegrationTestBase {
         postJson("/api/pedidos", pedidoJson(hoy().minusDays(1), CENTRO))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.codigo").value("FECHA_ENTREGA_PASADA"));
+    }
+
+    @Test
+    @DisplayName("CP-04: hoy a las 00:00 ya paso (la hora sale del reloj del servidor) -> 422, tambien al editar")
+    void horaDeHoyYaPasada() throws Exception {
+        postJson("/api/pedidos", pedidoJson(hoy(), "00:00", CENTRO))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.codigo").value("HORA_ENTREGA_INVALIDA"))
+                .andExpect(jsonPath("$.mensaje").value(org.hamcrest.Matchers.containsString("al menos 30 minutos")));
+
+        long id = crearPedido(hoy().plusDays(35));
+        mvc.perform(put("/api/pedidos/" + id).contentType(MediaType.APPLICATION_JSON)
+                        .content(pedidoJson(hoy(), "00:00", CENTRO)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.codigo").value("HORA_ENTREGA_INVALIDA"));
+        mvc.perform(delete("/api/pedidos/" + id)).andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("GET /api/servidor/hora devuelve fecha, hora, zona horaria y anticipacion minima")
+    void horaDelServidor() throws Exception {
+        mvc.perform(get("/api/servidor/hora"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fecha").value(org.hamcrest.Matchers.matchesPattern("\\d{4}-\\d{2}-\\d{2}")))
+                .andExpect(jsonPath("$.hora").value(org.hamcrest.Matchers.matchesPattern("\\d{2}:\\d{2}(:\\d{2})?")))
+                .andExpect(jsonPath("$.zonaHoraria").value("America/Guayaquil"))
+                .andExpect(jsonPath("$.anticipacionMinimaMinutos").value(30))
+                .andExpect(jsonPath("$.entregaMinimaFecha").exists())
+                .andExpect(jsonPath("$.entregaMinimaHora").exists());
     }
 
     @Test
