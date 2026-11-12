@@ -325,6 +325,12 @@ button.secundario {
   color: var(--color-suave);
 }
 
+/* Aviso del efecto imán al dibujar zonas: discreto, pero con contraste suficiente */
+.aviso-iman {
+  color: #166534;
+  font-weight: 600;
+}
+
 .error-campo {
   color: #b91c1c;
   font-size: 0.8rem;
