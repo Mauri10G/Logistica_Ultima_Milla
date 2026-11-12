@@ -24,9 +24,17 @@ export async function editarPedido(id, datos) {
   return respuesta.data
 }
 
-/** Elimina un pedido PENDIENTE (409 si ya no lo es). */
-export async function eliminarPedido(id) {
-  await api.delete(`/pedidos/${id}`)
+/**
+ * Elimina un pedido PENDIENTE (409 si ya no lo es).
+ * @param {{ alSalir?: boolean }} [opciones] alSalir: se pide al cerrar la pestaña; va con fetch y keepalive para que el
+ *   navegador no la cancele al descargar la página.
+ */
+export async function eliminarPedido(id, { alSalir = false } = {}) {
+  if (alSalir) {
+    await api.delete(`/pedidos/${id}`, { adapter: 'fetch', fetchOptions: { keepalive: true } })
+  } else {
+    await api.delete(`/pedidos/${id}`)
+  }
 }
 
 /**

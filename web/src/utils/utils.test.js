@@ -8,9 +8,9 @@ import {
   mensajeDeErrorPedido,
 } from './errores'
 import { ESTADOS_PEDIDO } from './estados'
-import { formatearFechaHora } from './formatos'
+import { formatearFecha, formatearFechaHora } from './formatos'
 import { poligonoAPuntos, puntosAPoligono } from './geojson'
-import { claveDeZona } from './zonas'
+import { claveDeZona, zonasSuperpuestas } from './zonas'
 import { crearIconoParada, paradasOrdenadas } from './paradas'
 import {
   fechaPorDefecto,
@@ -279,5 +279,34 @@ describe('claveDeZona', () => {
 
   test('tolera una zona sin área', () => {
     expect(claveDeZona({ id: 2, nombre: 'Vacía', activa: true })).toContain('2:Vacía')
+  })
+})
+
+describe('formatearFecha', () => {
+  test('pasa YYYY-MM-DD a DD/MM/YYYY', () => {
+    expect(formatearFecha('2026-02-13')).toBe('13/02/2026')
+    expect(formatearFecha('2026-02-13T09:30:15')).toBe('13/02/2026')
+  })
+
+  test('lo que no es una fecha se devuelve igual y vacío da cadena vacía', () => {
+    expect(formatearFecha('mañana')).toBe('mañana')
+    expect(formatearFecha(null)).toBe('')
+    expect(formatearFecha(undefined)).toBe('')
+  })
+})
+
+describe('zonasSuperpuestas', () => {
+  const MENSAJE =
+    'El area se superpone con: Centro, Ingahurco (se cruza, la contiene o queda dentro de ella). Dos zonas pueden compartir borde.'
+
+  test('saca los nombres de las zonas del mensaje de ZONA_SUPERPUESTA', () => {
+    expect(zonasSuperpuestas(MENSAJE)).toEqual(['Centro', 'Ingahurco'])
+    expect(zonasSuperpuestas('El area se superpone con: Norte (se cruza).')).toEqual(['Norte'])
+  })
+
+  test('si el mensaje no tiene ese formato devuelve una lista vacía', () => {
+    expect(zonasSuperpuestas('Zona repetida')).toEqual([])
+    expect(zonasSuperpuestas('')).toEqual([])
+    expect(zonasSuperpuestas(null)).toEqual([])
   })
 })

@@ -2140,3 +2140,101 @@ button.secundario[aria-pressed='true'] {
 .tooltip-fijo.tooltip-arriba {
   transform: translate(-50%, -100%);
 }
+
+/* ==========================================================================
+   Confirmaciones (alertdialog) y avisos con "Deshacer"
+   ========================================================================== */
+
+.modal.modal-confirmar {
+  width: min(480px, 100%);
+}
+
+.confirmar-cuerpo {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espacio-4);
+}
+
+.confirmar-icono {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+}
+
+.confirmar-icono-peligro {
+  background: var(--color-error-fondo);
+  color: var(--color-error-texto);
+}
+
+.confirmar-icono-advertencia {
+  background: var(--color-aviso-fondo);
+  color: var(--color-aviso-texto);
+}
+
+.confirmar-icono-normal {
+  background: var(--color-tarjeta-suave);
+  color: var(--color-primario);
+}
+
+.confirmar-texto {
+  flex: 1;
+  min-width: 0;
+}
+
+.confirmar-descripcion {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.confirmar-detalles {
+  display: grid;
+  gap: var(--espacio-2);
+  margin: var(--espacio-3) 0 0;
+  padding: var(--espacio-3);
+  background: var(--color-tarjeta-suave);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
+  font-size: var(--texto-sm);
+}
+
+.confirmar-detalles dt {
+  font-weight: 600;
+  color: var(--color-suave);
+}
+
+.confirmar-detalles dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.spinner.spinner-boton {
+  width: 1rem;
+  height: 1rem;
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.45);
+  border-top-color: currentColor;
+}
+
+button.secundario .spinner-boton,
+button.peligro .spinner-boton {
+  border-color: var(--color-borde);
+  border-top-color: currentColor;
+}
+
+/* "Deshacer": abajo y al centro, para no mezclarse con los avisos de arriba a la derecha */
+.avisos.avisos-deshacer {
+  top: auto;
+  right: auto;
+  bottom: var(--espacio-4);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.aviso-deshacer {
+  flex: none;
+  color: inherit;
+}
