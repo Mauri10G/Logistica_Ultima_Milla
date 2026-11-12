@@ -40,12 +40,22 @@ Given('que las rutas de esa fecha ya están armadas', async function () {
 
 // ---------- Pantalla de Rutas ----------
 
-When('el personal arma las rutas de esa fecha desde la web', async function () {
+When('el personal pide armar las rutas de esa fecha desde la web', async function () {
   await this.pagina.goto(`${this.web}/rutas`)
   await this.pagina.locator('#rutasFecha').fill(this.fechaLejana)
   // se espera a que desaparezcan las rutas de la fecha anterior (mañana) para no contar tarjetas que no son de esta prueba
   await this.pagina.getByText('No hay rutas armadas para esta fecha.').waitFor()
   await this.pagina.getByRole('button', { name: 'Armar rutas' }).click()
+})
+
+Then('ve el diálogo de confirmación con {int} pedidos pendientes para armar', async function (cantidad) {
+  const dialogo = this.pagina.getByRole('alertdialog')
+  await dialogo.waitFor()
+  await dialogo.getByText(`${cantidad} pedido(s) pendiente(s)`).waitFor()
+  await dialogo.getByText(this.fechaLejana.split('-').reverse().join('/'), { exact: true }).waitFor()
+})
+
+Then('ve las rutas armadas', async function () {
   await this.pagina.locator('[data-testid="ruta-card"]').first().waitFor()
 })
 

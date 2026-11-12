@@ -53,3 +53,26 @@ Then('ve el mensaje de error {string}', async function (texto) {
 Then('no ve el mensaje de error {string}', async function (texto) {
   assert.strictEqual(await this.pagina.getByText(texto).count(), 0)
 })
+
+// ---------- Diálogo de confirmación propio (role="alertdialog") ----------
+// Los botones se buscan DENTRO del diálogo: "Armar rutas" o "Guardar de todas formas" existen también en la página.
+
+Then('ve el diálogo de confirmación {string}', async function (titulo) {
+  await this.pagina.getByRole('alertdialog', { name: titulo }).waitFor()
+})
+
+Then('el diálogo de confirmación menciona {string}', async function (texto) {
+  await this.pagina.getByRole('alertdialog').getByText(texto).first().waitFor()
+})
+
+When('pulsa {string} en el diálogo de confirmación', async function (boton) {
+  await this.pagina.getByRole('alertdialog').getByRole('button', { name: boton, exact: true }).click()
+})
+
+Then('ya no ve ningún diálogo de confirmación', async function () {
+  await this.pagina.getByRole('alertdialog').waitFor({ state: 'detached' })
+})
+
+When('pasan {int} segundos', async function (segundos) {
+  await this.pagina.waitForTimeout(segundos * 1000)
+})
