@@ -2,6 +2,10 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import App from './App'
 
+jest.mock('./pages/InicioPage', () => ({
+  __esModule: true,
+  default: () => require('react').createElement('p', null, 'Página de inicio'),
+}))
 jest.mock('./pages/PedidosPage', () => ({
   __esModule: true,
   default: () => require('react').createElement('p', null, 'Página de pedidos'),
@@ -33,6 +37,7 @@ function dibujar(ruta) {
 
 describe('App', () => {
   test.each([
+    ['/', 'Página de inicio'],
     ['/pedidos', 'Página de pedidos'],
     ['/zonas', 'Página de zonas'],
     ['/rutas', 'Página de rutas'],
@@ -43,18 +48,13 @@ describe('App', () => {
     expect(screen.getByText(texto)).toBeInTheDocument()
   })
 
-  test('la raíz y las rutas desconocidas van a pedidos', () => {
-    dibujar('/')
-    expect(screen.getByText('Página de pedidos')).toBeInTheDocument()
-  })
-
-  test('una ruta desconocida va a pedidos', () => {
+  test('una ruta desconocida va al inicio', () => {
     dibujar('/no-existe')
-    expect(screen.getByText('Página de pedidos')).toBeInTheDocument()
+    expect(screen.getByText('Página de inicio')).toBeInTheDocument()
   })
 
   test('sin login habilitado /login redirige a la aplicación', () => {
     dibujar('/login')
-    expect(screen.getByText('Página de pedidos')).toBeInTheDocument()
+    expect(screen.getByText('Página de inicio')).toBeInTheDocument()
   })
 })

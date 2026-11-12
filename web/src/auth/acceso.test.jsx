@@ -186,12 +186,12 @@ describe('Layout', () => {
     )
   }
 
-  test('muestra el menú con las cinco secciones', () => {
+  test('muestra el menú con las seis secciones', () => {
     mockAuthHabilitada = false
     dibujarLayout()
 
     const menu = screen.getByRole('navigation', { name: 'Menú principal' })
-    for (const texto of ['Pedidos', 'Zonas', 'Rutas', 'Repartidores', 'Seguimiento']) {
+    for (const texto of ['Inicio', 'Pedidos', 'Zonas', 'Rutas', 'Repartidores', 'Seguimiento']) {
       expect(menu).toHaveTextContent(texto)
     }
     expect(screen.getByText('Contenido de pedidos')).toBeInTheDocument()
