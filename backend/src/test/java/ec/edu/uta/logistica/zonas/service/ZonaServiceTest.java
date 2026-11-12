@@ -26,10 +26,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** CP-06 a CP-08: superposicion de zonas. */
+/**
+ * CP-06 a CP-08: superposicion de zonas. El servicio delega la geometria en {@code buscarSuperpuestas} (interiores que
+ * se cruzan; ver {@code ZonaRepositoryIT}): si devuelve zonas se rechaza, si devuelve vacio (p. ej. zonas que solo
+ * comparten borde) se acepta.
+ */
 @ExtendWith(MockitoExtension.class)
 class ZonaServiceTest {
 
@@ -62,6 +67,67 @@ class ZonaServiceTest {
                 .satisfies(e -> assertThat(((ApiException) e).getCodigo()).isEqualTo("ZONA_SUPERPUESTA"));
 
         verify(zonaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("una zona contenida dentro de otra se rechaza (409 ZONA_SUPERPUESTA)")
+    void rechazaZonaDentroDeOtra() {
+        when(zonaRepository.existsByNombreIgnoreCase("Interior")).thenReturn(false);
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong())).thenReturn(List.of(centro));
+
+        assertThatThrownBy(() -> servicio.crear(new ZonaRequest("Interior", geoJson(), null, null), false))
+                .isInstanceOf(ConflictoException.class)
+                .hasMessageContaining("Centro")
+                .satisfies(e -> assertThat(((ApiException) e).getCodigo()).isEqualTo("ZONA_SUPERPUESTA"));
+    }
+
+    @Test
+    @DisplayName("el mensaje de ZONA_SUPERPUESTA explica la regla: compartir borde si se puede, ocupar lo mismo no")
+    void mensajeExplicaLaRegla() {
+        when(zonaRepository.existsByNombreIgnoreCase("Nueva")).thenReturn(false);
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong())).thenReturn(List.of(centro, Fabrica.zona(2L, "Norte")));
+
+        assertThatThrownBy(() -> servicio.crear(new ZonaRequest("Nueva", geoJson(), null, null), false))
+                .hasMessageContaining("Centro, Norte")
+                .hasMessageContaining("compartir borde");
+    }
+
+    @Test
+    @DisplayName("zonas que solo comparten borde se guardan (la consulta no devuelve ninguna superpuesta)")
+    void guardaZonaQueSoloComparteBorde() {
+        when(zonaRepository.existsByNombreIgnoreCase("Vecina")).thenReturn(false);
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong())).thenReturn(List.of());
+        when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
+
+        ZonaResponse creada = servicio.crear(new ZonaRequest("Vecina", geoJson(), null, null), false);
+
+        assertThat(creada.nombre()).isEqualTo("Vecina");
+        verify(zonaRepository).save(any(Zona.class));
+    }
+
+    @Test
+    @DisplayName("al verificar, el servicio entrega a la consulta el poligono WKT de la zona nueva")
+    void consultaConElPoligonoNuevo() {
+        when(zonaRepository.existsByNombreIgnoreCase("Nueva")).thenReturn(false);
+        when(zonaRepository.buscarSuperpuestas(anyString(), anyLong())).thenReturn(List.of());
+        when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
+        ArgumentCaptor<String> wkt = ArgumentCaptor.forClass(String.class);
+
+        servicio.crear(new ZonaRequest("Nueva", geoJson(), null, null), false);
+
+        verify(zonaRepository).buscarSuperpuestas(wkt.capture(), eq(0L));
+        assertThat(wkt.getValue()).startsWith("POLYGON ((-78.62 -1.24, -78.61 -1.24");
+    }
+
+    @Test
+    @DisplayName("una zona inactiva no se compara con las demas")
+    void zonaInactivaNoVerificaSuperposicion() {
+        when(zonaRepository.existsByNombreIgnoreCase("Inactiva")).thenReturn(false);
+        when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
+
+        servicio.crear(new ZonaRequest("Inactiva", geoJson(), false, null), false);
+
+        verify(zonaRepository, never()).buscarSuperpuestas(anyString(), anyLong());
     }
 
     @Test
