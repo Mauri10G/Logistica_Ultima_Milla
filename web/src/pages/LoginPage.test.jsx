@@ -54,6 +54,8 @@ describe('LoginPage (diseño)', () => {
 
     const ilustracion = container.querySelector('svg.login-ilustracion')
     expect(ilustracion.querySelector('.login-rio')).not.toBeNull()
+    // puentes: una franja por calle, recortada por el río
+    expect(ilustracion.querySelectorAll('.login-puentes rect')).toHaveLength(9)
     const sectores = [...ilustracion.querySelectorAll('.login-sector')].map((t) => t.textContent)
     expect(sectores).toEqual(['Ficoa', 'Centro', 'Huachi'])
   })

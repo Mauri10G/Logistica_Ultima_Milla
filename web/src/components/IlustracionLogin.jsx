@@ -1,59 +1,36 @@
 import { useId } from 'react'
-
-// Calles del mapa estilizado (el mismo trazado sirve para la ruta, que va por ellas).
-const CALLES_X = [70, 150, 240, 330, 410]
-const CALLES_Y = [60, 130, 200, 270]
-const ANCHO = 480
-const ALTO = 340
-
-// Manzanas: los huecos entre calles, con un margen para que se vean las avenidas.
-const MANZANAS = []
-for (let i = 0; i < CALLES_X.length - 1; i += 1) {
-  for (let j = 0; j < CALLES_Y.length - 1; j += 1) {
-    MANZANAS.push({
-      id: `${i}-${j}`,
-      x: CALLES_X[i] + 11,
-      y: CALLES_Y[j] + 11,
-      ancho: CALLES_X[i + 1] - CALLES_X[i] - 22,
-      alto: CALLES_Y[j + 1] - CALLES_Y[j] - 22,
-      parque: i === 1 && j === 2,
-    })
-  }
-}
-
-// Ruta de reparto por las calles: A (70,270) -> B (150,165) -> C (330,165) -> D (410,60), con esquinas redondeadas.
-const RUTA =
-  'M70 270V214Q70 200 84 200H136Q150 200 150 186V144Q150 130 164 130H226Q240 130 240 144V186Q240 200 254 200' +
-  'H316Q330 200 330 186V144Q330 130 344 130H396Q410 130 410 116V60'
-
-// Río curvo de norte a sur, como el Ambato; los nombres van sobre manzanas libres de la ruta.
-const RIO = 'M205-10C205 40 140 70 168 120S292 172 268 232S216 300 244 350'
-
-const SECTORES = [
-  { nombre: 'Ficoa', x: 110, y: 98 },
-  { nombre: 'Centro', x: 285, y: 168 },
-  { nombre: 'Huachi', x: 110, y: 238 },
-]
-
-const PINES = [
-  { id: 'a', x: 70, y: 270, clase: 'login-pin-a' },
-  { id: 'b', x: 150, y: 165, clase: 'login-pin-b' },
-  { id: 'c', x: 330, y: 165, clase: 'login-pin-c' },
-  { id: 'd', x: 410, y: 60, clase: 'login-pin-d' },
-]
+import {
+  ALTO,
+  ANCHO,
+  ANCHO_CALLE,
+  ANCHO_RIO,
+  CALLES_X,
+  CALLES_Y,
+  MANZANAS,
+  PINES,
+  RIO,
+  RUTA,
+  SECTORES,
+} from '../utils/mapaLogin'
 
 // Punta del pin en (0,0): una gota de 28 px de ancho.
 const FORMA_PIN = 'M0 0C-10-12-14-18-14-26a14 14 0 1 1 28 0c0 8-4 14-14 26z'
 
+// Los puentes son las calles cuando pasan sobre el río: un poco más angostos que la calle y con salientes en las orillas.
+const ANCHO_PUENTE = ANCHO_CALLE - 8
+const SALIENTE_ORILLA = 5
+
 /**
- * Mapa de ciudad estilizado con una ruta punteada que se dibuja uniendo cuatro pines de entrega, y una furgoneta
- * que la recorre. Es decorativo (aria-hidden); la animación es CSS y se apaga con prefers-reduced-motion
- * (ver .login-* en index.css).
+ * Mapa de ciudad estilizado (con un río, como el Ambato, y los sectores Ficoa, Centro y Huachi) con una ruta
+ * punteada que se dibuja uniendo cuatro pines de entrega, y una furgoneta que la recorre. Es decorativo
+ * (aria-hidden); la animación es CSS y se apaga con prefers-reduced-motion (ver .login-* en index.css).
+ * La geometría (río, manzanas, calles) está en utils/mapaLogin.js.
  */
 export default function IlustracionLogin() {
   const id = useId()
   const idMascara = `${id}-mascara`
   const idRecorte = `${id}-recorte`
+  const idOrillas = `${id}-orillas`
 
   return (
     <svg
@@ -79,12 +56,22 @@ export default function IlustracionLogin() {
             strokeLinejoin="round"
           />
         </mask>
+        {/* Solo se ve el tramo de cada calle que cae sobre el agua (más las orillas): ese tramo es el puente. */}
+        <mask id={idOrillas} maskUnits="userSpaceOnUse" x="0" y="0" width={ANCHO} height={ALTO}>
+          <path
+            d={RIO}
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth={ANCHO_RIO + SALIENTE_ORILLA * 2}
+            strokeLinecap="butt"
+          />
+        </mask>
       </defs>
 
       <g clipPath={`url(#${idRecorte})`}>
         <rect className="login-mapa-fondo" width={ANCHO} height={ALTO} />
 
-        {/* manzanas y parque */}
+        {/* manzanas y parque (las que estaban sobre el río se quitaron) */}
         {MANZANAS.map((m) => (
           <rect
             key={m.id}
@@ -97,9 +84,19 @@ export default function IlustracionLogin() {
           />
         ))}
 
-        {/* río que cruza la ciudad, como el Ambato: va por debajo de las calles (los cruces son puentes) */}
-        <path className="login-rio" d={RIO} fill="none" strokeLinecap="round" />
-        <path className="login-rio-brillo" d={RIO} fill="none" strokeLinecap="round" />
+        {/* río: por debajo de las calles y de los puentes */}
+        <path className="login-rio" d={RIO} fill="none" strokeWidth={ANCHO_RIO} strokeLinecap="butt" />
+        <path className="login-rio-brillo" d={RIO} fill="none" strokeLinecap="butt" />
+
+        {/* puentes: franjas de calle recortadas por el río */}
+        <g className="login-puentes" mask={`url(#${idOrillas})`}>
+          {CALLES_X.map((x) => (
+            <rect key={`px${x}`} x={x - ANCHO_PUENTE / 2} y="-10" width={ANCHO_PUENTE} height={ALTO + 20} />
+          ))}
+          {CALLES_Y.map((y) => (
+            <rect key={`py${y}`} x="-10" y={y - ANCHO_PUENTE / 2} width={ANCHO + 20} height={ANCHO_PUENTE} />
+          ))}
+        </g>
 
         {/* sectores */}
         {SECTORES.map((sector) => (
@@ -135,9 +132,14 @@ export default function IlustracionLogin() {
         <g key={pin.id} transform={`translate(${pin.x} ${pin.y})`}>
           {pin.id === 'd' && <ellipse className="login-pin-onda" cx="0" cy="0" rx="14" ry="6" />}
           <ellipse className="login-pin-sombra" cx="0" cy="1" rx="9" ry="3.2" />
-          <g className={`login-pin ${pin.clase}`}>
+          <g className={`login-pin login-pin-${pin.id}`}>
             <path className="login-pin-cuerpo" d={FORMA_PIN} />
-            <circle className={pin.id === 'd' ? 'login-pin-centro login-pin-centro-final' : 'login-pin-centro'} cx="0" cy="-26" r="5.5" />
+            <circle
+              className={pin.id === 'd' ? 'login-pin-centro login-pin-centro-final' : 'login-pin-centro'}
+              cx="0"
+              cy="-26"
+              r="5.5"
+            />
           </g>
         </g>
       ))}

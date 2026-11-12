@@ -1815,8 +1815,13 @@ button.disponibilidad.disponible::before {
 }
 
 .login-rio {
-  stroke: rgba(125, 211, 252, 0.34);
-  stroke-width: 15;
+  stroke: rgba(125, 211, 252, 0.4);
+}
+
+.login-puentes rect {
+  fill: rgba(226, 240, 255, 0.5);
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1;
 }
 
 .login-rio-brillo {
@@ -2096,6 +2101,17 @@ button.disponibilidad.disponible::before {
   100% {
     opacity: 0;
     transform: scale(2.4);
+  }
+}
+
+@media (min-width: 1700px) {
+  .login-ilustracion,
+  .login-panel-texto {
+    width: min(100%, 640px);
+  }
+
+  .login-contenido {
+    width: min(440px, 100%);
   }
 }
 
