@@ -3,10 +3,28 @@ import { useCallback, useEffect, useState } from 'react'
 import { actualizarZona, crearZona, listarZonas } from '../api/zonasApi'
 import { codigoDeError, estadoHttp, mensajeDeError } from '../utils/errores'
 import Avisos from '../components/Avisos'
-import { FilasCarga } from '../components/Cargando'
+import { colorDeZona } from '../components/constantesMapa'
 import EncabezadoPagina from '../components/EncabezadoPagina'
 import EstadoVacio from '../components/EstadoVacio'
+import Interruptor from '../components/Interruptor'
+import Tabla from '../components/Tabla'
 import ZonaForm from '../components/ZonaForm'
+
+const COLUMNAS = [
+  { clave: 'id', titulo: '#' },
+  { clave: 'nombre', titulo: 'Nombre' },
+  { clave: 'activa', titulo: 'Activa' },
+  { clave: 'acciones', titulo: 'Acciones' },
+]
+
+const VALORES = {
+  id: (zona) => zona.id,
+  nombre: (zona) => zona.nombre,
+  activa: (zona) => (zona.activa ? 0 : 1), // al ordenar ascendente, las activas primero
+}
+
+// Al cargar o recargar, la tabla viene por número de zona de menor a mayor.
+const ORDEN_INICIAL = { clave: 'id', direccion: 'asc' }
 
 export default function ZonasPage() {
   const [zonas, setZonas] = useState([])
@@ -16,6 +34,7 @@ export default function ZonasPage() {
   const [advertencia, setAdvertencia] = useState(null)
   const [mensaje, setMensaje] = useState(null)
   const [guardando, setGuardando] = useState(false)
+  const [mostrarInactivas, setMostrarInactivas] = useState(false)
   const [version, setVersion] = useState(0) // cambia tras guardar para vaciar el formulario
   const [cargando, setCargando] = useState(true)
 
@@ -78,6 +97,7 @@ export default function ZonasPage() {
     }
   }
 
+  const zonasVisibles = zonas.filter((zona) => mostrarInactivas || zona.activa)
   const zonasReferencia = zonas.filter((zona) => zona.activa && zona.id !== zonaEnEdicion?.id)
 
   return (
@@ -102,52 +122,61 @@ export default function ZonasPage() {
       />
 
       <div className="dos-columnas">
-        <div className="tabla-contenedor">
-          <table className="tabla" aria-busy={cargando}>
-            <caption className="solo-lectores">Zonas de reparto</caption>
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Nombre</th>
-                <th scope="col">Activa</th>
-                <th scope="col">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cargando && <FilasCarga columnas={4} />}
-              {zonas.map((zona) => (
-                <tr key={zona.id}>
-                  <td>{zona.id}</td>
-                  <td>{zona.nombre}</td>
-                  <td>
-                    <span className={zona.activa ? 'pastilla pastilla-ok' : 'pastilla'}>{zona.activa ? 'Sí' : 'No'}</span>
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="secundario pequeno"
-                      aria-label={`Editar zona ${zona.nombre}`}
-                      onClick={() => editar(zona)}
-                    >
-                      <Pencil size={14} aria-hidden="true" />
-                      Editar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!cargando && zonas.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="vacio">
-                    <EstadoVacio
-                      icono={MapPinned}
-                      titulo="No hay zonas configuradas."
-                      ayuda="Dibuje la primera zona en el mapa del formulario."
+        <div>
+          <div className="filtros">
+            <Interruptor etiqueta="Mostrar inactivas" activo={mostrarInactivas} onCambiar={setMostrarInactivas} />
+          </div>
+          <Tabla
+            titulo="Zonas de reparto"
+            columnas={COLUMNAS}
+            valores={VALORES}
+            filas={zonasVisibles}
+            cargando={cargando}
+            ordenInicial={ORDEN_INICIAL}
+            reiniciarCon={[mostrarInactivas]}
+            vacio={
+              <EstadoVacio
+                icono={MapPinned}
+                titulo="No hay zonas configuradas."
+                ayuda={
+                  zonas.length > 0
+                    ? 'Solo hay zonas inactivas: active «Mostrar inactivas» para verlas.'
+                    : 'Dibuje la primera zona en el mapa del formulario.'
+                }
+              />
+            }
+            renderFila={(zona) => (
+              <tr key={zona.id}>
+                <td>{zona.id}</td>
+                <td>
+                  <span className="zona-nombre">
+                    <span
+                      className={zona.activa ? 'zona-color' : 'zona-color zona-color-inactiva'}
+                      style={zona.activa ? { background: colorDeZona(zona) } : undefined}
+                      title={zona.activa ? 'Color de la zona en el mapa' : 'Zona inactiva: no se dibuja en el mapa'}
+                      data-testid={`zona-color-${zona.id}`}
+                      aria-hidden="true"
                     />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    {zona.nombre}
+                  </span>
+                </td>
+                <td>
+                  <span className={zona.activa ? 'pastilla pastilla-ok' : 'pastilla'}>{zona.activa ? 'Sí' : 'No'}</span>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="secundario pequeno"
+                    aria-label={`Editar zona ${zona.nombre}`}
+                    onClick={() => editar(zona)}
+                  >
+                    <Pencil size={14} aria-hidden="true" />
+                    Editar
+                  </button>
+                </td>
+              </tr>
+            )}
+          />
         </div>
 
         <div className="tarjeta">

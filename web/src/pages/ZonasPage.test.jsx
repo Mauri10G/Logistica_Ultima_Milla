@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { manejadoresMapa } from 'react-leaflet'
 import { actualizarZona, crearZona, listarZonas } from '../api/zonasApi'
+import { colorDeZona } from '../components/constantesMapa'
 import ZonasPage from './ZonasPage'
 
 jest.mock('../api/zonasApi')
@@ -57,6 +58,10 @@ async function dibujar() {
   await screen.findByRole('cell', { name: 'Centro' })
 }
 
+async function mostrarInactivas(user) {
+  await user.click(screen.getByRole('switch', { name: 'Mostrar inactivas' }))
+}
+
 async function dibujarYGuardarZonaNueva(user) {
   await user.type(screen.getByLabelText('Nombre de la zona'), 'Ficoa')
   clic(-1.2, -78.6)
@@ -75,11 +80,84 @@ beforeEach(() => {
 
 describe('ZonasPage', () => {
   test('lista las zonas y si están activas', async () => {
+    const user = userEvent.setup()
     await dibujar()
+    await mostrarInactivas(user)
 
     expect(screen.getByText('Norte')).toBeInTheDocument()
     expect(screen.getByText('Sí')).toBeInTheDocument()
     expect(screen.getByText('No')).toBeInTheDocument()
+  })
+
+  test('"Mostrar inactivas" viene apagado: las zonas inactivas no aparecen hasta encenderlo', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    const interruptor = screen.getByRole('switch', { name: 'Mostrar inactivas' })
+    expect(interruptor).not.toBeChecked()
+    expect(screen.queryByRole('cell', { name: 'Norte' })).not.toBeInTheDocument()
+
+    await user.click(interruptor)
+    expect(interruptor).toBeChecked()
+    expect(screen.getByRole('cell', { name: 'Norte' })).toBeInTheDocument()
+
+    await user.click(interruptor)
+    expect(screen.queryByRole('cell', { name: 'Norte' })).not.toBeInTheDocument()
+  })
+
+  test('si solo hay zonas inactivas lo explica y sugiere encender el interruptor', async () => {
+    listarZonas.mockResolvedValue([ZONAS[1]])
+    render(<ZonasPage />)
+
+    expect(await screen.findByText('No hay zonas configuradas.')).toBeInTheDocument()
+    expect(screen.getByText(/Mostrar inactivas/, { selector: 'p' })).toBeInTheDocument()
+  })
+
+  test('cada zona activa lleva un cuadrito con el mismo color que su capa en el mapa', async () => {
+    const user = userEvent.setup()
+    listarZonas.mockResolvedValue([
+      ZONAS[0],
+      { id: 4, nombre: 'Sur', activa: true, area: AREA },
+      { id: 2, nombre: 'Norte', activa: false, area: AREA },
+    ])
+    await dibujar()
+
+    const capas = screen.getAllByTestId('geojson')
+    expect(capas.map((capa) => capa.dataset.colorZona)).toEqual([colorDeZona({ id: 1 }), colorDeZona({ id: 4 })])
+    expect(screen.getByTestId('zona-color-1')).toHaveStyle({ background: colorDeZona({ id: 1 }) })
+    expect(screen.getByTestId('zona-color-4')).toHaveStyle({ background: colorDeZona({ id: 4 }) })
+    expect(colorDeZona({ id: 1 })).not.toBe(colorDeZona({ id: 4 }))
+
+    await mostrarInactivas(user)
+    // la inactiva no se dibuja en el mapa, así que su cuadrito va vacío
+    expect(screen.getByTestId('zona-color-2')).toHaveClass('zona-color-inactiva')
+  })
+
+  test('el color de una zona no cambia al ocultar o mostrar otras', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    const antes = screen.getByTestId('geojson').dataset.colorZona
+
+    await mostrarInactivas(user)
+
+    expect(screen.getByTestId('geojson').dataset.colorZona).toBe(antes)
+  })
+
+  test('vienen ordenadas por # de menor a mayor y el encabezado Nombre ordena por nombre', async () => {
+    const user = userEvent.setup()
+    listarZonas.mockResolvedValue([
+      { id: 3, nombre: 'Ficoa', activa: true, area: AREA },
+      { id: 1, nombre: 'Centro', activa: true, area: AREA },
+      { id: 2, nombre: 'Atocha', activa: true, area: AREA },
+    ])
+    await dibujar()
+    const nombres = () => screen.getAllByRole('row').slice(1).map((fila) => fila.cells[1].textContent)
+
+    expect(nombres()).toEqual(['Centro', 'Atocha', 'Ficoa'])
+    expect(screen.getByRole('columnheader', { name: '#' })).toHaveAttribute('aria-sort', 'ascending')
+
+    await user.click(screen.getByRole('button', { name: 'Nombre' }))
+    expect(nombres()).toEqual(['Atocha', 'Centro', 'Ficoa'])
   })
 
   test('sin zonas lo dice', async () => {
@@ -253,6 +331,7 @@ describe('ZonasPage', () => {
     expect(screen.getByRole('form', { name: 'Nueva zona' })).toBeInTheDocument()
     expect(screen.getByLabelText('Nombre de la zona')).toHaveValue('')
 
+    await mostrarInactivas(user)
     await user.click(screen.getByRole('button', { name: 'Editar zona Norte' }))
     await user.click(screen.getByRole('button', { name: 'Cancelar edición' }))
     expect(screen.getByRole('form', { name: 'Nueva zona' })).toBeInTheDocument()
@@ -323,6 +402,7 @@ describe('ZonasPage: el mapa se actualiza al instante, sin recargar la página',
     await dibujar()
     expect(screen.getAllByTestId('geojson')).toHaveLength(1)
 
+    await mostrarInactivas(user)
     await user.click(screen.getByRole('button', { name: 'Editar zona Norte' }))
     listarZonas.mockResolvedValue([ZONAS[0], { ...ZONAS[1], activa: true }])
     await user.click(screen.getByLabelText('Zona activa'))
