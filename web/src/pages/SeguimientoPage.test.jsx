@@ -322,7 +322,7 @@ describe('SeguimientoPage: orden, búsqueda y paginación', () => {
 
     await user.click(screen.getByRole('button', { name: 'Mañana' }))
 
-    await waitFor(() => expect(screen.getByText('Mostrando 1 a 10 de 24')).toBeInTheDocument())
+    expect(await screen.findByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
   })
 })
 

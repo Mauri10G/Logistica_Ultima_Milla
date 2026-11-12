@@ -5,6 +5,7 @@ import { numerosDePagina, TAMANOS_PAGINA, useTabla } from '../hooks/useTabla'
 
 const ICONO_ORDEN = { asc: ArrowUp, desc: ArrowDown }
 const ETIQUETA_ORDEN = { asc: 'ascendente', desc: 'descendente' }
+const ARIA_SORT = { asc: 'ascending', desc: 'descending' }
 
 function EncabezadoColumna({ columna, ordenable, orden, onOrdenar }) {
   if (!ordenable) {
@@ -16,12 +17,9 @@ function EncabezadoColumna({ columna, ordenable, orden, onOrdenar }) {
   }
   const activa = orden?.clave === columna.clave
   const Icono = activa ? ICONO_ORDEN[orden.direccion] : ArrowUpDown
+  const ariaSort = activa ? ARIA_SORT[orden.direccion] : undefined
   return (
-    <th
-      scope="col"
-      className={columna.className}
-      aria-sort={activa ? (orden.direccion === 'asc' ? 'ascending' : 'descending') : undefined}
-    >
+    <th scope="col" className={columna.className} aria-sort={ariaSort}>
       <button
         type="button"
         className={activa ? 'orden-columna orden-activo' : 'orden-columna'}
@@ -48,9 +46,10 @@ export function Paginacion({ desde, hasta, total, pagina, totalPaginas, tamano, 
           <ChevronLeft size={14} aria-hidden="true" />
           Anterior
         </button>
-        {numerosDePagina(pagina, totalPaginas).map((numero, indice) =>
+        {numerosDePagina(pagina, totalPaginas).map((numero, indice, numeros) =>
           numero === '…' ? (
-            <span key={`puntos-${indice}`} className="paginacion-puntos" aria-hidden="true">
+            // los puntos suspensivos van siempre tras un número distinto: ese número identifica la clave
+            <span key={`puntos-tras-${numeros[indice - 1]}`} className="paginacion-puntos" aria-hidden="true">
               …
             </span>
           ) : (
@@ -135,7 +134,7 @@ export default function Tabla({
         </thead>
         <tbody>
           {cargando && <FilasCarga columnas={columnas.length} />}
-          {tabla.filasPagina.map(renderFila)}
+          {tabla.filasPagina.map((fila) => renderFila(fila))}
           {sinFilas && (
             <tr>
               <td colSpan={columnas.length} className="vacio">

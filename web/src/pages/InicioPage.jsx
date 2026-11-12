@@ -40,6 +40,48 @@ function Valor({ cargando, fallo, children }) {
 
 const NO_CARGO = 'No se pudo cargar'
 
+/** Texto bajo un indicador: "Consultando…" o el fallo mientras no hay datos, y `listo` cuando llegaron. */
+function textoDetalle({ cargando, fallo, listo, consultando = 'Consultando…', fallido = NO_CARGO }) {
+  if (!cargando) return listo
+  return fallo ? fallido : consultando
+}
+
+/** Encabezado de una tarjeta: icono y título. */
+function CabeceraIndicador({ icono: Icono, children }) {
+  return (
+    <div className="indicador-cabecera">
+      <span className="indicador-icono">
+        <Icono size={18} aria-hidden="true" />
+      </span>
+      <span>{children}</span>
+    </div>
+  )
+}
+
+/** Contenido de "Próximas entregas": mensaje de carga o fallo, estado vacío o la lista. */
+function ProximasEntregas({ pedidos, fallo, proximas }) {
+  if (pedidos === null) {
+    return <p className="indicador-detalle">{fallo ? 'No se pudieron cargar las entregas' : 'Cargando próximas entregas…'}</p>
+  }
+  if (proximas.length === 0) {
+    return <EstadoVacio titulo="No quedan entregas pendientes hoy." icono={CalendarClock} />
+  }
+  return (
+    <ol className="proximas-lista" aria-label="Próximas entregas">
+      {proximas.map((pedido) => (
+        <li key={pedido.id}>
+          <span className="proxima-hora">{pedido.horaEntrega?.slice(0, 5) ?? '—'}</span>
+          <span className="proxima-texto">
+            <strong>{pedido.clienteNombres}</strong>
+            <span>{pedido.direccion}</span>
+          </span>
+          <EstadoBadge estado={pedido.estado} />
+        </li>
+      ))}
+    </ol>
+  )
+}
+
 /**
  * Panel de inicio: pedidos de hoy por estado, rutas armadas, repartidores disponibles y accesos rápidos.
  * Solo usa endpoints que ya existen (pedidos, rutas, repartidores) y se actualiza con el tiempo real.
@@ -106,6 +148,11 @@ export default function InicioPage() {
   const manana = contarRutas(rutasManana ?? [])
   const activos = (repartidores ?? []).filter((repartidor) => repartidor.activo !== false)
   const disponibles = activos.filter((repartidor) => repartidor.disponible)
+  // una fuente "falló" solo si no hay ningún dato que mostrar
+  const cargandoPedidos = pedidos === null
+  const fallaPedidos = fallos.pedidos && cargandoPedidos
+  const cargandoRutas = rutasHoy === null || rutasManana === null
+  const cargandoRepartidores = repartidores === null
 
   return (
     <section>
@@ -119,13 +166,13 @@ export default function InicioPage() {
       <ul
         className="tarjetas-estado"
         aria-label="Pedidos de hoy por estado"
-        aria-busy={pedidos === null && !fallos.pedidos}
+        aria-busy={cargandoPedidos && !fallos.pedidos}
       >
         {ESTADOS_PEDIDO.map((estado) => (
           <li key={estado} className={`tarjeta-estado acento-${estado}`}>
             <EstadoBadge estado={estado} />
             <span className="tarjeta-estado-numero">
-              <Valor cargando={pedidos === null} fallo={fallos.pedidos && pedidos === null}>
+              <Valor cargando={cargandoPedidos} fallo={fallaPedidos}>
                 {porEstado[estado] ?? 0}
               </Valor>
             </span>
@@ -135,81 +182,61 @@ export default function InicioPage() {
 
       <h2 className="panel-seccion-titulo">Operación</h2>
       <div className="panel-rejilla">
-        <article className="tarjeta indicador" aria-busy={pedidos === null && !fallos.pedidos}>
-          <div className="indicador-cabecera">
-            <span className="indicador-icono">
-              <Package size={18} aria-hidden="true" />
-            </span>
-            Pedidos de hoy
-          </div>
+        <article className="tarjeta indicador" aria-busy={cargandoPedidos && !fallos.pedidos}>
+          <CabeceraIndicador icono={Package}>Pedidos de hoy</CabeceraIndicador>
           <span className="indicador-valor">
-            <Valor cargando={pedidos === null} fallo={fallos.pedidos && pedidos === null}>
+            <Valor cargando={cargandoPedidos} fallo={fallaPedidos}>
               {pedidos?.length}
             </Valor>
           </span>
           <p className="indicador-detalle">
-            {pedidos === null
-              ? fallos.pedidos
-                ? NO_CARGO
-                : 'Consultando…'
-              : `${porEstado.PENDIENTE ?? 0} pendientes de asignar a una ruta`}
+            {textoDetalle({
+              cargando: cargandoPedidos,
+              fallo: fallos.pedidos,
+              listo: `${porEstado.PENDIENTE ?? 0} pendientes de asignar a una ruta`,
+            })}
           </p>
         </article>
 
-        <article className="tarjeta indicador" aria-busy={rutasHoy === null && !fallos.rutas}>
-          <div className="indicador-cabecera">
-            <span className="indicador-icono">
-              <Route size={18} aria-hidden="true" />
-            </span>
-            Rutas armadas hoy
-          </div>
+        <article className="tarjeta indicador" aria-busy={cargandoRutas && !fallos.rutas}>
+          <CabeceraIndicador icono={Route}>Rutas armadas hoy</CabeceraIndicador>
           <span className="indicador-valor">
             <Valor cargando={rutasHoy === null} fallo={fallos.rutas && rutasHoy === null}>
               {hoy.armadas}
             </Valor>
           </span>
           <p className="indicador-detalle">
-            {rutasHoy === null || rutasManana === null
-              ? fallos.rutas
-                ? NO_CARGO
-                : 'Consultando…'
-              : `${hoy.enCurso} en curso · ${manana.armadas} armadas para mañana`}
+            {textoDetalle({
+              cargando: cargandoRutas,
+              fallo: fallos.rutas,
+              listo: `${hoy.enCurso} en curso · ${manana.armadas} armadas para mañana`,
+            })}
           </p>
         </article>
 
-        <article className="tarjeta indicador" aria-busy={repartidores === null && !fallos.repartidores}>
-          <div className="indicador-cabecera">
-            <span className="indicador-icono">
-              <Truck size={18} aria-hidden="true" />
-            </span>
-            Repartidores disponibles
-          </div>
+        <article className="tarjeta indicador" aria-busy={cargandoRepartidores && !fallos.repartidores}>
+          <CabeceraIndicador icono={Truck}>Repartidores disponibles</CabeceraIndicador>
           <span className="indicador-valor">
-            <Valor cargando={repartidores === null} fallo={fallos.repartidores && repartidores === null}>
+            <Valor cargando={cargandoRepartidores} fallo={fallos.repartidores && cargandoRepartidores}>
               {disponibles.length}
             </Valor>
           </span>
           <p className="indicador-detalle">
-            {repartidores === null
-              ? fallos.repartidores
-                ? NO_CARGO
-                : 'Consultando…'
-              : `de ${activos.length} repartidores activos`}
+            {textoDetalle({
+              cargando: cargandoRepartidores,
+              fallo: fallos.repartidores,
+              listo: `de ${activos.length} repartidores activos`,
+            })}
           </p>
         </article>
       </div>
 
       <h2 className="panel-seccion-titulo">Avance del día</h2>
       <div className="dos-columnas">
-        <article className="tarjeta avance" aria-busy={pedidos === null && !fallos.pedidos}>
-          <div className="indicador-cabecera">
-            <span className="indicador-icono">
-              <Package size={18} aria-hidden="true" />
-            </span>
-            Entregados hoy
-          </div>
+        <article className="tarjeta avance" aria-busy={cargandoPedidos && !fallos.pedidos}>
+          <CabeceraIndicador icono={Package}>Entregados hoy</CabeceraIndicador>
           <span className="indicador-valor">
-            <Valor cargando={pedidos === null} fallo={fallos.pedidos && pedidos === null}>
+            <Valor cargando={cargandoPedidos} fallo={fallaPedidos}>
               {avance} %
             </Valor>
           </span>
@@ -224,41 +251,20 @@ export default function InicioPage() {
             <span style={{ width: `${avance}%` }} />
           </div>
           <p className="indicador-detalle">
-            {pedidos === null
-              ? fallos.pedidos
-                ? 'No se pudo calcular el avance'
-                : 'Calculando avance…'
-              : pedidos.length === 0
-                ? 'No hay pedidos para entregar hoy'
-                : `${entregados} de ${pedidos.length} pedidos entregados`}
+            {textoDetalle({
+              cargando: cargandoPedidos,
+              fallo: fallos.pedidos,
+              consultando: 'Calculando avance…',
+              fallido: 'No se pudo calcular el avance',
+              listo:
+                pedidos?.length === 0 ? 'No hay pedidos para entregar hoy' : `${entregados} de ${pedidos?.length} pedidos entregados`,
+            })}
           </p>
         </article>
 
-        <article className="tarjeta proximas" aria-busy={pedidos === null && !fallos.pedidos}>
-          <div className="indicador-cabecera">
-            <span className="indicador-icono">
-              <CalendarClock size={18} aria-hidden="true" />
-            </span>
-            Próximas entregas
-          </div>
-          {pedidos === null ? (
-            <p className="indicador-detalle">{fallos.pedidos ? 'No se pudieron cargar las entregas' : 'Cargando próximas entregas…'}</p>
-          ) : proximas.length === 0 ? (
-            <EstadoVacio titulo="No quedan entregas pendientes hoy." icono={CalendarClock} />
-          ) : (
-            <ol className="proximas-lista" aria-label="Próximas entregas">
-              {proximas.map((pedido) => (
-                <li key={pedido.id}>
-                  <span className="proxima-hora">{pedido.horaEntrega?.slice(0, 5) ?? '—'}</span>
-                  <span className="proxima-texto">
-                    <strong>{pedido.clienteNombres}</strong>
-                    <span>{pedido.direccion}</span>
-                  </span>
-                  <EstadoBadge estado={pedido.estado} />
-                </li>
-              ))}
-            </ol>
-          )}
+        <article className="tarjeta proximas" aria-busy={cargandoPedidos && !fallos.pedidos}>
+          <CabeceraIndicador icono={CalendarClock}>Próximas entregas</CabeceraIndicador>
+          <ProximasEntregas pedidos={pedidos} fallo={fallos.pedidos} proximas={proximas} />
         </article>
       </div>
 

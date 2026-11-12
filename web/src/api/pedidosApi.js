@@ -1,6 +1,6 @@
 import { api } from './client'
 
-/** @returns {{ pedidos: object[], total: number }} (el total viene en la cabecera X-Total-Count) */
+/** @returns {Promise<{ pedidos: object[], total: number }>} (el total viene en la cabecera X-Total-Count) */
 export async function listarPedidos({ fecha, zonaId, estado, page = 0, size = 100 } = {}) {
   const params = { page, size }
   if (fecha) params.fecha = fecha

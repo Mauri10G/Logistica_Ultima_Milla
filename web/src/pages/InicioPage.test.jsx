@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { listarPedidos } from '../api/pedidosApi'
 import { listarRepartidores } from '../api/repartidoresApi'
@@ -161,7 +161,7 @@ describe('InicioPage', () => {
 
     listarRutas.mockImplementation(async (fecha) => (fecha === fechaIso(0) ? [] : RUTAS_MANANA))
     await act(async () => alRecibir[TOPIC_RUTAS]({ fecha: fechaIso(0) }))
-    await waitFor(() => expect(screen.getByText('0 en curso · 1 armadas para mañana')).toBeInTheDocument())
+    expect(await screen.findByText('0 en curso · 1 armadas para mañana')).toBeInTheDocument()
   })
 
   test('desconectado se refleja en el indicador', async () => {

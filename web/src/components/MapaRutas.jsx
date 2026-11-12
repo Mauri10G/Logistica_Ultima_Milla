@@ -15,7 +15,7 @@ import EstadoBadge from './EstadoBadge'
 export default function MapaRutas({ rutas, altura = 420, rutaResaltadaId = null }) {
   const hayResaltada = rutas.some((ruta) => ruta.id === rutaResaltadaId)
   return (
-    <div role="group" aria-label="Mapa de rutas">
+    <fieldset className="conjunto" aria-label="Mapa de rutas">
       <div className="mapa-marco">
         <MapContainer center={CENTRO_AMBATO} zoom={12} style={{ height: altura }} scrollWheelZoom>
           <TileLayer attribution={ATRIBUCION_OSM} url={URL_TILES_OSM} />
@@ -62,6 +62,6 @@ export default function MapaRutas({ rutas, altura = 420, rutaResaltadaId = null 
           </li>
         ))}
       </ul>
-    </div>
+    </fieldset>
   )
 }

@@ -58,21 +58,37 @@ export function buscarPuntoImantado(latitud, longitud, zonas, radio = RADIO_IMAN
   for (const zona of zonas) {
     if (zona.activa === false) continue
     for (const anillo of zona.area?.coordinates ?? []) {
-      // el último punto de un anillo repite al primero: los vértices se cuentan una sola vez
-      for (const [lng, lat] of anillo.slice(0, -1)) {
-        const distancia = distanciaMetros(clic, [lat, lng])
-        if (distancia < radio && (vertice === null || distancia < vertice.distancia)) {
-          vertice = { punto: [lat, lng], zona: zona.nombre, distancia, tipo: 'vertice' }
-        }
-      }
-      for (let i = 0; i < anillo.length - 1; i += 1) {
-        const punto = puntoMasCercanoEnSegmento(latitud, longitud, anillo[i], anillo[i + 1])
-        const distancia = distanciaMetros(clic, punto)
-        if (distancia < radio && (borde === null || distancia < borde.distancia)) {
-          borde = { punto, zona: zona.nombre, distancia, tipo: 'borde' }
-        }
-      }
+      vertice = masCercano(vertice, verticeMasCercano(anillo, clic, zona.nombre, radio))
+      borde = masCercano(borde, bordeMasCercano(anillo, clic, zona.nombre, radio))
     }
   }
   return vertice ?? borde
+}
+
+/** El más cercano de dos candidatos (cualquiera puede ser null); ante un empate gana `actual`. */
+function masCercano(actual, candidato) {
+  if (candidato === null) return actual
+  return actual === null || candidato.distancia < actual.distancia ? candidato : actual
+}
+
+/** Vértice del anillo más cercano al clic a menos de `radio` metros, o null. */
+function verticeMasCercano(anillo, clic, zona, radio) {
+  let mejor = null
+  // el último punto de un anillo repite al primero: los vértices se cuentan una sola vez
+  for (const [lng, lat] of anillo.slice(0, -1)) {
+    const distancia = distanciaMetros(clic, [lat, lng])
+    if (distancia < radio) mejor = masCercano(mejor, { punto: [lat, lng], zona, distancia, tipo: 'vertice' })
+  }
+  return mejor
+}
+
+/** Punto del borde del anillo más cercano al clic a menos de `radio` metros, o null. */
+function bordeMasCercano(anillo, clic, zona, radio) {
+  let mejor = null
+  for (let i = 0; i < anillo.length - 1; i += 1) {
+    const punto = puntoMasCercanoEnSegmento(clic[0], clic[1], anillo[i], anillo[i + 1])
+    const distancia = distanciaMetros(clic, punto)
+    if (distancia < radio) mejor = masCercano(mejor, { punto, zona, distancia, tipo: 'borde' })
+  }
+  return mejor
 }

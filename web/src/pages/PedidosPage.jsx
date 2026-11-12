@@ -225,7 +225,7 @@ export default function PedidosPage() {
           <label htmlFor="filtroFecha">Fecha de entrega</label>
           <input id="filtroFecha" name="fecha" type="date" value={filtros.fecha} onChange={cambiarFiltro} />
         </div>
-        <div className="grupo-botones" role="group" aria-label="Atajos de fecha">
+        <fieldset className="conjunto grupo-botones" aria-label="Atajos de fecha">
           <button type="button" className="secundario" aria-pressed={filtros.fecha === hoy} onClick={() => elegirFecha(hoy)}>
             Hoy
           </button>
@@ -235,7 +235,7 @@ export default function PedidosPage() {
           <button type="button" className="secundario" aria-pressed={filtros.fecha === ''} onClick={() => elegirFecha('')}>
             Todas
           </button>
-        </div>
+        </fieldset>
         <div className="campo">
           <label htmlFor="filtroZona">Zona</label>
           <select id="filtroZona" name="zonaId" value={filtros.zonaId} onChange={cambiarFiltro}>

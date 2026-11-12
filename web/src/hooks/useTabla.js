@@ -43,7 +43,7 @@ export function ordenarFilas(filas, valor, direccion) {
  */
 export function useTabla(filas, { valores, ordenInicial = null, tamanoInicial = TAMANO_PAGINA_INICIAL, reiniciarCon = [] }) {
   const [orden, setOrden] = useState(ordenInicial)
-  const [tamano, setTamanoEstado] = useState(tamanoInicial)
+  const [tamano, setTamano] = useState(tamanoInicial)
   const claveReinicio = JSON.stringify(reiniciarCon)
   const [solicitud, setSolicitud] = useState({ pagina: 1, clave: claveReinicio })
 
@@ -68,7 +68,7 @@ export function useTabla(filas, { valores, ordenInicial = null, tamanoInicial = 
 
   const cambiarTamano = useCallback(
     (nuevo) => {
-      setTamanoEstado(nuevo)
+      setTamano(nuevo)
       setSolicitud({ pagina: 1, clave: claveReinicio })
     },
     [claveReinicio],
