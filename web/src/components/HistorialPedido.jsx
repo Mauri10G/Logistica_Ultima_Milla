@@ -1,13 +1,17 @@
+import { History, X } from 'lucide-react'
 import { formatearFechaHora } from '../utils/formatos'
+import Cargando from './Cargando'
 import EstadoBadge from './EstadoBadge'
+import EstadoVacio from './EstadoVacio'
 
 /** Panel con la línea de tiempo de estados de un pedido (GET /api/seguimiento/pedidos/{id}/historial). */
 export default function HistorialPedido({ pedido, historial, error, onCerrar }) {
   return (
     <aside className="tarjeta panel-historial" aria-label={`Historial del pedido ${pedido.id}`}>
       <header className="encabezado">
-        <h3>Historial del pedido {pedido.id}</h3>
-        <button type="button" className="secundario" onClick={onCerrar}>
+        <h2>Historial del pedido {pedido.id}</h2>
+        <button type="button" className="secundario pequeno" onClick={onCerrar}>
+          <X size={16} aria-hidden="true" />
           Cerrar historial
         </button>
       </header>
@@ -19,8 +23,10 @@ export default function HistorialPedido({ pedido, historial, error, onCerrar }) 
           {error}
         </p>
       )}
-      {!error && historial === null && <p className="vacio">Cargando historial…</p>}
-      {!error && historial?.length === 0 && <p className="vacio">Este pedido aún no tiene cambios de estado.</p>}
+      {!error && historial === null && <Cargando texto="Cargando historial…" bloque />}
+      {!error && historial?.length === 0 && (
+        <EstadoVacio titulo="Este pedido aún no tiene cambios de estado." icono={History} />
+      )}
       {historial?.length > 0 && (
         <ol className="linea-tiempo">
           {historial.map((cambio) => (

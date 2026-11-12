@@ -158,6 +158,21 @@ describe('MapaRutas', () => {
     expect(screen.getByText(/Calle B/)).toBeInTheDocument()
   })
 
+  test('la leyenda explica el color de cada estado del pedido', () => {
+    render(<MapaRutas rutas={rutas} />)
+
+    const leyenda = screen.getByRole('list', { name: /según el estado del pedido/ })
+    for (const estado of ['Pendiente', 'Asignado', 'Recogido', 'En camino', 'Entregado']) {
+      expect(leyenda).toHaveTextContent(estado)
+    }
+  })
+
+  test('el popup de la parada muestra el estado del pedido con su badge', () => {
+    render(<MapaRutas rutas={[{ id: 12, pedidos: [{ id: 7, latitud: -1.2, longitud: -78.6, direccion: 'Calle D', estado: 'ENTREGADO' }] }]} />)
+
+    expect(screen.getByTestId('popup').querySelector('.badge-ENTREGADO')).toHaveTextContent('Entregado')
+  })
+
   test('sin rutas solo se ve el mapa', () => {
     render(<MapaRutas rutas={[]} />)
 

@@ -110,92 +110,141 @@ export default function PedidoForm({
     onSubmit(construirDatos())
   }
 
+  const descripcionFecha = ['ayudaFechaEntrega', errorFecha ? 'errorFechaEntrega' : null].filter(Boolean).join(' ')
+  const descripcionHora = ['ayudaHoraEntrega', errorHora ? 'errorHoraEntrega' : null].filter(Boolean).join(' ')
+  const anticipacion = horaServidor?.anticipacionMinimaMinutos
+
   return (
     <form className="formulario" onSubmit={enviar} aria-label={editando ? 'Editar pedido' : 'Nuevo pedido'}>
-      <div className="campo">
-        <label htmlFor="clienteNombres">Nombres del cliente</label>
-        <input id="clienteNombres" name="clienteNombres" value={valores.clienteNombres} onChange={cambiar} required />
-      </div>
-      <div className="campo">
-        <label htmlFor="clienteTelefono">Teléfono</label>
-        <input id="clienteTelefono" name="clienteTelefono" value={valores.clienteTelefono} onChange={cambiar} required />
-      </div>
-      <div className="campo">
-        <label htmlFor="clienteEmail">Email (opcional)</label>
-        <input id="clienteEmail" name="clienteEmail" type="email" value={valores.clienteEmail} onChange={cambiar} />
-      </div>
-      <div className="campo ancho-completo">
-        <label htmlFor="direccion">Dirección de entrega</label>
-        <input id="direccion" name="direccion" value={valores.direccion} onChange={cambiar} required />
+      <div className="grupo-form ancho-completo">
+        <h3 className="grupo-titulo">
+          Datos del cliente
+          <span className="grupo-descripcion">Quién recibe el pedido y cómo contactarlo.</span>
+        </h3>
+        <div className="campo">
+          <label htmlFor="clienteNombres">Nombres del cliente</label>
+          <input id="clienteNombres" name="clienteNombres" value={valores.clienteNombres} onChange={cambiar} required />
+        </div>
+        <div className="campo">
+          <label htmlFor="clienteTelefono">Teléfono</label>
+          <input
+            id="clienteTelefono"
+            name="clienteTelefono"
+            value={valores.clienteTelefono}
+            onChange={cambiar}
+            aria-describedby="ayudaClienteTelefono"
+            required
+          />
+          <p id="ayudaClienteTelefono" className="ayuda">
+            Número con el que el repartidor puede llamar.
+          </p>
+        </div>
+        <div className="campo">
+          <label htmlFor="clienteEmail">Email (opcional)</label>
+          <input id="clienteEmail" name="clienteEmail" type="email" value={valores.clienteEmail} onChange={cambiar} />
+        </div>
       </div>
 
-      <div className="ancho-completo">
-        <SelectorUbicacion
-          posicion={valores.latitud === '' ? null : [Number(valores.latitud), Number(valores.longitud)]}
-          onSeleccionar={elegirUbicacion}
-          zonas={zonas}
-        />
-        <p className="ayuda">Haga clic en el mapa para colocar el marcador de entrega.</p>
-      </div>
-      <div className="campo">
-        <label htmlFor="latitud">Latitud</label>
-        <input id="latitud" name="latitud" value={valores.latitud} readOnly aria-invalid={Boolean(errores.ubicacion)} />
-      </div>
-      <div className="campo">
-        <label htmlFor="longitud">Longitud</label>
-        <input id="longitud" name="longitud" value={valores.longitud} readOnly aria-invalid={Boolean(errores.ubicacion)} />
-      </div>
-      {errores.ubicacion && (
-        <p className="mensaje-error ancho-completo" role="alert">
-          {errores.ubicacion}
-        </p>
-      )}
+      <div className="grupo-form ancho-completo">
+        <h3 className="grupo-titulo">
+          Ubicación
+          <span className="grupo-descripcion">El pedido se asigna a la zona donde cae el marcador del mapa.</span>
+        </h3>
+        <div className="campo ancho-completo">
+          <label htmlFor="direccion">Dirección de entrega</label>
+          <input
+            id="direccion"
+            name="direccion"
+            value={valores.direccion}
+            onChange={cambiar}
+            aria-describedby="ayudaDireccion"
+            required
+          />
+          <p id="ayudaDireccion" className="ayuda">
+            Calle principal, secundaria y una referencia.
+          </p>
+        </div>
 
-      <div className="campo">
-        <label htmlFor="fechaEntrega">Fecha de entrega</label>
-        <input
-          id="fechaEntrega"
-          name="fechaEntrega"
-          type="date"
-          value={fechaEntrega}
-          min={fechaMinima}
-          onChange={cambiar}
-          required
-          aria-invalid={Boolean(errorFecha)}
-          aria-describedby={errorFecha ? 'errorFechaEntrega' : undefined}
-        />
-        {errorFecha && (
-          <span id="errorFechaEntrega" className="error-campo" role={errores.fechaEntrega ? 'alert' : 'status'}>
-            {errorFecha}
-          </span>
+        <div className="ancho-completo">
+          <SelectorUbicacion
+            posicion={valores.latitud === '' ? null : [Number(valores.latitud), Number(valores.longitud)]}
+            onSeleccionar={elegirUbicacion}
+            zonas={zonas}
+          />
+          <p className="ayuda">Haga clic en el mapa para colocar el marcador de entrega.</p>
+        </div>
+        <div className="campo">
+          <label htmlFor="latitud">Latitud</label>
+          <input id="latitud" name="latitud" value={valores.latitud} readOnly aria-invalid={Boolean(errores.ubicacion)} />
+        </div>
+        <div className="campo">
+          <label htmlFor="longitud">Longitud</label>
+          <input id="longitud" name="longitud" value={valores.longitud} readOnly aria-invalid={Boolean(errores.ubicacion)} />
+        </div>
+        {errores.ubicacion && (
+          <p className="mensaje-error ancho-completo" role="alert">
+            {errores.ubicacion}
+          </p>
         )}
       </div>
-      <div className="campo">
-        <label htmlFor="horaEntrega">Hora aproximada</label>
-        <input
-          id="horaEntrega"
-          name="horaEntrega"
-          type="time"
-          value={valores.horaEntrega}
-          min={horaMinima}
-          onChange={cambiar}
-          required
-          aria-invalid={Boolean(errorHora)}
-          aria-describedby={errorHora ? 'errorHoraEntrega' : undefined}
-        />
-        {errorHora && (
-          <span id="errorHoraEntrega" className="error-campo" role={errores.horaEntrega ? 'alert' : 'status'}>
-            {errorHora}
-          </span>
-        )}
-      </div>
-      <div className="campo">
-        <label htmlFor="prioridad">Prioridad</label>
-        <select id="prioridad" name="prioridad" value={valores.prioridad} onChange={cambiar}>
-          <option value="NORMAL">Normal</option>
-          <option value="ALTA">Alta</option>
-          <option value="URGENTE">Urgente</option>
-        </select>
+
+      <div className="grupo-form ancho-completo">
+        <h3 className="grupo-titulo">
+          Fecha y hora
+          <span className="grupo-descripcion">Cuándo debe llegar el pedido y con qué prioridad.</span>
+        </h3>
+        <div className="campo">
+          <label htmlFor="fechaEntrega">Fecha de entrega</label>
+          <input
+            id="fechaEntrega"
+            name="fechaEntrega"
+            type="date"
+            value={fechaEntrega}
+            min={fechaMinima}
+            onChange={cambiar}
+            required
+            aria-invalid={Boolean(errorFecha)}
+            aria-describedby={descripcionFecha}
+          />
+          <p id="ayudaFechaEntrega" className="ayuda">
+            No puede ser anterior a hoy.
+          </p>
+          {errorFecha && (
+            <span id="errorFechaEntrega" className="error-campo" role={errores.fechaEntrega ? 'alert' : 'status'}>
+              {errorFecha}
+            </span>
+          )}
+        </div>
+        <div className="campo">
+          <label htmlFor="horaEntrega">Hora aproximada</label>
+          <input
+            id="horaEntrega"
+            name="horaEntrega"
+            type="time"
+            value={valores.horaEntrega}
+            min={horaMinima}
+            onChange={cambiar}
+            required
+            aria-invalid={Boolean(errorHora)}
+            aria-describedby={descripcionHora}
+          />
+          <p id="ayudaHoraEntrega" className="ayuda">
+            {anticipacion ? `Anticipación mínima: ${anticipacion} minutos.` : 'Hora local del servidor.'}
+          </p>
+          {errorHora && (
+            <span id="errorHoraEntrega" className="error-campo" role={errores.horaEntrega ? 'alert' : 'status'}>
+              {errorHora}
+            </span>
+          )}
+        </div>
+        <div className="campo">
+          <label htmlFor="prioridad">Prioridad</label>
+          <select id="prioridad" name="prioridad" value={valores.prioridad} onChange={cambiar}>
+            <option value="NORMAL">Normal</option>
+            <option value="ALTA">Alta</option>
+            <option value="URGENTE">Urgente</option>
+          </select>
+        </div>
       </div>
 
       {error && (

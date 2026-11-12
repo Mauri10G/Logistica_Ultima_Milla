@@ -1,8 +1,13 @@
+import { PackageSearch, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { crearPedido, editarPedido, eliminarPedido, listarPedidos, obtenerHoraServidor } from '../api/pedidosApi'
 import { listarZonas } from '../api/zonasApi'
 import { mensajeDeError, mensajeDeErrorPedido } from '../utils/errores'
+import Avisos from '../components/Avisos'
+import { FilasCarga } from '../components/Cargando'
+import EncabezadoPagina from '../components/EncabezadoPagina'
 import EstadoBadge from '../components/EstadoBadge'
+import EstadoVacio from '../components/EstadoVacio'
 import Modal from '../components/Modal'
 import PedidoForm from '../components/PedidoForm'
 import { ESTADOS_PEDIDO } from '../utils/estados'
@@ -21,6 +26,7 @@ export default function PedidosPage() {
   const [errorForm, setErrorForm] = useState(null)
   const [errorLista, setErrorLista] = useState(null)
   const [mensaje, setMensaje] = useState(null)
+  const [cargando, setCargando] = useState(true)
 
   const cargar = useCallback(async () => {
     try {
@@ -30,6 +36,8 @@ export default function PedidosPage() {
       setErrorLista(null)
     } catch (error) {
       setErrorLista(mensajeDeError(error))
+    } finally {
+      setCargando(false)
     }
   }, [filtros])
 
@@ -133,18 +141,22 @@ export default function PedidosPage() {
 
   return (
     <section>
-      <header className="encabezado">
-        <h2>Pedidos</h2>
+      <EncabezadoPagina
+        titulo="Pedidos"
+        descripcion="Registre los pedidos de entrega y filtre por fecha, zona o estado."
+      >
         <button type="button" onClick={abrirNuevo}>
+          <Plus size={18} aria-hidden="true" />
           Nuevo pedido
         </button>
-      </header>
+      </EncabezadoPagina>
 
-      {mensaje && (
-        <p className="mensaje-ok" role="status">
-          {mensaje}
-        </p>
-      )}
+      <Avisos
+        mensaje={mensaje}
+        error={errorLista}
+        onCerrarMensaje={() => setMensaje(null)}
+        onCerrarError={() => setErrorLista(null)}
+      />
 
       {mostrarForm && (
         <Modal titulo={pedidoEnEdicion ? `Editar pedido ${pedidoEnEdicion.id}` : 'Nuevo pedido'} onCerrar={cerrarForm}>
@@ -193,72 +205,76 @@ export default function PedidosPage() {
         </p>
       </div>
 
-      {errorLista && (
-        <p className="mensaje-error" role="alert">
-          {errorLista}
-        </p>
-      )}
-      <table className="tabla">
-        <caption className="solo-lectores">Lista de pedidos</caption>
-        <thead>
-          <tr>
-            <th scope="col">#</th>
-            <th scope="col">Cliente</th>
-            <th scope="col">Dirección</th>
-            <th scope="col">Zona</th>
-            <th scope="col">Entrega</th>
-            <th scope="col">Registro</th>
-            <th scope="col">Estado</th>
-            <th scope="col">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pedidos.map((pedido) => (
-            <tr key={pedido.id}>
-              <td>{pedido.id}</td>
-              <td>{pedido.clienteNombres}</td>
-              <td>{pedido.direccion}</td>
-              <td>{pedido.zonaNombre}</td>
-              <td>
-                {pedido.fechaEntrega} {pedido.horaEntrega?.slice(0, 5)}
-              </td>
-              <td>{pedido.fechaRegistro?.slice(0, 16).replace('T', ' ')}</td>
-              <td>
-                <EstadoBadge estado={pedido.estado} />
-              </td>
-              <td className="celda-acciones">
-                {pedido.estado === 'PENDIENTE' && (
-                  <>
-                    <button
-                      type="button"
-                      className="secundario"
-                      aria-label={`Editar pedido ${pedido.id}`}
-                      onClick={() => abrirEdicion(pedido)}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      className="peligro"
-                      aria-label={`Eliminar pedido ${pedido.id}`}
-                      onClick={() => eliminar(pedido)}
-                    >
-                      Eliminar
-                    </button>
-                  </>
-                )}
-              </td>
-            </tr>
-          ))}
-          {pedidos.length === 0 && (
+      <div className="tabla-contenedor">
+        <table className="tabla" aria-busy={cargando}>
+          <caption className="solo-lectores">Lista de pedidos</caption>
+          <thead>
             <tr>
-              <td colSpan={8} className="vacio">
-                No hay pedidos con esos filtros.
-              </td>
+              <th scope="col">#</th>
+              <th scope="col">Cliente</th>
+              <th scope="col">Dirección</th>
+              <th scope="col">Zona</th>
+              <th scope="col">Entrega</th>
+              <th scope="col">Registro</th>
+              <th scope="col">Estado</th>
+              <th scope="col">Acciones</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {cargando && <FilasCarga columnas={8} />}
+            {pedidos.map((pedido) => (
+              <tr key={pedido.id}>
+                <td>{pedido.id}</td>
+                <td>{pedido.clienteNombres}</td>
+                <td>{pedido.direccion}</td>
+                <td>{pedido.zonaNombre}</td>
+                <td className="celda-fecha">
+                  {pedido.fechaEntrega} {pedido.horaEntrega?.slice(0, 5)}
+                </td>
+                <td className="celda-fecha">{pedido.fechaRegistro?.slice(0, 16).replace('T', ' ')}</td>
+                <td>
+                  <EstadoBadge estado={pedido.estado} />
+                </td>
+                <td className="celda-acciones">
+                  {pedido.estado === 'PENDIENTE' && (
+                    <>
+                      <button
+                        type="button"
+                        className="secundario pequeno"
+                        aria-label={`Editar pedido ${pedido.id}`}
+                        onClick={() => abrirEdicion(pedido)}
+                      >
+                        <Pencil size={14} aria-hidden="true" />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        className="peligro pequeno"
+                        aria-label={`Eliminar pedido ${pedido.id}`}
+                        onClick={() => eliminar(pedido)}
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                        Eliminar
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!cargando && pedidos.length === 0 && (
+              <tr>
+                <td colSpan={8} className="vacio">
+                  <EstadoVacio
+                    icono={PackageSearch}
+                    titulo="No hay pedidos con esos filtros."
+                    ayuda="Cambie la fecha, la zona o el estado, o registre un nuevo pedido."
+                  />
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   )
 }

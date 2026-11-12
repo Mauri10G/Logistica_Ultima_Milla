@@ -1,3 +1,4 @@
+import { Route, Zap } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { listarRepartidores } from '../api/repartidoresApi'
 import {
@@ -9,7 +10,11 @@ import {
   sacarPedidoDeRuta,
 } from '../api/rutasApi'
 import { endpointNoDisponible, MENSAJE_FUNCION_NO_DISPONIBLE, mensajeDeError } from '../utils/errores'
+import Avisos from '../components/Avisos'
+import Cargando from '../components/Cargando'
 import { colorDeRuta } from '../components/constantesMapa'
+import EncabezadoPagina from '../components/EncabezadoPagina'
+import EstadoVacio from '../components/EstadoVacio'
 import IndicadorConexion from '../components/IndicadorConexion'
 import MapaRutas from '../components/MapaRutas'
 import RutaCard from '../components/RutaCard'
@@ -25,6 +30,7 @@ export default function RutasPage() {
   const [ocupado, setOcupado] = useState(false)
   const [mensaje, setMensaje] = useState(null)
   const [error, setError] = useState(null)
+  const [cargando, setCargando] = useState(true)
 
   const cargar = useCallback(async () => {
     try {
@@ -32,6 +38,8 @@ export default function RutasPage() {
       setError(null)
     } catch (e) {
       setError(mensajeDeError(e))
+    } finally {
+      setCargando(false)
     }
   }, [fecha])
 
@@ -112,10 +120,16 @@ export default function RutasPage() {
 
   return (
     <section>
-      <header className="encabezado">
-        <h2>Rutas</h2>
+      <EncabezadoPagina
+        titulo="Rutas"
+        descripcion="Arme las rutas de un día, ajuste las paradas y vea el recorrido en el mapa."
+      >
         <IndicadorConexion conectado={conectado} />
-      </header>
+        <button type="button" onClick={armar} disabled={armando || !fecha}>
+          <Zap size={18} aria-hidden="true" />
+          {armando ? 'Armando…' : 'Armar rutas'}
+        </button>
+      </EncabezadoPagina>
 
       <div className="filtros">
         <div className="campo">
@@ -128,21 +142,14 @@ export default function RutasPage() {
         <button type="button" className="secundario" onClick={() => setFecha(fechaIso(1))}>
           Mañana
         </button>
-        <button type="button" onClick={armar} disabled={armando || !fecha}>
-          {armando ? 'Armando…' : 'Armar rutas'}
-        </button>
       </div>
 
-      {mensaje && (
-        <p className="mensaje-ok" role="status">
-          {mensaje}
-        </p>
-      )}
-      {error && (
-        <p className="mensaje-error" role="alert">
-          {error}
-        </p>
-      )}
+      <Avisos
+        mensaje={mensaje}
+        error={error}
+        onCerrarMensaje={() => setMensaje(null)}
+        onCerrarError={() => setError(null)}
+      />
 
       <div className="dos-columnas">
         <div className="lista-rutas">
@@ -160,7 +167,16 @@ export default function RutasPage() {
               onReordenar={reordenar}
             />
           ))}
-          {rutas.length === 0 && <p className="vacio">No hay rutas armadas para esta fecha.</p>}
+          {cargando && <Cargando texto="Cargando rutas…" bloque />}
+          {!cargando && rutas.length === 0 && (
+            <div className="tarjeta">
+              <EstadoVacio
+                icono={Route}
+                titulo="No hay rutas armadas para esta fecha."
+                ayuda="Pulse «Armar rutas» para agrupar los pedidos pendientes de la fecha elegida."
+              />
+            </div>
+          )}
         </div>
         <div className="tarjeta">
           <MapaRutas rutas={rutas} />

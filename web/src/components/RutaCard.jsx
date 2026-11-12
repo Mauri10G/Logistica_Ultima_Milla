@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import EstadoBadge from './EstadoBadge'
 
 /**
@@ -43,9 +44,12 @@ export default function RutaCard({
         </strong>
         <EstadoBadge estado={ruta.estado} />
       </header>
-      <p>
+      <p className="ruta-resumen">
         Repartidor: {ruta.repartidorNombre} · {ruta.pedidos.length}/{ruta.maxPedidos} pedidos
       </p>
+      <div className={ruta.pedidos.length >= ruta.maxPedidos ? 'ruta-barra ruta-barra-llena' : 'ruta-barra'} aria-hidden="true">
+        <span style={{ width: `${Math.min(100, (ruta.pedidos.length / (ruta.maxPedidos || 1)) * 100)}%` }} />
+      </div>
 
       {editable && (
         <div className="campo campo-en-linea">
@@ -68,36 +72,37 @@ export default function RutaCard({
       <ol className="paradas">
         {ruta.pedidos.map((pedido, indice) => (
           <li key={pedido.id}>
-            <span>
+            <span className="parada-texto">
               {pedido.horaEntrega?.slice(0, 5)} · {pedido.direccion} <EstadoBadge estado={pedido.estado} />
             </span>
             {editable && (
               <span className="ajustes-parada">
                 <button
                   type="button"
-                  className="secundario"
+                  className="secundario pequeno"
                   aria-label={`Subir la parada del pedido ${pedido.id}`}
                   disabled={ocupado || indice === 0}
                   onClick={() => intercambiar(indice, indice - 1)}
                 >
-                  ↑
+                  <ChevronUp size={16} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
-                  className="secundario"
+                  className="secundario pequeno"
                   aria-label={`Bajar la parada del pedido ${pedido.id}`}
                   disabled={ocupado || indice === ids.length - 1}
                   onClick={() => intercambiar(indice, indice + 1)}
                 >
-                  ↓
+                  <ChevronDown size={16} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
-                  className="peligro"
+                  className="peligro pequeno"
                   aria-label={`Sacar el pedido ${pedido.id} de la ruta`}
                   disabled={ocupado}
                   onClick={() => onSacar(ruta, pedido)}
                 >
+                  <X size={16} aria-hidden="true" />
                   Sacar
                 </button>
                 {otrasRutas.length > 0 && (

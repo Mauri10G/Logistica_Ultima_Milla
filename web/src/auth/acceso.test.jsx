@@ -87,6 +87,23 @@ describe('LoginPage', () => {
     expect(obtenerSesion()).toBeNull()
   })
 
+  test('con error los campos quedan marcados como inválidos y apuntan al mensaje', async () => {
+    const user = userEvent.setup()
+    iniciarSesionApi.mockRejectedValue(errorHttp(401, { mensaje: 'Credenciales invalidas' }))
+    dibujarLogin()
+
+    expect(screen.getByLabelText('Usuario')).toHaveAttribute('aria-invalid', 'false')
+    await user.type(screen.getByLabelText('Usuario'), 'admin')
+    await user.type(screen.getByLabelText('Clave'), 'mala')
+    await user.click(screen.getByRole('button', { name: 'Ingresar' }))
+
+    const alerta = await screen.findByRole('alert')
+    for (const campo of ['Usuario', 'Clave']) {
+      expect(screen.getByLabelText(campo)).toHaveAttribute('aria-invalid', 'true')
+      expect(screen.getByLabelText(campo)).toHaveAttribute('aria-describedby', alerta.id)
+    }
+  })
+
   test('otro error del servidor muestra su mensaje', async () => {
     const user = userEvent.setup()
     iniciarSesionApi.mockRejectedValue(errorHttp(500, { mensaje: 'Ocurrio un error interno' }))
@@ -186,12 +203,12 @@ describe('Layout', () => {
     )
   }
 
-  test('muestra el menú con las cinco secciones', () => {
+  test('muestra el menú con las seis secciones', () => {
     mockAuthHabilitada = false
     dibujarLayout()
 
     const menu = screen.getByRole('navigation', { name: 'Menú principal' })
-    for (const texto of ['Pedidos', 'Zonas', 'Rutas', 'Repartidores', 'Seguimiento']) {
+    for (const texto of ['Inicio', 'Pedidos', 'Zonas', 'Rutas', 'Repartidores', 'Seguimiento']) {
       expect(menu).toHaveTextContent(texto)
     }
     expect(screen.getByText('Contenido de pedidos')).toBeInTheDocument()

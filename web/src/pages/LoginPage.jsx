@@ -1,7 +1,9 @@
+import { CircleAlert, LogIn } from 'lucide-react'
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { iniciarSesionApi } from '../api/authApi'
 import { guardarSesion } from '../auth/sesion'
+import Logo from '../components/Logo'
 import { ROL_STAFF, useSesion } from '../auth/useSesion'
 import { estadoHttp, mensajeDeError } from '../utils/errores'
 
@@ -36,7 +38,13 @@ export default function LoginPage() {
   return (
     <main className="pantalla-login">
       <form className="tarjeta formulario formulario-login" onSubmit={enviar} aria-label="Iniciar sesión">
-        <h1 className="ancho-completo">Entregas y Rutas</h1>
+        <div className="login-marca ancho-completo">
+          <Logo />
+          <div>
+            <h1>Entregas y Rutas</h1>
+            <p>Ingrese con su usuario de personal.</p>
+          </div>
+        </div>
         <div className="campo ancho-completo">
           <label htmlFor="loginUsuario">Usuario</label>
           <input
@@ -45,6 +53,8 @@ export default function LoginPage() {
             autoComplete="username"
             value={usuario}
             onChange={(e) => setUsuario(e.target.value)}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'errorLogin' : undefined}
             required
           />
         </div>
@@ -57,16 +67,20 @@ export default function LoginPage() {
             autoComplete="current-password"
             value={clave}
             onChange={(e) => setClave(e.target.value)}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'errorLogin' : undefined}
             required
           />
         </div>
         {error && (
-          <p className="mensaje-error ancho-completo" role="alert">
-            {error}
+          <p id="errorLogin" className="mensaje-error mensaje-con-icono ancho-completo" role="alert">
+            <CircleAlert size={18} aria-hidden="true" />
+            <span>{error}</span>
           </p>
         )}
         <div className="acciones ancho-completo">
           <button type="submit" disabled={enviando}>
+            <LogIn size={18} aria-hidden="true" />
             {enviando ? 'Ingresando…' : 'Ingresar'}
           </button>
         </div>

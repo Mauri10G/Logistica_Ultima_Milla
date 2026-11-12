@@ -113,6 +113,22 @@ describe('PedidosPage: lista y filtros', () => {
     expect(screen.getByText('350 pedido(s) (mostrando 2)')).toBeInTheDocument()
   })
 
+  test('mientras llegan los datos muestra filas de carga y no el mensaje de vacío', async () => {
+    listarPedidos.mockReturnValue(new Promise(() => {}))
+    render(<PedidosPage />)
+
+    expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByText('Cargando datos…')).toBeInTheDocument()
+    expect(screen.queryByText('No hay pedidos con esos filtros.')).not.toBeInTheDocument()
+  })
+
+  test('al terminar de cargar la tabla deja de estar ocupada', async () => {
+    await dibujar()
+
+    expect(screen.getByRole('table')).toHaveAttribute('aria-busy', 'false')
+    expect(screen.queryByText('Cargando datos…')).not.toBeInTheDocument()
+  })
+
   test('sin resultados lo dice', async () => {
     listarPedidos.mockResolvedValue({ pedidos: [], total: 0 })
     render(<PedidosPage />)
