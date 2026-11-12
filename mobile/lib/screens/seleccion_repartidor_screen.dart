@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/stomp_service.dart';
 import 'ruta_screen.dart';
 
 /// No hay login todavia: el repartidor se identifica indicando su id.
 class SeleccionRepartidorScreen extends StatefulWidget {
   final ApiService? api;
+  final StompService? stomp;
 
-  const SeleccionRepartidorScreen({super.key, this.api});
+  const SeleccionRepartidorScreen({super.key, this.api, this.stomp});
 
   @override
   State<SeleccionRepartidorScreen> createState() => _SeleccionRepartidorScreenState();
@@ -31,7 +33,9 @@ class _SeleccionRepartidorScreenState extends State<SeleccionRepartidorScreen> {
     }
     setState(() => _error = null);
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => RutaScreen(repartidorId: id, api: widget.api)),
+      MaterialPageRoute(
+        builder: (_) => RutaScreen(repartidorId: id, api: widget.api, stomp: widget.stomp),
+      ),
     );
   }
 

@@ -24,7 +24,7 @@ class Ruta {
     final pedidos = (json['pedidos'] as List<dynamic>? ?? [])
         .map((p) => Pedido.fromJson(p as Map<String, dynamic>))
         .toList()
-      ..sort((a, b) => (a.ordenEnRuta ?? 0).compareTo(b.ordenEnRuta ?? 0));
+      ..sort((a, b) => (a.ordenEnRuta ?? 1 << 30).compareTo(b.ordenEnRuta ?? 1 << 30));
     return Ruta(
       id: json['id'] as int,
       fecha: json['fecha'] as String? ?? '',
