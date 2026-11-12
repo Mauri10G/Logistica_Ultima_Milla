@@ -1785,8 +1785,6 @@ button.disponibilidad.disponible::before {
   color: var(--color-suave);
 }
 
-/* --- Ilustración del mapa (SVG; ver components/IlustracionLogin.jsx) --- */
-
 .login-fondo-rutas {
   position: absolute;
   inset: 0;
@@ -1814,293 +1812,189 @@ button.disponibilidad.disponible::before {
   stroke-width: 2;
 }
 
-.login-rio {
-  stroke: rgba(125, 211, 252, 0.4);
+/* --- Ilustración: postal de Ambato (SVG; ver components/IlustracionLogin.jsx) ---
+   Lo de aquí es el aspecto en reposo (también el de movimiento reducido); las animaciones van más abajo. */
+
+.login-nube {
+  fill: #ffffff;
+  opacity: 0.92;
 }
 
-.login-puentes rect {
-  fill: rgba(226, 240, 255, 0.5);
-  stroke: rgba(255, 255, 255, 0.55);
-  stroke-width: 1;
+.login-cordillera {
+  fill: #8fa8f0;
+  opacity: 0.5;
 }
 
-.login-rio-brillo {
-  stroke: rgba(224, 242, 254, 0.5);
-  stroke-width: 2;
-  stroke-dasharray: 14 10;
-}
-
-.login-sector {
-  fill: rgba(255, 255, 255, 0.62);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-}
-
-.login-mapa-fondo {
-  fill: rgba(8, 16, 80, 0.3);
-  stroke: rgba(255, 255, 255, 0.2);
-}
-
-.login-manzana {
-  fill: rgba(255, 255, 255, 0.12);
-}
-
-.login-parque {
-  fill: rgba(110, 231, 183, 0.3);
-}
-
-.login-calles line {
-  stroke: rgba(255, 255, 255, 0.28);
-  stroke-width: 1.2;
-  stroke-dasharray: 7 9;
-}
-
-.login-ruta-guia,
-.login-ruta-trazo {
-  stroke-width: 4.5;
-  stroke-dasharray: 1 9;
-}
-
-.login-ruta-guia {
-  stroke: rgba(255, 255, 255, 0.26);
-}
-
-.login-ruta-trazo {
-  stroke: #ffffff;
-}
-
-.login-ruta-mascara {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-}
-
-.login-pin {
-  transform-origin: 0 0;
-}
-
-.login-pin-onda {
-  transform-origin: 0 0;
-}
-
-.login-pin-cuerpo {
+.login-nieve {
   fill: #ffffff;
 }
 
-.login-pin-centro {
-  fill: var(--color-primario);
+.login-humo-bola {
+  fill: #eef2ff;
+  opacity: 0.6;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
-.login-pin-centro-final {
-  fill: #f59e0b;
+.login-humo-1 {
+  transform: translate(2px, -6px) scale(1);
 }
 
-.login-pin-sombra {
-  fill: rgba(8, 16, 70, 0.35);
+.login-humo-2 {
+  transform: translate(8px, -20px) scale(1.3);
 }
 
-.login-pin-onda {
-  fill: none;
-  stroke: #fbbf24;
-  stroke-width: 2;
-  opacity: 0;
+.login-humo-3 {
+  transform: translate(2px, -36px) scale(1.6);
+  opacity: 0.35;
 }
 
-.login-furgoneta-fondo {
-  fill: #ffffff;
+.login-ciudad-fondo rect {
+  fill: #a9bcee;
+  opacity: 0.75;
 }
 
-.login-furgoneta-icono {
-  fill: var(--color-primario);
+.login-ventana {
+  fill: #2b4aa8;
+  opacity: 0.85;
 }
 
-/* La furgoneta recorre la ruta con offset-path (el trazado se pone en línea desde el componente).
-   Sin soporte, se oculta en vez de quedarse en una esquina. */
-@supports not (offset-path: path('M0 0')) {
-  .login-furgoneta {
-    display: none;
-  }
+.login-ventana-luz {
+  fill: #ffb347;
 }
 
-/* Un ciclo de 10 s: la ruta se dibuja hasta el 65 %, los pines aparecen cuando la ruta los alcanza
-   (B 17 %, C 47 %, D 65 %) y todo se desvanece antes de repetir. */
+.login-pin-rebote {
+  transform-origin: 0 0;
+}
+
+/* Quieta: la furgoneta se queda a media calle. */
+.login-furgoneta {
+  transform: translateX(240px);
+}
+
+.login-rueda {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Movimiento suave en bucle (si la persona no pidió reducirlo) */
 @media (prefers-reduced-motion: no-preference) {
-  .login-ruta-mascara {
-    animation: login-trazar 10s linear infinite;
+  .login-nube-1 {
+    animation: login-nube 52s ease-in-out infinite alternate;
   }
 
-  .login-ruta-trazo {
-    animation: login-desvanecer 10s linear infinite;
+  .login-nube-2 {
+    animation: login-nube 70s ease-in-out infinite alternate-reverse;
   }
 
-  .login-furgoneta {
-    animation: login-recorrer 10s linear infinite;
+  .login-nube-3 {
+    animation: login-nube 60s ease-in-out infinite alternate;
   }
 
-  .login-pin-b {
-    animation: login-pin-b 10s ease-out infinite;
+  .login-humo-bola {
+    animation: login-humo 7s ease-out infinite;
   }
 
-  .login-pin-c {
-    animation: login-pin-c 10s ease-out infinite;
+  .login-humo-2 {
+    animation-delay: -2.3s;
   }
 
-  .login-pin-d {
-    animation: login-pin-d 10s ease-out infinite;
-  }
-
-  .login-pin-onda {
-    animation: login-onda 10s ease-out infinite;
-  }
-}
-
-/* Con movimiento reducido: ruta completa y furgoneta a mitad de camino, todo quieto. */
-@media (prefers-reduced-motion: reduce) {
-  .login-ruta-mascara {
-    stroke-dashoffset: 0;
+  .login-humo-3 {
+    animation-delay: -4.6s;
   }
 
   .login-furgoneta {
-    offset-distance: 50%;
+    transform: none;
+    animation: login-recorrer 16s linear infinite;
   }
 
-  .login-girar {
-    animation: none;
+  .login-furgoneta-cuerpo {
+    animation: login-vaiven 0.5s ease-in-out infinite alternate;
+  }
+
+  .login-rueda {
+    animation: login-rueda 0.7s linear infinite;
+  }
+
+  .login-pin-rebote {
+    animation: login-rebote 3s ease-out infinite;
+  }
+
+  .login-pin-2 {
+    animation-delay: 1s;
+  }
+
+  .login-pin-3 {
+    animation-delay: 2s;
   }
 }
 
-@keyframes login-trazar {
+@keyframes login-nube {
+  from {
+    transform: translateX(-24px);
+  }
+  to {
+    transform: translateX(46px);
+  }
+}
+
+@keyframes login-humo {
   0% {
-    stroke-dashoffset: 1;
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
   }
-  65%,
-  100% {
-    stroke-dashoffset: 0;
+  15% {
+    opacity: 0.8;
   }
-}
-
-@keyframes login-desvanecer {
-  0%,
-  90% {
-    opacity: 1;
-  }
-  97%,
   100% {
     opacity: 0;
+    transform: translate(22px, -66px) scale(1.8);
   }
 }
 
 @keyframes login-recorrer {
+  from {
+    transform: translateX(-140px);
+  }
+  to {
+    transform: translateX(660px);
+  }
+}
+
+@keyframes login-vaiven {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes login-rueda {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes login-rebote {
   0% {
-    offset-distance: 0%;
-    opacity: 0;
+    transform: translateY(0) scale(1, 1);
   }
-  2% {
-    opacity: 1;
+  6% {
+    transform: translateY(0) scale(1.1, 0.88);
   }
-  65% {
-    offset-distance: 100%;
-    opacity: 1;
-  }
-  71%,
-  100% {
-    offset-distance: 100%;
-    opacity: 0;
-  }
-}
-
-@keyframes login-pin-b {
-  0%,
   16% {
-    opacity: 0;
-    transform: scale(0.4);
+    transform: translateY(-14px) scale(0.94, 1.08);
   }
-  20% {
-    opacity: 1;
-    transform: scale(1.15);
+  26% {
+    transform: translateY(0) scale(1.06, 0.93);
   }
-  24%,
-  90% {
-    opacity: 1;
-    transform: scale(1);
+  32% {
+    transform: translateY(-4px) scale(1, 1);
   }
-  96%,
+  38%,
   100% {
-    opacity: 0;
-    transform: scale(1);
-  }
-}
-
-@keyframes login-pin-c {
-  0%,
-  46% {
-    opacity: 0;
-    transform: scale(0.4);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
-  54%,
-  90% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  96%,
-  100% {
-    opacity: 0;
-    transform: scale(1);
-  }
-}
-
-@keyframes login-pin-d {
-  0%,
-  64% {
-    opacity: 0;
-    transform: scale(0.4);
-  }
-  68% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
-  72%,
-  90% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  96%,
-  100% {
-    opacity: 0;
-    transform: scale(1);
-  }
-}
-
-@keyframes login-onda {
-  0%,
-  68% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  70% {
-    opacity: 0.6;
-    transform: scale(0.5);
-  }
-  80% {
-    opacity: 0;
-    transform: scale(2.4);
-  }
-  81% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  83% {
-    opacity: 0.6;
-    transform: scale(0.5);
-  }
-  93%,
-  100% {
-    opacity: 0;
-    transform: scale(2.4);
+    transform: translateY(0) scale(1, 1);
   }
 }
 

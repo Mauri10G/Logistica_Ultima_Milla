@@ -38,26 +38,40 @@ describe('LoginPage (diseño)', () => {
     expect(screen.getByText('Sistema de Gestión de Entregas y Rutas · UTA FISEI')).toBeInTheDocument()
   })
 
-  test('la ilustración del mapa es decorativa: está oculta a lectores de pantalla', () => {
+  test('la ilustración es decorativa: está oculta a lectores de pantalla', () => {
     const { container } = dibujarLogin()
 
-    const ilustracion = container.querySelector('svg.login-ilustracion')
-    expect(ilustracion).toHaveAttribute('aria-hidden', 'true')
-    // 4 pines de entrega, una ruta y la furgoneta
-    expect(ilustracion.querySelectorAll('.login-pin')).toHaveLength(4)
-    expect(ilustracion.querySelector('.login-ruta-trazo')).not.toBeNull()
-    expect(ilustracion.querySelector('.login-furgoneta')).not.toBeNull()
+    expect(container.querySelector('svg.login-ilustracion')).toHaveAttribute('aria-hidden', 'true')
   })
 
-  test('el mapa tiene el río y los sectores Centro, Huachi y Ficoa', () => {
+  test('la postal de Ambato tiene volcán con nieve y humo, catedral con cruz, ciudad, árboles y flores', () => {
     const { container } = dibujarLogin()
+    const postal = container.querySelector('svg.login-ilustracion')
 
-    const ilustracion = container.querySelector('svg.login-ilustracion')
-    expect(ilustracion.querySelector('.login-rio')).not.toBeNull()
-    // puentes: una franja por calle, recortada por el río
-    expect(ilustracion.querySelectorAll('.login-puentes rect')).toHaveLength(9)
-    const sectores = [...ilustracion.querySelectorAll('.login-sector')].map((t) => t.textContent)
-    expect(sectores).toEqual(['Ficoa', 'Centro', 'Huachi'])
+    expect(postal.querySelector('.login-volcan')).not.toBeNull()
+    expect(postal.querySelector('.login-nieve')).not.toBeNull()
+    expect(postal.querySelectorAll('.login-humo-bola').length).toBeGreaterThanOrEqual(3)
+    expect(postal.querySelector('.login-catedral')).not.toBeNull()
+    expect(postal.querySelectorAll('.login-ciudad > g').length).toBeGreaterThanOrEqual(8)
+    expect(postal.querySelectorAll('.login-nube')).toHaveLength(3)
+  })
+
+  test('tiene la furgoneta en la calle y tres pines de entrega con rebote', () => {
+    const { container } = dibujarLogin()
+    const postal = container.querySelector('svg.login-ilustracion')
+
+    expect(postal.querySelector('.login-furgoneta')).not.toBeNull()
+    expect(postal.querySelectorAll('.login-rueda')).toHaveLength(2)
+    expect(postal.querySelectorAll('.login-pin-rebote')).toHaveLength(3)
+  })
+
+  test('ya no tiene el mapa visto desde arriba, el río ni los puentes', () => {
+    const { container } = dibujarLogin()
+    const postal = container.querySelector('svg.login-ilustracion')
+
+    for (const clase of ['login-rio', 'login-puentes', 'login-ruta-trazo', 'login-sector', 'login-manzana']) {
+      expect(postal.querySelector(`.${clase}`)).toBeNull()
+    }
   })
 
   test('el fondo de rutas del formulario es decorativo', () => {
