@@ -9,16 +9,20 @@ import '../widgets/pedido_tile.dart';
 /// Ruta del repartidor con sus pedidos en orden de entrega.
 class RutaScreen extends StatefulWidget {
   final int repartidorId;
+  final String? token;
   final ApiService? api;
   final StompService? stomp;
   final Future<bool> Function(Uri uri)? lanzarUrl;
+  final Future<void> Function()? alCerrarSesion;
 
   const RutaScreen({
     super.key,
     required this.repartidorId,
+    this.token,
     this.api,
     this.stomp,
     this.lanzarUrl,
+    this.alCerrarSesion,
   });
 
   @override
@@ -26,7 +30,7 @@ class RutaScreen extends StatefulWidget {
 }
 
 class _RutaScreenState extends State<RutaScreen> {
-  late final ApiService _api = widget.api ?? ApiService();
+  late final ApiService _api = widget.api ?? ApiService(token: widget.token);
   StompService? _stomp;
   Ruta? _ruta;
   bool _sinRuta = false;
@@ -41,6 +45,7 @@ class _RutaScreenState extends State<RutaScreen> {
     _cargar();
     _stomp = widget.stomp ?? StompService();
     _stomp!.conectar(
+      token: widget.token,
       alCambiarRutas: () => _cargar(desdeTiempoReal: true),
       alCambiarConexion: (conectado) {
         if (!mounted) return;
@@ -175,6 +180,15 @@ class _RutaScreenState extends State<RutaScreen> {
             tooltip: 'Recargar ruta',
             onPressed: _cargando ? null : _cargar,
           ),
+          if (widget.alCerrarSesion != null)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Cerrar sesión',
+              onPressed: () async {
+                _stomp?.desconectar();
+                await widget.alCerrarSesion!();
+              },
+            ),
         ],
       ),
       body: _cargando
