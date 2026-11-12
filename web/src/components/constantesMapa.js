@@ -10,3 +10,8 @@ export function colorDeRuta(indice) {
 
 export const ATRIBUCION_OSM = '&copy; colaboradores de OpenStreetMap'
 export const URL_TILES_OSM = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+
+/** Color de una zona: sale de su id, así no cambia cuando se agregan, se editan o se ocultan otras zonas. */
+export function colorDeZona(zona) {
+  return colorDeRuta(Number(zona.id))
+}

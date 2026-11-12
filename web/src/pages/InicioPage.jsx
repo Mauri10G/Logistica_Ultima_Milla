@@ -1,4 +1,4 @@
-import { Activity, MapPinned, Package, PackagePlus, Route, Truck, Users } from 'lucide-react'
+import { Activity, CalendarClock, MapPinned, Package, PackagePlus, Route, Truck, Users } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listarPedidos } from '../api/pedidosApi'
@@ -7,11 +7,13 @@ import { listarRutas } from '../api/rutasApi'
 import Avisos from '../components/Avisos'
 import EncabezadoPagina from '../components/EncabezadoPagina'
 import EstadoBadge from '../components/EstadoBadge'
+import EstadoVacio from '../components/EstadoVacio'
 import IndicadorConexion from '../components/IndicadorConexion'
 import { fechaIso } from '../hooks/fechas'
 import { useWebSocketTopic } from '../hooks/useWebSocketTopic'
 import { TOPIC_PEDIDOS, TOPIC_RUTAS } from '../services/websocket'
 import { mensajeDeError } from '../utils/errores'
+import { porcentajeEntregado, proximasEntregas } from '../utils/avance'
 import { ESTADOS_PEDIDO } from '../utils/estados'
 
 const ACCESOS = [
@@ -97,6 +99,9 @@ export default function InicioPage() {
     acumulado[pedido.estado] = (acumulado[pedido.estado] ?? 0) + 1
     return acumulado
   }, {})
+  const entregados = porEstado.ENTREGADO ?? 0
+  const avance = porcentajeEntregado(pedidos ?? [])
+  const proximas = proximasEntregas(pedidos ?? [])
   const hoy = contarRutas(rutasHoy ?? [])
   const manana = contarRutas(rutasManana ?? [])
   const activos = (repartidores ?? []).filter((repartidor) => repartidor.activo !== false)
@@ -191,6 +196,69 @@ export default function InicioPage() {
                 : 'Consultando…'
               : `de ${activos.length} repartidores activos`}
           </p>
+        </article>
+      </div>
+
+      <h2 className="panel-seccion-titulo">Avance del día</h2>
+      <div className="dos-columnas">
+        <article className="tarjeta avance" aria-busy={pedidos === null && !fallos.pedidos}>
+          <div className="indicador-cabecera">
+            <span className="indicador-icono">
+              <Package size={18} aria-hidden="true" />
+            </span>
+            Entregados hoy
+          </div>
+          <span className="indicador-valor">
+            <Valor cargando={pedidos === null} fallo={fallos.pedidos && pedidos === null}>
+              {avance} %
+            </Valor>
+          </span>
+          <div
+            className="barra-progreso"
+            role="progressbar"
+            aria-label="Pedidos entregados hoy"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={avance}
+          >
+            <span style={{ width: `${avance}%` }} />
+          </div>
+          <p className="indicador-detalle">
+            {pedidos === null
+              ? fallos.pedidos
+                ? 'No se pudo calcular el avance'
+                : 'Calculando avance…'
+              : pedidos.length === 0
+                ? 'No hay pedidos para entregar hoy'
+                : `${entregados} de ${pedidos.length} pedidos entregados`}
+          </p>
+        </article>
+
+        <article className="tarjeta proximas" aria-busy={pedidos === null && !fallos.pedidos}>
+          <div className="indicador-cabecera">
+            <span className="indicador-icono">
+              <CalendarClock size={18} aria-hidden="true" />
+            </span>
+            Próximas entregas
+          </div>
+          {pedidos === null ? (
+            <p className="indicador-detalle">{fallos.pedidos ? 'No se pudieron cargar las entregas' : 'Cargando próximas entregas…'}</p>
+          ) : proximas.length === 0 ? (
+            <EstadoVacio titulo="No quedan entregas pendientes hoy." icono={CalendarClock} />
+          ) : (
+            <ol className="proximas-lista" aria-label="Próximas entregas">
+              {proximas.map((pedido) => (
+                <li key={pedido.id}>
+                  <span className="proxima-hora">{pedido.horaEntrega?.slice(0, 5) ?? '—'}</span>
+                  <span className="proxima-texto">
+                    <strong>{pedido.clienteNombres}</strong>
+                    <span>{pedido.direccion}</span>
+                  </span>
+                  <EstadoBadge estado={pedido.estado} />
+                </li>
+              ))}
+            </ol>
+          )}
         </article>
       </div>
 

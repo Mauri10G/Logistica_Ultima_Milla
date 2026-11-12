@@ -172,3 +172,113 @@ describe('InicioPage', () => {
     await screen.findByText('de 2 repartidores activos')
   })
 })
+
+describe('InicioPage: avance del día y próximas entregas', () => {
+  const HOY = [
+    { id: 1, estado: 'ENTREGADO', horaEntrega: '08:00:00', clienteNombres: 'Ana', direccion: 'Calle 1' },
+    { id: 2, estado: 'PENDIENTE', horaEntrega: '15:00:00', clienteNombres: 'Beto', direccion: 'Calle 2' },
+    { id: 3, estado: 'EN_CAMINO', horaEntrega: '09:30:00', clienteNombres: 'Carla', direccion: 'Calle 3' },
+    { id: 4, estado: 'PENDIENTE', horaEntrega: '11:00:00', clienteNombres: 'Dani', direccion: 'Calle 4' },
+    { id: 5, estado: 'ASIGNADO', horaEntrega: '10:15:00', clienteNombres: 'Eli', direccion: 'Calle 5' },
+    { id: 6, estado: 'RECOGIDO', horaEntrega: '12:00:00', clienteNombres: 'Fer', direccion: 'Calle 6' },
+    { id: 7, estado: 'PENDIENTE', horaEntrega: '17:45:00', clienteNombres: 'Gus', direccion: 'Calle 7' },
+    { id: 8, estado: 'ENTREGADO', horaEntrega: '08:30:00', clienteNombres: 'Hugo', direccion: 'Calle 8' },
+  ]
+
+  test('la barra de progreso muestra el porcentaje de pedidos entregados hoy', async () => {
+    listarPedidos.mockResolvedValue({ pedidos: HOY, total: 8 })
+    dibujar()
+
+    await screen.findByText('25 %')
+    const barra = screen.getByRole('progressbar', { name: 'Pedidos entregados hoy' })
+    expect(barra).toHaveAttribute('aria-valuenow', '25')
+    expect(barra).toHaveAttribute('aria-valuemin', '0')
+    expect(barra).toHaveAttribute('aria-valuemax', '100')
+    expect(barra.firstChild).toHaveStyle({ width: '25%' })
+    expect(screen.getByText('25 %')).toBeInTheDocument()
+    expect(screen.getByText('2 de 8 pedidos entregados')).toBeInTheDocument()
+  })
+
+  test('el porcentaje se redondea y con todos entregados llega a 100', async () => {
+    listarPedidos.mockResolvedValue({ pedidos: [{ id: 1, estado: 'ENTREGADO' }, { id: 2, estado: 'PENDIENTE' }, { id: 3, estado: 'PENDIENTE' }], total: 3 })
+    const { unmount } = dibujar()
+    expect(await screen.findByText('33 %')).toBeInTheDocument()
+    unmount()
+
+    listarPedidos.mockResolvedValue({ pedidos: [{ id: 1, estado: 'ENTREGADO' }], total: 1 })
+    dibujar()
+    expect(await screen.findByText('100 %')).toBeInTheDocument()
+  })
+
+  test('sin pedidos hoy el avance es 0 % y lo explica', async () => {
+    listarPedidos.mockResolvedValue({ pedidos: [], total: 0 })
+    dibujar()
+
+    expect(await screen.findByText('No hay pedidos para entregar hoy')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Pedidos entregados hoy' })).toHaveAttribute('aria-valuenow', '0')
+    expect(screen.getByText('No quedan entregas pendientes hoy.')).toBeInTheDocument()
+  })
+
+  test('Próximas entregas lista las 5 siguientes por hora, sin las ya entregadas', async () => {
+    listarPedidos.mockResolvedValue({ pedidos: HOY, total: 8 })
+    dibujar()
+
+    const lista = await screen.findByRole('list', { name: 'Próximas entregas' })
+    const filas = within(lista).getAllByRole('listitem')
+    expect(filas).toHaveLength(5)
+    expect(filas.map((fila) => fila.querySelector('.proxima-hora').textContent)).toEqual(['09:30', '10:15', '11:00', '12:00', '15:00'])
+    expect(within(lista).getByText('Carla')).toBeInTheDocument()
+    expect(within(lista).getByText('Calle 3')).toBeInTheDocument()
+    expect(within(lista).queryByText('Ana')).not.toBeInTheDocument() // entregada
+    expect(within(lista).queryByText('Gus')).not.toBeInTheDocument() // la sexta
+  })
+
+  test('con menos de 5 pendientes muestra solo esos', async () => {
+    listarPedidos.mockResolvedValue({ pedidos: HOY.slice(0, 3), total: 3 })
+    dibujar()
+
+    const lista = await screen.findByRole('list', { name: 'Próximas entregas' })
+    expect(within(lista).getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  test('los pedidos sin hora van al final', async () => {
+    listarPedidos.mockResolvedValue({
+      pedidos: [
+        { id: 1, estado: 'PENDIENTE', clienteNombres: 'SinHora', direccion: 'X' },
+        { id: 2, estado: 'PENDIENTE', horaEntrega: '10:00:00', clienteNombres: 'ConHora', direccion: 'Y' },
+      ],
+      total: 2,
+    })
+    dibujar()
+
+    const lista = await screen.findByRole('list', { name: 'Próximas entregas' })
+    const filas = within(lista).getAllByRole('listitem')
+    expect(filas[0]).toHaveTextContent('ConHora')
+    expect(filas[1]).toHaveTextContent('SinHora')
+  })
+
+  test('se actualiza con el tiempo real', async () => {
+    listarPedidos.mockResolvedValue({ pedidos: HOY, total: 8 })
+    dibujar()
+    await screen.findByText('25 %')
+
+    listarPedidos.mockResolvedValue({ pedidos: HOY.map((p) => ({ ...p, estado: 'ENTREGADO' })), total: 8 })
+    await act(async () => alRecibir[TOPIC_PEDIDOS]({ pedidoId: 3 }))
+
+    expect(await screen.findByText('100 %')).toBeInTheDocument()
+    expect(screen.getByText('No quedan entregas pendientes hoy.')).toBeInTheDocument()
+  })
+
+  test('mientras cargan y si falla la consulta lo indican', async () => {
+    listarPedidos.mockReturnValue(new Promise(() => {}))
+    const { unmount } = dibujar()
+    expect(screen.getByText('Calculando avance…')).toBeInTheDocument()
+    expect(screen.getByText('Cargando próximas entregas…')).toBeInTheDocument()
+    unmount()
+
+    listarPedidos.mockRejectedValue({ response: { status: 500, data: { mensaje: 'Fallo' } } })
+    dibujar()
+    expect(await screen.findByText('No se pudo calcular el avance')).toBeInTheDocument()
+    expect(screen.getByText('No se pudieron cargar las entregas')).toBeInTheDocument()
+  })
+})

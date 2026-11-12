@@ -1,9 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { cambiarDisponibilidad, crearRepartidor, listarRepartidores } from '../api/repartidoresApi'
+import { listarRutas } from '../api/rutasApi'
+import { fechaIso } from '../hooks/fechas'
 import RepartidoresPage from './RepartidoresPage'
 
 jest.mock('../api/repartidoresApi')
+jest.mock('../api/rutasApi')
 
 const REPARTIDORES = [
   { id: 1, nombres: 'Ana Pérez', telefono: '0981111111', capacidadMaxima: 4, disponible: true },
@@ -20,6 +23,7 @@ beforeEach(() => {
   listarRepartidores.mockResolvedValue(REPARTIDORES)
   crearRepartidor.mockResolvedValue({ id: 3 })
   cambiarDisponibilidad.mockResolvedValue({})
+  listarRutas.mockResolvedValue([])
 })
 
 describe('RepartidoresPage', () => {
@@ -27,8 +31,17 @@ describe('RepartidoresPage', () => {
     await dibujar()
 
     expect(screen.getByText('0982222222')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Disponible · marcar no disponible' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'No disponible · marcar disponible' })).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Disponible de Ana Pérez' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Disponible de Luis Mora' })).not.toBeChecked()
+  })
+
+  test('la disponibilidad es un interruptor con la etiqueta visible Disponible', async () => {
+    await dibujar()
+
+    const interruptores = screen.getAllByRole('switch')
+    expect(interruptores).toHaveLength(2)
+    expect(screen.getAllByText('Disponible', { selector: '.interruptor-texto' })).toHaveLength(2)
+    expect(screen.queryByText(/marcar no disponible|marcar disponible/)).not.toBeInTheDocument()
   })
 
   test('sin repartidores lo dice', async () => {
@@ -135,7 +148,7 @@ describe('RepartidoresPage', () => {
     const user = userEvent.setup()
     await dibujar()
 
-    await user.click(screen.getByRole('button', { name: 'Disponible · marcar no disponible' }))
+    await user.click(screen.getByRole('switch', { name: 'Disponible de Ana Pérez' }))
 
     await waitFor(() => expect(cambiarDisponibilidad).toHaveBeenCalledWith(1, false))
     await waitFor(() => expect(listarRepartidores).toHaveBeenCalledTimes(2))
@@ -146,8 +159,101 @@ describe('RepartidoresPage', () => {
     cambiarDisponibilidad.mockRejectedValue({ response: { status: 404, data: { mensaje: 'No existe el repartidor con id 2' } } })
     await dibujar()
 
-    await user.click(screen.getByRole('button', { name: 'No disponible · marcar disponible' }))
+    await user.click(screen.getByRole('switch', { name: 'Disponible de Luis Mora' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No existe el repartidor con id 2')
+  })
+})
+
+function nombresEnTabla() {
+  return screen
+    .getAllByRole('row')
+    .slice(1) // la primera fila es el encabezado
+    .map((fila) => within(fila).getAllByRole('cell')[1].textContent)
+}
+
+describe('RepartidoresPage: orden, búsqueda y ruta de hoy', () => {
+  const MAS = [
+    { id: 3, nombres: 'Zoila Vera', telefono: '0983333333', capacidadMaxima: 4, disponible: true },
+    { id: 4, nombres: 'Beatriz Álvarez', telefono: '0984444444', capacidadMaxima: 6, disponible: true },
+  ]
+
+  test('vienen ordenados por # de menor a mayor, con la flecha en #', async () => {
+    listarRepartidores.mockResolvedValue([MAS[0], MAS[1], REPARTIDORES[1], REPARTIDORES[0]])
+    await dibujar()
+
+    expect(nombresEnTabla()).toEqual(['Ana Pérez', 'Luis Mora', 'Zoila Vera', 'Beatriz Álvarez'])
+    expect(screen.getByRole('columnheader', { name: '#' })).toHaveAttribute('aria-sort', 'ascending')
+    expect(screen.getByRole('columnheader', { name: 'Nombres' })).not.toHaveAttribute('aria-sort')
+  })
+
+  test('el encabezado Nombres ordena por nombre y otro clic invierte', async () => {
+    const user = userEvent.setup()
+    listarRepartidores.mockResolvedValue([...REPARTIDORES, ...MAS])
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Nombres' }))
+    expect(nombresEnTabla()).toEqual(['Ana Pérez', 'Beatriz Álvarez', 'Luis Mora', 'Zoila Vera'])
+
+    await user.click(screen.getByRole('button', { name: 'Nombres' }))
+    expect(nombresEnTabla()).toEqual(['Zoila Vera', 'Luis Mora', 'Beatriz Álvarez', 'Ana Pérez'])
+  })
+
+  test('al volver a cargar la pantalla el orden vuelve a #', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<RepartidoresPage />)
+    await screen.findByText('Ana Pérez')
+    await user.click(screen.getByRole('button', { name: 'Nombres' }))
+    await user.click(screen.getByRole('button', { name: 'Nombres' }))
+    expect(nombresEnTabla()).toEqual(['Luis Mora', 'Ana Pérez'])
+
+    unmount()
+    render(<RepartidoresPage />)
+    await screen.findByText('Ana Pérez')
+
+    expect(nombresEnTabla()).toEqual(['Ana Pérez', 'Luis Mora'])
+    expect(screen.getByRole('columnheader', { name: '#' })).toHaveAttribute('aria-sort', 'ascending')
+  })
+
+  test('el buscador filtra por nombre (sin importar acentos) o teléfono', async () => {
+    const user = userEvent.setup()
+    listarRepartidores.mockResolvedValue([...REPARTIDORES, ...MAS])
+    await dibujar()
+
+    await user.type(screen.getByLabelText('Buscar repartidor'), 'alvarez')
+    expect(nombresEnTabla()).toEqual(['Beatriz Álvarez'])
+
+    await user.clear(screen.getByLabelText('Buscar repartidor'))
+    await user.type(screen.getByLabelText('Buscar repartidor'), '0982222')
+    expect(nombresEnTabla()).toEqual(['Luis Mora'])
+  })
+
+  test('una búsqueda sin resultados muestra el mensaje de vacío', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.type(screen.getByLabelText('Buscar repartidor'), 'nadie')
+
+    expect(screen.getByText('No hay repartidores registrados.')).toBeInTheDocument()
+  })
+
+  test('la columna Ruta de hoy usa las rutas de hoy y muestra — si no tiene', async () => {
+    listarRutas.mockResolvedValue([
+      { id: 7, repartidorId: 1, zonaNombre: 'Centro', maxPedidos: 4, pedidos: [{ id: 1 }, { id: 2 }] },
+    ])
+    await dibujar()
+
+    expect(listarRutas).toHaveBeenCalledWith(fechaIso(0))
+    expect(await screen.findByText('Ruta 7 · Centro · 2/4 pedidos')).toBeInTheDocument()
+    const filaLuis = screen.getByText('Luis Mora').closest('tr')
+    expect(within(filaLuis).getByText('—')).toBeInTheDocument()
+  })
+
+  test('si no se pueden consultar las rutas la lista igual se muestra', async () => {
+    listarRutas.mockRejectedValue({ response: { status: 500, data: { mensaje: 'Falló' } } })
+    await dibujar()
+
+    expect(screen.getAllByText('—')).toHaveLength(2)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

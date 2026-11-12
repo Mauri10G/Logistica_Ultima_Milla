@@ -12,6 +12,8 @@ function contenedor(testid) {
     if (positions) atributos['data-positions'] = JSON.stringify(positions)
     if (data) atributos['data-data'] = JSON.stringify(data)
     if (pathOptions?.color) atributos['data-color'] = pathOptions.color
+    if (pathOptions?.weight) atributos['data-weight'] = pathOptions.weight
+    if (pathOptions?.opacity !== undefined) atributos['data-opacity'] = pathOptions.opacity
     return createElement('div', atributos, children)
   }
 }
@@ -21,13 +23,11 @@ export const TileLayer = () => null
 
 // Igual que react-leaflet real: la capa guarda `data` al crearse y ignora sus cambios posteriores.
 // Solo se redibuja si React la vuelve a montar (cambia su `key`).
-export function GeoJSON({ children, data }) {
+export function GeoJSON({ children, data, style }) {
   const dataInicial = useRef(data)
-  return createElement(
-    'div',
-    { 'data-testid': 'geojson', 'data-data': JSON.stringify(dataInicial.current) },
-    children,
-  )
+  const atributos = { 'data-testid': 'geojson', 'data-data': JSON.stringify(dataInicial.current) }
+  if (style?.color) atributos['data-color-zona'] = style.color
+  return createElement('div', atributos, children)
 }
 
 export const Polyline = contenedor('polilinea')
