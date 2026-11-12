@@ -86,7 +86,8 @@ public class ZonaService {
         if (!superpuestas.isEmpty()) {
             String nombres = superpuestas.stream().map(Zona::getNombre).collect(Collectors.joining(", "));
             throw new ConflictoException("ZONA_SUPERPUESTA", "El area se superpone con: " + nombres
-                    + ". Reenvie con confirmarSuperposicion=true para guardarla de todos modos.");
+                    + " (se cruza, la contiene o queda dentro de ella)."
+                    + " Dos zonas pueden compartir borde, pero no ocupar la misma superficie.");
         }
     }
 
