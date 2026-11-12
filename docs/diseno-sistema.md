@@ -196,3 +196,27 @@ Los CP-01, CP-02 y CP-10 no se detallaron en el enunciado de esta base: quedan p
 - Autenticación y roles; ventana de tiempo para el armado programado por zona.
 - Automatizar CP-11 con Playwright (dos páginas: una hace el `PATCH`, la otra observa la tabla).
 - Pruebas de seguridad (Dependency-Check y ZAP) ejecutadas y archivadas en `tests/security/reports/` y `docs/evidencias/`.
+
+## 10. Aplicación móvil del repartidor (Flutter)
+
+La aplicación móvil (`mobile/`) está orientada exclusivamente al repartidor (`COURIER`) y sigue el mismo contrato REST y STOMP del backend sin lógica de negocio duplicada.
+
+### 10.1 Estructura de capas (`mobile/lib/`)
+
+| Carpeta / Archivo | Responsabilidad |
+|---|---|
+| `config.dart` | Configuración por `--dart-define`: `API_URL` (por defecto `http://10.0.2.2:8080`), URL WebSocket derivada `wsUrl` (`/ws`), `AUTH_HABILITADA` y `PERMITIR_ID_TEMPORAL`. |
+| `main.dart` | Punto de entrada (`LogisticaApp`); restaura sesión guardada al iniciar, coordina expiración por `401`, inyecta clientes HTTP/STOMP para pruebas y permite desactivar auth mediante `AUTH_HABILITADA=false`. |
+| `models/` | `Pedido` (prioridad por defecto `NORMAL`, `uriGoogleMaps` por coordenadas con respaldo por dirección, transiciones lineales), `Ruta` (ordena pedidos por `ordenEnRuta` dejando nulos al final) y `Sesion` (`token`, `rol`, `repartidorId`, validación `esRepartidor`). |
+| `services/sesion_service.dart` | Persiste y elimina el JSON de `Sesion` en `SharedPreferences` bajo la clave `logistica.sesion`. |
+| `services/api_service.dart` | Cliente HTTP (`http`) con timeout de 15 s para `POST /api/auth/login`, `GET /api/repartidores/{id}/ruta-actual` y `PATCH /api/pedidos/{id}/estado` (`origen: "MOVIL"`). Adjunta `Authorization: Bearer <token>`, invoca `alExpirarSesion` ante `401` fuera del login y traduce errores a `SinRutaException` (`404`), `SinConexionException` y `ApiException` con mensajes claros (`401`, `403`, `409`). |
+| `services/stomp_service.dart` | Cliente WebSocket + STOMP (`stomp_dart_client`) suscrito a `/topic/rutas` con reconexión cada 3 s, envío de `Authorization: Bearer <token>` en `stompConnectHeaders` y notificación de estado de conexión (`alCambiarConexion`). |
+| `screens/login_screen.dart` | Formulario con validación, consumo de `POST /api/auth/login`, rechazo de cuentas no `COURIER` (p. ej. `STAFF`) y enlace temporal hacia `SeleccionRepartidorScreen` mientras se habilita el endpoint de login en el backend. |
+| `screens/ruta_screen.dart` | Lista las paradas del día en orden, soporta pull-to-refresh (`RefreshIndicator`), muestra vista amigable cuando no hay ruta (`404`), escucha `/topic/rutas` para recargar y avisar actualizaciones en vivo, indica estado de conexión STOMP en el `AppBar`, ofrece botón de cierre de sesión y exige confirmación (`AlertDialog`) antes de pasar a `ENTREGADO`. |
+| `screens/seleccion_repartidor_screen.dart` | Acceso temporal por ID de repartidor (conservado como respaldo mientras backend publica autenticación). |
+| `widgets/pedido_tile.dart` | Tarjeta de cada parada con orden, dirección, cliente, teléfono, hora corta, badge de prioridad (`NORMAL`, `ALTA`, `URGENTE`), botón `"Abrir en Maps"` (`url_launcher` con `<queries>` para `https` y `geo` en `AndroidManifest.xml`) y botón de avance de estado con indicador de carga. |
+
+### 10.2 Pruebas del módulo móvil
+
+- **Unitarias y de widgets (`mobile/test/`)**: modelos (`modelos_test.dart`), servicios HTTP/STOMP/sesión simulados con `MockClient` y `SharedPreferences.setMockInitialValues`, tarjetas `PedidoTile` y pantallas (`LoginScreen`, `RutaScreen`, `SeleccionRepartidorScreen`).
+- **Integración (`mobile/integration_test/app_test.dart`)**: cubre la carga inicial en login, un flujo completo CP-11 simulado (login, ruta ordenada, Maps, confirmación de entrega, actualización en vivo por `/topic/rutas` y cierre de sesión) y el caso E2E contra backend real activado con `--dart-define=EJECUTAR_E2E=true`.
