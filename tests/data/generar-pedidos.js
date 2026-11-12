@@ -1,34 +1,56 @@
 #!/usr/bin/env node
 /**
- * Generador de datos masivos: simula un dia de alta demanda (San Valentin) registrando pedidos aleatorios
- * DENTRO de las zonas activas, a traves de POST /api/pedidos (asi se ejercitan tambien las reglas de negocio).
- * No tiene dependencias: solo Node 18+.
+ * Generador de datos masivos: puebla el sistema para un dia de alta demanda (San Valentin). Primero completa
+ * los repartidores y despues registra pedidos aleatorios DENTRO de las zonas activas, todo a traves de la API
+ * (asi se ejercitan tambien las reglas de negocio). No tiene dependencias: solo Node 18+.
  *
- *   node tests/data/generar-pedidos.js                      5000 pedidos para el proximo 14 de febrero
- *   node tests/data/generar-pedidos.js --cantidad 20000 --fecha 2027-02-14 --concurrencia 40
+ *   node tests/data/generar-pedidos.js --escenario normal          500 pedidos, 10 repartidores
+ *   node tests/data/generar-pedidos.js                             alta demanda: 5000 pedidos, 40 repartidores
+ *   node tests/data/generar-pedidos.js --escenario san-valentin    20000 pedidos, 80 repartidores
+ *   node tests/data/generar-pedidos.js --cantidad 300 --repartidores 5 --fecha 2027-02-14 --concurrencia 10
  *   node tests/data/generar-pedidos.js --api http://servidor:8080 --armar     (arma las rutas al terminar)
  */
-const { parseArgs } = require('node:util');
+const { parseArgs } = require('node:util')
+const { ESCENARIOS, resolverOpciones } = require('./lib/escenarios')
+const { obtenerCabeceras } = require('./lib/auth')
+const { asegurarRepartidores } = require('./lib/repartidores')
 
 const { values: opciones } = parseArgs({
   options: {
     api: { type: 'string', default: 'http://localhost:8080' },
-    cantidad: { type: 'string', default: '5000' },
+    escenario: { type: 'string' },
+    cantidad: { type: 'string' },
+    repartidores: { type: 'string' },
     fecha: { type: 'string' },
-    concurrencia: { type: 'string', default: '20' },
+    concurrencia: { type: 'string' },
     armar: { type: 'boolean', default: false },
     ayuda: { type: 'boolean', default: false },
   },
 })
 
 if (opciones.ayuda) {
-  console.log('Uso: node generar-pedidos.js [--api URL] [--cantidad N] [--fecha YYYY-MM-DD] [--concurrencia N] [--armar]')
+  console.log(
+    'Uso: node generar-pedidos.js [--escenario normal|alta|san-valentin] [--api URL] [--cantidad N]\n' +
+      '                             [--repartidores N] [--fecha YYYY-MM-DD] [--concurrencia N] [--armar]\n\nEscenarios:',
+  )
+  Object.entries(ESCENARIOS).forEach(([nombre, e]) =>
+    console.log(`  ${nombre.padEnd(13)} ${e.pedidos} pedidos, ${e.repartidores} repartidores. ${e.descripcion}`),
+  )
   process.exit(0)
 }
 
+let resueltas
+try {
+  resueltas = resolverOpciones(opciones)
+} catch (error) {
+  console.error(error.message)
+  process.exit(1)
+}
+
 const API = opciones.api.replace(/\/$/, '')
-const CANTIDAD = Number(opciones.cantidad)
-const CONCURRENCIA = Number(opciones.concurrencia)
+const CANTIDAD = resueltas.cantidad
+const CONCURRENCIA = resueltas.concurrencia
+const REPARTIDORES = resueltas.repartidores
 
 /** Proximo 14 de febrero (el de este año si todavia no paso). */
 function proximoSanValentin() {
@@ -41,6 +63,9 @@ const FECHA = opciones.fecha || proximoSanValentin()
 const NOMBRES = ['Maria', 'Jose', 'Luis', 'Ana', 'Carlos', 'Lucia', 'Pedro', 'Sofia', 'Diego', 'Camila', 'Jorge', 'Elena']
 const APELLIDOS = ['Torres', 'Mena', 'Salazar', 'Naranjo', 'Vargas', 'Cevallos', 'Paredes', 'Lopez', 'Guevara', 'Chachalo']
 const elegir = (lista) => lista[Math.floor(Math.random() * lista.length)]
+
+/** Mensaje de un error de red con su causa (p. ej. "fetch failed (ECONNREFUSED)"). */
+const describirError = (error) => (error.cause?.code ? `${error.message} (${error.cause.code})` : error.message)
 
 /** Punto dentro del poligono (ray casting) */
 function dentro([lng, lat], anillo) {
@@ -91,12 +116,22 @@ function pedidoAleatorio(zonas, indice) {
 }
 
 async function main() {
-  const respuestaZonas = await fetch(`${API}/api/zonas?soloActivas=true`)
+  const cabeceras = await obtenerCabeceras(API)
+  if (cabeceras.Authorization) console.log(`Sesion iniciada como ${process.env.API_USUARIO}.`)
+
+  const respuestaZonas = await fetch(`${API}/api/zonas?soloActivas=true`, { headers: cabeceras })
   if (!respuestaZonas.ok) throw new Error(`No se pudieron leer las zonas: HTTP ${respuestaZonas.status}`)
   const zonas = await respuestaZonas.json()
   if (zonas.length === 0) throw new Error('No hay zonas activas')
 
-  console.log(`Generando ${CANTIDAD} pedidos para ${FECHA} en ${zonas.length} zonas (${CONCURRENCIA} en paralelo)...`)
+  if (REPARTIDORES > 0) {
+    const { existentes, creados } = await asegurarRepartidores(API, REPARTIDORES, cabeceras)
+    console.log(`Repartidores disponibles: ${existentes + creados} (${creados} nuevos).`)
+  }
+
+  console.log(
+    `Escenario ${resueltas.escenario}: ${CANTIDAD} pedidos para ${FECHA} en ${zonas.length} zonas (${CONCURRENCIA} en paralelo)...`,
+  )
   const inicio = Date.now()
   let siguiente = 0
   let creados = 0
@@ -108,7 +143,7 @@ async function main() {
       try {
         const respuesta = await fetch(`${API}/api/pedidos`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: cabeceras,
           body: JSON.stringify(pedidoAleatorio(zonas, indice)),
         })
         if (respuesta.status === 201) {
@@ -118,7 +153,8 @@ async function main() {
           errores.set(clave, (errores.get(clave) ?? 0) + 1)
         }
       } catch (error) {
-        errores.set(error.message, (errores.get(error.message) ?? 0) + 1)
+        const motivo = describirError(error)
+        errores.set(motivo, (errores.get(motivo) ?? 0) + 1)
       }
       if ((indice + 1) % 500 === 0) console.log(`  ${indice + 1}/${CANTIDAD}`)
     }
@@ -136,14 +172,19 @@ async function main() {
   if (opciones.armar) {
     console.log(`Armando rutas de ${FECHA}...`)
     const t0 = Date.now()
-    const respuesta = await fetch(`${API}/api/rutas/armar?fecha=${FECHA}`, { method: 'POST' })
+    const respuesta = await fetch(`${API}/api/rutas/armar?fecha=${FECHA}`, { method: 'POST', headers: cabeceras })
+    if (!respuesta.ok) {
+      console.error(`El armado de rutas fallo: HTTP ${respuesta.status} ${(await respuesta.text()).slice(0, 200)}`)
+      process.exitCode = 1
+      return
+    }
     const rutas = await respuesta.json()
     console.log(`Armado: HTTP ${respuesta.status}, ${Array.isArray(rutas) ? rutas.length : '?'} rutas en ${((Date.now() - t0) / 1000).toFixed(1)} s`)
   }
-  process.exit(fallidos > CANTIDAD * 0.01 ? 1 : 0)
+  process.exitCode = fallidos > CANTIDAD * 0.01 ? 1 : 0
 }
 
 main().catch((error) => {
-  console.error(error.message)
-  process.exit(1)
+  console.error(describirError(error))
+  process.exitCode = 1
 })
