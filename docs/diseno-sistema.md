@@ -66,10 +66,20 @@ entre sí, sin huecos. Cada polígono contiene al rectángulo anterior, así que
   también es verdadero cuando solo se tocan los bordes y obligaba a dejar márgenes (huecos) entre zonas. No se usó
   `ST_Overlaps` porque no detecta la contención ni la igualdad, y `ST_Touches` solo dice "se tocan", no "no se cruzan".
   `area && nueva` va como filtro previo para aprovechar el índice GIST (`ST_Relate` no lo usa).
-- **Vértices compartidos:** para que el borde común sea exactamente el mismo segmento, los vértices de las dos zonas
-  deben coincidir. Si un vértice de una zona cae "casi" sobre el borde de otra (sin coincidir), el resultado puede ser
-  una superposición de área minúscula que sí se rechaza. Por eso el editor web pega los puntos a los vértices cercanos
-  (efecto imán de ~30 m) y la V3 usa los mismos vértices en bordes comunes.
+- **Tolerancia de superposición** (`logistica.zonas.tolerancia-superposicion-m2`, por defecto **500**): además de
+  `ST_Relate`, la consulta calcula el área de la intersección en metros cuadrados
+  (`ST_Area(ST_CollectionExtract(ST_Intersection(...), 3)::geography)`) y solo hay superposición si supera ese mínimo.
+  Sirve para absorber las diferencias de decimales al pegar el borde de una zona al de su vecina: un punto pegado a
+  "algún lugar" de un borde puede quedar a centímetros y dejaría una franja de área mínima que no es un cruce real.
+  500 m² equivalen a una franja de ~25 cm de ancho a lo largo de 2 km de borde. Una zona totalmente contenida en otra
+  (o que la contiene) se rechaza siempre, sin importar su área (`ST_CoveredBy`), así que una zona diminuta no se cuela
+  dentro de otra. Si se pone en 0, vuelve a rechazarse cualquier cruce por pequeño que sea.
+- **Vértices compartidos e imán:** para que el borde común sea el mismo segmento, los vértices de las dos zonas deben
+  coincidir. Por eso el editor web tiene un efecto imán de **100 m** (`RADIO_IMAN_METROS` en `web/src/utils/iman.js`):
+  al hacer clic se pega al vértice más cercano de otra zona activa (prioridad) y, si no hay ninguno a menos de 100 m,
+  al punto más cercano de cualquier borde de otra zona activa. Antes de hacer clic, un círculo verde con el nombre de la
+  zona muestra dónde se va a pegar. Un punto pegado a un borde (no a un vértice) puede diferir de ese borde por
+  decimales: eso lo cubre la tolerancia de superposición. La V3 usa los mismos vértices en los bordes comunes.
 - **Punto de un pedido (CP-03):** `ST_Covers`, no `ST_Contains`: con zonas contiguas, un punto exactamente sobre el
   borde compartido no está en el interior de ninguna y quedaría sin zona. Con `ST_Covers` el borde cuenta como parte de
   la zona y, si cae entre dos, se elige la de menor id. Un punto fuera de todas las zonas se sigue rechazando con 422.
@@ -154,7 +164,7 @@ dos rutas.
 | Tema | Decisión |
 |---|---|
 | Errores | Cuerpo uniforme `{timestamp, status, codigo, mensaje, errores?}`. 400 validación/solicitud mal formada · 404 no existe · **409** conflicto de estado (pedido no editable, transición inválida, zona superpuesta, concurrencia) · **422** regla de negocio (fuera de zona, fecha pasada, sin repartidores) |
-| Superposición de zonas | `ST_Relate(..., 'T********')` sobre zonas activas: solo cuenta si los **interiores** se cruzan (cruce, zona dentro de otra o que contiene a otra). Compartir borde o vértices **no** es superposición. Si se cruzan, requiere `confirmarSuperposicion=true` |
+| Superposición de zonas | `ST_Relate(..., 'T********')` sobre zonas activas: solo cuenta si los **interiores** se cruzan (cruce, zona dentro de otra o que contiene a otra). Compartir borde o vértices **no** es superposición, ni tampoco una franja de intersección menor a `logistica.zonas.tolerancia-superposicion-m2` (500 m² por defecto, para absorber diferencias de decimales al pegar bordes). Si se cruzan, requiere `confirmarSuperposicion=true` |
 | Bajas | Zonas y repartidores se dan de baja lógica (`activa`/`activo = false`) para no romper el historial |
 | Hora y fecha | Un `Clock` único en `America/Guayaquil` (`logistica.zona-horaria`); el servidor y CI en UTC no cambian "hoy" |
 | Tiempo real | Se publica `AFTER_COMMIT`: nunca se envía un cambio que luego se revierta |
