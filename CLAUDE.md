@@ -63,6 +63,12 @@ ec.edu.uta.logistica
 
 - Zona del pedido = `ST_Covers` del punto (el borde cuenta; si cae entre dos zonas gana la de menor id); fuera de toda zona → **422** "La dirección no corresponde a ninguna zona configurada" (CP-03).
 - No se permite fecha de entrega anterior a hoy → 422 (CP-04). "Hoy" sale del `Clock` en zona `America/Guayaquil`.
+- La fecha y hora de entrega deben ser al menos `logistica.pedidos.anticipacion-minima-minutos` (30) después de **ahora**, al
+  registrar y al editar → 422 `HORA_ENTREGA_INVALIDA` ("La hora de entrega debe ser al menos 30 minutos después de la hora
+  actual del servidor, 19:15"). Ahora sale del `Clock` del backend (a minutos), nunca del computador del usuario; mañana en
+  adelante acepta cualquier hora. `GET /api/servidor/hora` devuelve fecha, hora, zona horaria, anticipación mínima y la
+  primera entrega aceptada; el modal de pedido de la web la pide al abrirse para fijar fecha mínima, hora mínima de hoy y el
+  aviso de hora inválida. Si el endpoint no responde, la web no valida fecha ni hora y muestra el mensaje del backend.
 - Solo se edita/elimina un pedido en estado `PENDIENTE` → 409 (CP-05).
 - Zona que se superpone con otra (`ST_Relate(..., 'T********')`: solo cuentan los interiores que se cruzan, solo zonas activas) → 409 `ZONA_SUPERPUESTA`, salvo `confirmarSuperposicion=true` (CP-06 a CP-08).
   Las zonas pueden compartir borde o vértices; cruzarse, quedar dentro de otra o contener a otra no (las 5 zonas base son contiguas desde V3).
