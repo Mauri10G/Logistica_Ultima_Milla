@@ -61,7 +61,7 @@ pipeline {
                 // El backend tarda en arrancar porque Flyway crea el esquema, por eso se reintenta.
                 sh '''
                     for i in $(seq 1 30); do
-                      if docker exec logistica-prod-web wget -qO- http://localhost/api/servidor/hora; then
+                      if docker exec logistica-prod-web wget -qO- http://127.0.0.1/api/servidor/hora; then
                         echo ""; echo "La aplicacion responde a traves de Nginx"; exit 0
                       fi
                       echo "Esperando al backend... intento $i"; sleep 5
