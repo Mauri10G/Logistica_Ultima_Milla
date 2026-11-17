@@ -11,8 +11,9 @@ pipeline {
     environment {
         TAG = "${env.BUILD_NUMBER}"
         COMPOSE = 'docker compose -f despliegue/docker-compose.yml -p logistica-prod'
+        // Copia del kubeconfig que apunta a host.docker.internal, ver docs/despliegue/GUIA_DESPLIEGUE.md
+        KUBECONFIG = '/var/jenkins_home/.kube/config'
     }
-
     options {
         timeout(time: 40, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '10'))
