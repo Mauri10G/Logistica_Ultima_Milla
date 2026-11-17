@@ -6,16 +6,16 @@ Guarda cada captura con su código como nombre, por ejemplo `C-08.png`.
 ## 0. Antes de empezar
 
 - Docker Desktop actualizado, con al menos 6 GB de memoria en Settings > Resources.
-- Los archivos nuevos de este cambio ya subidos a la rama `develop` del repositorio:
+- Los archivos nuevos de este cambio ya subidos a la rama `feature/despliegue-ci-cd` del repositorio:
   `backend/Dockerfile`, `backend/.dockerignore`, `backend/src/main/resources/application-prod.yml`,
   `web/Dockerfile`, `web/.dockerignore`, `web/nginx.conf`, `web/src/entorno.js`,
   `despliegue/docker-compose.yml`, `jenkins/Dockerfile`, `jenkins/docker-compose.yml`, `Jenkinsfile`, `k8s/*.yaml`.
 
 ```powershell
-git checkout develop
+git checkout -b feature/despliegue-ci-cd
 git add backend web despliegue jenkins k8s Jenkinsfile docs/despliegue
 git commit -m "Agregar despliegue automatizado con Docker, Jenkins y Kubernetes"
-git push origin develop
+git push -u origin feature/despliegue-ci-cd
 ```
 
 ## 1. Docker Desktop y Kubernetes
@@ -50,10 +50,16 @@ git push origin develop
 3. Abre http://localhost:8090, pega la contraseña, elige **Install suggested plugins** y crea tu usuario administrador.
    **C-04**: la pantalla de instalación de plugins sugeridos.
 4. En **Manage Jenkins > Plugins > Available plugins** instala **Pipeline: Stage View** si no está instalado.
-5. Comprueba que Jenkins ve Docker y Kubernetes:
+5. Dentro del contenedor, `127.0.0.1:6443` es el propio contenedor y no el clúster, así que kubectl falla con
+   `connection refused`. Crea una copia del kubeconfig para Jenkins que apunte a `host.docker.internal`.
+   El Jenkinsfile ya usa esta copia con la variable `KUBECONFIG`:
+   ```powershell
+   docker exec jenkins sh -c "mkdir -p /var/jenkins_home/.kube && sed 's#https://127.0.0.1:6443#https://host.docker.internal:6443#' /root/.kube/config > /var/jenkins_home/.kube/config && kubectl --kubeconfig /var/jenkins_home/.kube/config config set-cluster docker-desktop --tls-server-name=kubernetes"
+   ```
+6. Comprueba que Jenkins ve Docker y Kubernetes:
    ```powershell
    docker exec jenkins docker version
-   docker exec jenkins kubectl get nodes
+   docker exec jenkins kubectl --kubeconfig /var/jenkins_home/.kube/config get nodes
    ```
    **C-05**: el panel principal de Jenkins y la salida de estos dos comandos.
 
@@ -64,7 +70,7 @@ git push origin develop
    - SCM: Git
    - Repository URL: `https://github.com/Mauri10G/Logistica_Ultima_Milla.git`
    - Si el repositorio es privado, agrega una credencial **Username with password** con tu usuario de GitHub y un token personal.
-   - Branch Specifier: `*/develop`
+   - Branch Specifier: `*/feature/despliegue-ci-cd`
    - Script Path: `Jenkinsfile`
 3. Guarda.
    **C-06**: la configuración del job mostrando la URL, la rama y el Script Path.
@@ -127,9 +133,10 @@ Para volver a dejar la web en 2 réplicas: `kubectl -n logistica scale deploymen
 
 | Problema | Solución |
 |---|---|
-| La etapa de Kubernetes no conecta con el clúster | Verifica que el clúster sea kubeadm. Si sigue fallando, ejecuta el build con `DESPLEGAR_K8S` desmarcado y aplica los manifiestos desde PowerShell con los mismos comandos de la etapa |
+| La etapa de Kubernetes no conecta con el clúster | Repite el paso 2.5 para regenerar la copia del kubeconfig, por ejemplo después de reiniciar el clúster. Si sigue fallando, ejecuta el build con `DESPLEGAR_K8S` desmarcado y aplica los manifiestos desde PowerShell con los mismos comandos de la etapa |
 | `ErrImagePull` en los pods | El clúster está en modo kind; cámbialo a kubeadm |
 | `/bin/sh^M` al construir el backend | Git convirtió `mvnw` a CRLF; ejecuta `git add --renormalize .` y vuelve a hacer commit |
+| `Premature end of Content-Length` al descargar dependencias de Maven | Es un corte de red; vuelve a ejecutar el build |
 | La prueba de humo agota los intentos | Revisa `docker logs logistica-prod-backend`; normalmente es falta de memoria en Docker Desktop |
 | El puerto 8081, 8082 u 8090 está ocupado | Cambia el puerto en el compose o en `k8s/04-web.yaml` |
 
