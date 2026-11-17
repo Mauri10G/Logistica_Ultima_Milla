@@ -1,0 +1,44 @@
+# Despliegue completo en contenedores: base PostGIS, backend y web.
+# Lo ejecuta el pipeline de Jenkins con:  docker compose -f despliegue/docker-compose.yml -p logistica-prod up -d
+# La web queda en http://localhost:8081
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: logistica-prod-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: logistica
+      POSTGRES_USER: logistica
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-logistica}
+    volumes:
+      - datos_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U logistica -d logistica"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    image: logistica-backend:${TAG:-latest}
+    container_name: logistica-prod-backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://db:5432/logistica
+      DB_USER: logistica
+      DB_PASSWORD: ${DB_PASSWORD:-logistica}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: logistica-web:${TAG:-latest}
+    container_name: logistica-prod-web
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+
+volumes:
+  datos_db:

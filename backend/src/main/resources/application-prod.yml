@@ -1,0 +1,17 @@
+# Perfil prod: usado por las imagenes de Docker y Kubernetes.
+# Los datos de conexion llegan siempre por variables de entorno, sin valores por defecto.
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true # expone /actuator/health/liveness y /actuator/health/readiness
+
+logging:
+  level:
+    ec.edu.uta.logistica: INFO

@@ -1,0 +1,22 @@
+# Levanta Jenkins en http://localhost:8090
+#   docker compose -f jenkins/docker-compose.yml up -d --build
+services:
+  jenkins:
+    build: .
+    container_name: jenkins
+    # root solo para esta practica: asi Jenkins puede usar el socket de Docker Desktop.
+    user: root
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${USERPROFILE:-~}/.kube:/root/.kube
+    extra_hosts:
+      # el kubeconfig de Docker Desktop apunta a kubernetes.docker.internal:6443
+      - "kubernetes.docker.internal:host-gateway"
+
+volumes:
+  jenkins_home:
