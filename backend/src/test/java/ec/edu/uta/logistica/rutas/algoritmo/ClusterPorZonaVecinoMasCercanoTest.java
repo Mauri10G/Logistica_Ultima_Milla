@@ -119,9 +119,12 @@ class ClusterPorZonaVecinoMasCercanoTest {
     @DisplayName("sin pedidos devuelve vacio y sin repartidores lanza IllegalStateException")
     void casosLimite() {
         assertThat(estrategia.planificar(List.of(), repartidores, Map.of(), 4)).isEmpty();
-        assertThatThrownBy(() -> estrategia.planificar(pedidosEnZona(centro, 1, 2), List.of(), Map.of(), 4))
+        List<Pedido> pedidos = pedidosEnZona(centro, 1, 2);
+        List<Repartidor> sinRepartidores = List.of();
+        Map<Long, Integer> sinCarga = Map.of();
+        assertThatThrownBy(() -> estrategia.planificar(pedidos, sinRepartidores, sinCarga, 4))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> estrategia.planificar(pedidosEnZona(centro, 1, 2), repartidores, Map.of(), 0))
+        assertThatThrownBy(() -> estrategia.planificar(pedidos, repartidores, sinCarga, 0))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

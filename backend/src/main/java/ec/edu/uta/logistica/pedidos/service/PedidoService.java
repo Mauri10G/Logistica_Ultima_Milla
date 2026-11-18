@@ -16,6 +16,7 @@ import ec.edu.uta.logistica.pedidos.dto.HoraServidorResponse;
 import ec.edu.uta.logistica.pedidos.dto.PedidoRequest;
 import ec.edu.uta.logistica.pedidos.dto.PedidoResponse;
 import ec.edu.uta.logistica.pedidos.entity.Cliente;
+import ec.edu.uta.logistica.pedidos.entity.DatosEntrega;
 import ec.edu.uta.logistica.pedidos.entity.EstadoPedido;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.pedidos.evento.PedidoRegistradoEvent;
@@ -72,9 +73,9 @@ public class PedidoService {
         Zona zona = calcularZona(solicitud.latitud(), solicitud.longitud());
         Cliente cliente = resolverClienteNuevo(solicitud);
 
-        Pedido pedido = new Pedido(cliente, solicitud.direccion().trim(), ubicacion, zona,
-                solicitud.fechaEntrega(), solicitud.horaEntrega(), LocalDateTime.now(reloj),
-                solicitud.prioridad(), solicitud.registradoPorPersonal() == null || solicitud.registradoPorPersonal());
+        DatosEntrega entrega = new DatosEntrega(solicitud.fechaEntrega(), solicitud.horaEntrega(), solicitud.prioridad());
+        Pedido pedido = new Pedido(cliente, solicitud.direccion().trim(), ubicacion, zona, entrega,
+                LocalDateTime.now(reloj), solicitud.registradoPorPersonal() == null || solicitud.registradoPorPersonal());
         Pedido guardado = pedidoRepository.save(pedido);
         // Si la fecha ya tiene rutas armadas, el modulo de rutas lo inserta como ultimo momento en esta misma
         // transaccion (UltimoMomentoAutomatico); la respuesta ya sale ASIGNADO y con su ruta.
@@ -107,7 +108,7 @@ public class PedidoService {
     /** Devuelve la pagina solicitada; el total sale en la cabecera X-Total-Count. */
     @Transactional(readOnly = true)
     public Page<PedidoResponse> listar(LocalDate fecha, Long zonaId, EstadoPedido estado, int pagina, int tamano) {
-        int tamanoSeguro = Math.min(Math.max(tamano, 1), 1000);
+        int tamanoSeguro = Math.clamp(tamano, 1, 1000);
         return pedidoRepository.buscar(fecha, zonaId, estado, PageRequest.of(Math.max(pagina, 0), tamanoSeguro))
                 .map(PedidoResponse::desde);
     }

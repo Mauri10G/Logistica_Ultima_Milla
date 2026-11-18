@@ -33,9 +33,11 @@ class SeguridadConfigTest {
     @Test
     @DisplayName("un secreto ausente o de menos de 32 caracteres impide arrancar (HS256 exige 256 bits)")
     void secretoCorto() {
-        assertThatThrownBy(() -> SeguridadConfig.clave(propiedades("corto", "x")))
+        var propiedades = propiedades("corto", "x");
+        assertThatThrownBy(() -> SeguridadConfig.clave(propiedades))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("32");
-        assertThatThrownBy(() -> SeguridadConfig.clave(propiedades(null, "x")))
+        var propiedades2 = propiedades(null, "x");
+        assertThatThrownBy(() -> SeguridadConfig.clave(propiedades2))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(SeguridadConfig.clave(propiedades(SECRETO, "x")).getAlgorithm()).isEqualTo("HmacSHA256");
     }

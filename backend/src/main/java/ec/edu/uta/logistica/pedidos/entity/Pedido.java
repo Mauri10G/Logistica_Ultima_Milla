@@ -79,17 +79,16 @@ public class Pedido {
         // requerido por JPA
     }
 
-    public Pedido(Cliente cliente, String direccion, Point ubicacion, Zona zona, LocalDate fechaEntrega,
-                  LocalTime horaEntrega, LocalDateTime fechaRegistro, PrioridadPedido prioridad,
-                  boolean registradoPorPersonal) {
+    public Pedido(Cliente cliente, String direccion, Point ubicacion, Zona zona, DatosEntrega entrega,
+                  LocalDateTime fechaRegistro, boolean registradoPorPersonal) {
         this.cliente = cliente;
         this.direccion = direccion;
         this.ubicacion = ubicacion;
         this.zona = zona;
-        this.fechaEntrega = fechaEntrega;
-        this.horaEntrega = horaEntrega;
+        this.fechaEntrega = entrega.fecha();
+        this.horaEntrega = entrega.hora();
         this.fechaRegistro = fechaRegistro;
-        this.prioridad = prioridad != null ? prioridad : PrioridadPedido.NORMAL;
+        this.prioridad = entrega.prioridad() != null ? entrega.prioridad() : PrioridadPedido.NORMAL;
         this.registradoPorPersonal = registradoPorPersonal;
     }
 

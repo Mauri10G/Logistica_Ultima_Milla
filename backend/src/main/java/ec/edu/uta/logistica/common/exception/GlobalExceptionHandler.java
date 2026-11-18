@@ -1,5 +1,6 @@
 package ec.edu.uta.logistica.common.exception;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,6 +25,13 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class GlobalExceptionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private final Clock reloj;
+
+    /** La marca de tiempo de los errores sale del Clock de la aplicacion (America/Guayaquil), no de la zona del servidor. */
+    public GlobalExceptionHandler(Clock reloj) {
+        this.reloj = reloj;
+    }
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorRespuesta> manejarApi(ApiException ex) {
@@ -87,6 +95,6 @@ public class GlobalExceptionHandler {
     private ResponseEntity<ErrorRespuesta> respuesta(HttpStatus status, String codigo, String mensaje,
                                                      Map<String, String> errores) {
         return ResponseEntity.status(status)
-                .body(new ErrorRespuesta(LocalDateTime.now(), status.value(), codigo, mensaje, errores));
+                .body(new ErrorRespuesta(LocalDateTime.now(reloj), status.value(), codigo, mensaje, errores));
     }
 }

@@ -69,7 +69,8 @@ class RutaTest {
         pequena.agregarPedido(Fabrica.pedido(1L, zona, FECHA));
         pequena.agregarPedido(Fabrica.pedido(2L, zona, FECHA));
 
-        assertThatThrownBy(() -> pequena.agregarPedido(Fabrica.pedido(3L, zona, FECHA)))
+        var pedido = Fabrica.pedido(3L, zona, FECHA);
+        assertThatThrownBy(() -> pequena.agregarPedido(pedido))
                 .isInstanceOf(IllegalStateException.class);
     }
 

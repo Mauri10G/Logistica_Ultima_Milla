@@ -20,6 +20,7 @@ import ec.edu.uta.logistica.IntegrationTestBase;
 import ec.edu.uta.logistica.common.exception.ConflictoException;
 import ec.edu.uta.logistica.common.geo.GeoUtil;
 import ec.edu.uta.logistica.pedidos.entity.Cliente;
+import ec.edu.uta.logistica.pedidos.entity.DatosEntrega;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.pedidos.entity.PrioridadPedido;
 import ec.edu.uta.logistica.pedidos.repository.ClienteRepository;
@@ -153,7 +154,7 @@ class ConcurrenciaRutasIT extends IntegrationTestBase {
         assertThat(jdbc.queryForList("select count(*) from pedido where fecha_entrega = ? group by ruta_id",
                 Integer.class, fecha)).allMatch(total -> total <= MAXIMO);
 
-        // 2) Todo pedido esta asignado a exactamente una ruta de su misma fecha, y como ASIGNADO
+        // 2) Cada pedido esta asignado a exactamente una ruta de su misma fecha, y como ASIGNADO
         for (Long id : idsPedidos) {
             assertThat(jdbc.queryForObject("select count(*) from pedido p join ruta r on r.id = p.ruta_id "
                     + "where p.id = ? and p.estado = 'ASIGNADO' and r.fecha = p.fecha_entrega", Integer.class, id))
@@ -179,8 +180,9 @@ class ConcurrenciaRutasIT extends IntegrationTestBase {
         for (int i = 0; i < cantidad; i++) {
             Cliente cliente = clienteRepository.save(new Cliente("Cliente concurrente " + i, "0990000000", null));
             Pedido pedido = pedidoRepository.save(new Pedido(cliente, "Direccion " + i,
-                    GeoUtil.punto(-1.2440 + i * 0.0003, -78.6200 + i * 0.0002), centro, fecha,
-                    LocalTime.of(9, 0).plusMinutes(i), LocalDateTime.now(reloj), PrioridadPedido.NORMAL, true));
+                    GeoUtil.punto(-1.2440 + i * 0.0003, -78.6200 + i * 0.0002), centro,
+                    new DatosEntrega(fecha, LocalTime.of(9, 0).plusMinutes(i), PrioridadPedido.NORMAL),
+                    LocalDateTime.now(reloj), true));
             ids.add(pedido.getId());
         }
         return ids;
