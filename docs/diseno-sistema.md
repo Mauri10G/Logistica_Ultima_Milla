@@ -139,29 +139,54 @@ Ruta:   ARMADA → EN_CURSO (se recoge el primer pedido) → FINALIZADA (todos E
 
 ## 5. Estrategia de armado de rutas
 
-**Estado: implementación inicial, el algoritmo definitivo lo confirma el equipo.** Está detrás de la interfaz
-`EstrategiaArmadoRutas` (función pura: no toca la base de datos), por lo que se puede cambiar o comparar fácilmente.
+**Estado: confirmada por el equipo.** Nos quedamos con `ClusterPorZonaVecinoMasCercano` (agrupar por zona y ordenar
+por vecino más cercano). Está detrás de la interfaz `EstrategiaArmadoRutas`, que es una función pura (no toca la base
+de datos): la transacción, los bloqueos y la persistencia son de `ArmadoRutasService`.
 
-### Implementación actual: `ClusterPorZonaVecinoMasCercano`
+### Por qué la elegimos
 
-1. **Agrupar** los pendientes por `(fecha de entrega, zona)`.
-2. **Partir en clusters** de hasta `max_pedidos` por cercanía: se toma como semilla el pedido más alejado del centroide
-   de los que quedan y se le suman sus vecinos más cercanos (distancia haversine) hasta llenar el cluster.
-3. **Ordenar las paradas** de cada cluster por vecino más cercano, empezando por el pedido con la hora aproximada más
-   temprana.
-4. **Asignar** cada ruta al repartidor disponible con menos pedidos ese día (empate: menor id).
+| Criterio | Cómo lo cumple |
+|---|---|
+| Reglas del enunciado | Agrupa por zona y fecha de entrega y nunca arma una ruta de más de `max_pedidos` (4) |
+| Simple de explicar y de probar | Cuatro pasos deterministas (los empates se resuelven por id): las pruebas unitarias fijan el resultado exacto |
+| Rápida | 5000 pedidos de San Valentín → 1252 rutas en ~11 s, dentro del armado programado de las 18:00 |
+| Sin dependencias | Solo distancia haversine en Java; un solver de VRP (OR-Tools) agregaría una librería nativa y cambiaría el stack |
+| Encaja con el resto | El último momento y los ajustes manuales operan sobre las mismas rutas por zona y fecha y el mismo bloqueo |
 
-Es determinista (los empates se resuelven por id). Zonas con pocos pedidos generan rutas de 1 o 2 pedidos.
-Medido: 5000 pedidos de San Valentín → 1252 rutas en ~11 s (con 6 repartidores, cada uno recibe muchas rutas: en la
-práctica serían viajes sucesivos).
+Las alternativas (k-means o DBSCAN por zona, barrido angular, VRP con OR-Tools, mejora con 2-opt) dan rutas algo más
+cortas pero son más difíciles de probar de forma determinista y no cambian lo que el enunciado exige.
 
-### Limitaciones conocidas / alternativas a evaluar
+### Cómo funciona
 
-- El último cluster de una zona puede quedar con 1 pedido (p. ej. 5 pedidos → 4 + 1). Alternativa: balancear (3 + 2).
-- El orden por vecino más cercano es una heurística golosa; se puede mejorar con 2-opt.
-- La hora aproximada solo decide la primera parada; no hay ventanas de tiempo.
-- No considera `capacidad_maxima` del repartidor (campo reservado) ni tiempos de viaje reales (distancia en línea recta).
-- Alternativas posibles: k-means / DBSCAN por zona, barrido angular (*sweep*), o un solver de VRP (OR-Tools).
+1. **Agrupar** los pedidos `PENDIENTE` sin ruta por `(fecha de entrega, zona)`. Las zonas y las fechas no se mezclan.
+2. **Partir en clusters** de hasta `max_pedidos` por cercanía: semilla = el pedido más alejado del centroide de los que
+   quedan (así los pedidos de la periferia no quedan sueltos al final); se le suman sus vecinos más cercanos
+   (haversine) hasta llenar el cluster. Se repite con los que quedan.
+3. **Ordenar las paradas** de cada cluster por vecino más cercano, empezando por el pedido con la hora más temprana.
+   Opcional, `logistica.rutas.ventana-horaria-minutos` (0 = desactivado): la hora de entrega funciona como **ventana
+   de tiempo**; con 60 se visitan primero todas las entregas de la franja 09:00–09:59 (por cercanía dentro de ella),
+   luego las de 10:00–10:59, etc.
+4. **Asignar** cada ruta al repartidor disponible con menos pedidos ese día (empate: menor id), contando la carga que
+   ya tenía antes del armado.
+
+### Lo que se revisó y corrigió
+
+- **Hora de entrega ignorada después de la primera parada** (defecto): con el vecino más cercano puro, una ruta podía
+  pasar por un pedido de las 18:00 antes que por uno de las 09:30 si estaba más cerca. Se agregó la ventana horaria
+  configurable (pruebas `respetaLaVentanaHoraria` y `dentroDeLaFranjaMandaLaCercania`). Queda en 0 por defecto para no
+  cambiar el comportamiento que ya validaron la web y las pruebas de aceptación; el equipo puede encenderla con 60.
+- Se verificó con pruebas que ninguna ruta supera el máximo, que cada pedido aparece exactamente una vez, que zonas y
+  fechas no se mezclan, el particionado por cercanía, el reparto de carga y los casos límite (sin pedidos, sin
+  repartidores, máximo menor a 1).
+
+### Limitaciones conocidas
+
+- El último cluster de una zona puede quedar con 1 pedido (5 pedidos → 4 + 1). Deja espacio para el último momento,
+  por eso no se balancea (3 + 2).
+- El vecino más cercano es una heurística golosa; 2-opt la mejoraría.
+- Distancia en línea recta, no tiempos de viaje reales; `capacidad_maxima` del repartidor sigue reservada.
+- El armado crea rutas nuevas para los pendientes aunque haya rutas `ARMADA` con espacio en la misma zona; esas se
+  llenan con el último momento automático o con los ajustes manuales.
 
 Para cambiar el algoritmo: crear una clase `@Component` que implemente `EstrategiaArmadoRutas`, dejar una sola activa
 (`@Primary` o `@ConditionalOnProperty`) y reutilizar `ClusterPorZonaVecinoMasCercanoTest` como modelo de pruebas.
@@ -219,7 +244,7 @@ Los CP-01, CP-02 y CP-10 no se detallaron en el enunciado de esta base: quedan p
 
 ## 9. Pendiente (después de esta base)
 
-- Confirmar el algoritmo de armado y sus parámetros (ver sección 5).
+- Decidir si se enciende la ventana horaria del armado (`logistica.rutas.ventana-horaria-minutos`, sección 5).
 - Encender `logistica.seguridad.habilitada` cuando la web y el móvil manden el token; ventana de tiempo para el armado
   programado por zona.
 - Automatizar CP-11 con Playwright (dos páginas: una hace el `PATCH`, la otra observa la tabla).
