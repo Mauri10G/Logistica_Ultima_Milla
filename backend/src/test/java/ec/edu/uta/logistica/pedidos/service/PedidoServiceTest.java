@@ -28,6 +28,7 @@ import ec.edu.uta.logistica.pedidos.entity.EstadoPedido;
 import ec.edu.uta.logistica.pedidos.entity.OrigenCambio;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.pedidos.entity.TransicionInvalidaException;
+import ec.edu.uta.logistica.pedidos.evento.PedidoRegistradoEvent;
 import ec.edu.uta.logistica.pedidos.repository.ClienteRepository;
 import ec.edu.uta.logistica.pedidos.repository.PedidoRepository;
 import ec.edu.uta.logistica.rutas.entity.Ruta;
@@ -44,6 +45,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 
 /** Reglas CP-03 (zona), CP-04 (fecha y hora de entrega), CP-05 (edicion) y transiciones de estado. */
@@ -64,6 +66,8 @@ class PedidoServiceTest {
     private ZonaRepository zonaRepository;
     @Mock
     private SeguimientoService seguimientoService;
+    @Mock
+    private ApplicationEventPublisher publicador;
 
     private PedidoService servicio;
     private final Zona centro = Fabrica.zona(1L, "Centro");
@@ -75,7 +79,7 @@ class PedidoServiceTest {
 
     private PedidoService servicioCon(Clock reloj, int anticipacionMinutos) {
         return new PedidoService(pedidoRepository, clienteRepository, zonaRepository, seguimientoService,
-                new ControlAcceso(), reloj, anticipacionMinutos);
+                new ControlAcceso(), publicador, reloj, anticipacionMinutos);
     }
 
     private static Clock relojA(String instanteUtc) {
@@ -138,6 +142,8 @@ class PedidoServiceTest {
         // la fecha de registro viene del reloj y es distinta de la de entrega
         assertThat(respuesta.fechaRegistro().toLocalDate()).isEqualTo(HOY);
         assertThat(respuesta.registradoPorPersonal()).isTrue();
+        // avisa al modulo de rutas para la insercion automatica de ultimo momento
+        verify(publicador).publishEvent(new PedidoRegistradoEvent(null, HOY, 1L));
     }
 
     @Nested

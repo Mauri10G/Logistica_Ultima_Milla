@@ -40,6 +40,9 @@ logistica:
     anticipacion-minima-minutos: 30
   rutas:
     max-pedidos: 4 # maximo de pedidos por ruta
+    # Al registrar un pedido para una fecha que ya tiene rutas armadas, se inserta solo en una ruta con espacio de su
+    # zona o en una ruta nueva (UltimoMomentoAutomatico).
+    ultimo-momento-automatico: true
     armado:
       programado-habilitado: true # armado automatico con @Scheduled
       cron: "0 0 18 * * *" # todos los dias a las 18:00 (hora de logistica.zona-horaria)
