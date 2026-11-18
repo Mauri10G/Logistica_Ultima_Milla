@@ -43,6 +43,9 @@ logistica:
     # Al registrar un pedido para una fecha que ya tiene rutas armadas, se inserta solo en una ruta con espacio de su
     # zona o en una ruta nueva (UltimoMomentoAutomatico).
     ultimo-momento-automatico: true
+    # Ventana de tiempo al ordenar las paradas: con 60, una ruta visita primero todas las entregas de 09:00-09:59, luego
+    # las de 10:00-10:59, etc. (vecino mas cercano dentro de cada franja). 0 = vecino mas cercano puro.
+    ventana-horaria-minutos: 0
     armado:
       programado-habilitado: true # armado automatico con @Scheduled
       cron: "0 0 18 * * *" # todos los dias a las 18:00 (hora de logistica.zona-horaria)
