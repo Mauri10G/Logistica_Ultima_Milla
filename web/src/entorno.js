@@ -5,5 +5,5 @@ const urlConfigurada = import.meta.env.VITE_API_URL
 export const API_URL =
   urlConfigurada === 'mismo-origen' ? window.location.origin : urlConfigurada || 'http://localhost:8080'
 
-/** Con false (por defecto) la web funciona sin login; con true exige iniciar sesion. */
+/** Con true la web exige iniciar sesion (.env.example lo trae en true); sin la variable o con false funciona sin login. */
 export const AUTH_HABILITADA = import.meta.env.VITE_AUTH_HABILITADA === 'true'

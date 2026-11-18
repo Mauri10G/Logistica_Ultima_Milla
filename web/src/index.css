@@ -1756,7 +1756,8 @@ button.disponibilidad.disponible::before {
   color: var(--color-texto);
 }
 
-.login-formulario .mensaje-error {
+.login-formulario .mensaje-error,
+.login-formulario .mensaje-advertencia {
   margin: 0;
 }
 

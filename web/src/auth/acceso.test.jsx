@@ -5,7 +5,8 @@ import { iniciarSesionApi } from '../api/authApi'
 import Layout from '../components/Layout'
 import RutaProtegida from '../components/RutaProtegida'
 import LoginPage from '../pages/LoginPage'
-import { cerrarSesion, guardarSesion, obtenerSesion } from './sesion'
+import { cerrarSesion, expirarSesion, guardarSesion, obtenerSesion } from './sesion'
+import { useSesion } from './useSesion'
 
 let mockAuthHabilitada = true
 
@@ -62,7 +63,7 @@ describe('LoginPage', () => {
 
   test('un login correcto guarda token y rol y entra a la aplicación', async () => {
     const user = userEvent.setup()
-    iniciarSesionApi.mockResolvedValue({ token: 'tok', rol: 'STAFF', repartidorId: null })
+    iniciarSesionApi.mockResolvedValue({ token: 'tok', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z' })
     dibujarLogin()
 
     await user.type(screen.getByLabelText('Usuario'), '  admin ')
@@ -71,7 +72,7 @@ describe('LoginPage', () => {
 
     expect(iniciarSesionApi).toHaveBeenCalledWith('admin', 'secreta')
     expect(await screen.findByText('Pantalla de inicio')).toBeInTheDocument()
-    expect(obtenerSesion()).toEqual({ token: 'tok', rol: 'STAFF', repartidorId: null })
+    expect(obtenerSesion()).toEqual({ token: 'tok', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z' })
   })
 
   test('credenciales incorrectas (401) muestran un mensaje claro y no guardan sesión', async () => {
@@ -184,6 +185,54 @@ describe('RutaProtegida', () => {
     act(() => cerrarSesion())
 
     expect(screen.getByText('Pantalla de login')).toBeInTheDocument()
+  })
+
+  test('al vencer expiraEn la sesión se cierra sola y la pantalla vuelve al login', () => {
+    jest.useFakeTimers()
+    jest.setSystemTime(new Date('2026-11-18T10:00:00Z'))
+    guardarSesion({ token: 't', rol: 'STAFF', expiraEn: '2026-11-18T10:00:30Z' })
+    dibujarProtegida()
+    expect(screen.getByText('Contenido privado')).toBeInTheDocument()
+
+    act(() => jest.advanceTimersByTime(31_000))
+
+    expect(screen.getByText('Pantalla de login')).toBeInTheDocument()
+    expect(obtenerSesion()).toBeNull()
+    jest.useRealTimers()
+  })
+
+  test('un token ya vencido al abrir la página va al login', () => {
+    localStorage.setItem('logistica.sesion', JSON.stringify({ token: 'viejo', rol: 'STAFF', repartidorId: null, expiraEn: '2020-01-01T00:00:00Z' }))
+    dibujarProtegida()
+
+    expect(screen.getByText('Pantalla de login')).toBeInTheDocument()
+  })
+
+  test('una sesión que el backend rechaza (401 NO_AUTENTICADO) vuelve al login', () => {
+    guardarSesion({ token: 't', rol: 'STAFF' })
+    dibujarProtegida()
+
+    act(() => expirarSesion())
+
+    expect(screen.getByText('Pantalla de login')).toBeInTheDocument()
+  })
+})
+
+describe('useSesion', () => {
+  function Estado() {
+    const { sesion } = useSesion()
+    return <p>{sesion ? `rol ${sesion.rol}` : 'sin sesión'}</p>
+  }
+
+  test('entrega la sesión actual y se actualiza al iniciar y cerrar sesión', () => {
+    render(<Estado />)
+    expect(screen.getByText('sin sesión')).toBeInTheDocument()
+
+    act(() => guardarSesion({ token: 't', rol: 'COURIER', repartidorId: 1 }))
+    expect(screen.getByText('rol COURIER')).toBeInTheDocument()
+
+    act(() => cerrarSesion())
+    expect(screen.getByText('sin sesión')).toBeInTheDocument()
   })
 })
 
