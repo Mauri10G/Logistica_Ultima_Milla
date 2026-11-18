@@ -34,7 +34,7 @@ Then('el interruptor de disponibilidad del repartidor de la prueba está {string
 })
 
 Then('el sistema guardó al repartidor de la prueba como disponible {string}', async function (valor) {
-  const repartidores = await (await fetch(`${this.api}/api/repartidores`)).json()
+  const repartidores = await (await fetch(`${this.api}/api/repartidores`, { headers: { Authorization: this.autorizacion } })).json()
   const guardado = repartidores.find((r) => r.nombres === this.repartidor)
   assert.ok(guardado, `el repartidor ${this.repartidor} no existe`)
   assert.strictEqual(guardado.disponible, valor === 'sí')

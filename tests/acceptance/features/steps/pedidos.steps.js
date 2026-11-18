@@ -16,7 +16,7 @@ Given('que existe un pedido pendiente del cliente de la prueba en la zona {strin
   const [latitud, longitud] = PUNTOS[zona]
   const respuesta = await fetch(`${this.api}/api/pedidos`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: this.autorizacion },
     body: JSON.stringify({
       clienteNombres: this.cliente,
       clienteTelefono: '0990000000',
@@ -140,7 +140,7 @@ Then('ve el aviso de hora {string} bajo el campo de hora de entrega', async func
 // ---------- Comprobaciones contra el backend ----------
 
 Then('el sistema guardó el pedido del cliente de la prueba como {string} en la zona {string}', async function (estado, zona) {
-  const lista = await (await fetch(`${this.api}/api/pedidos?fecha=${this.manana}&size=1000`)).json()
+  const lista = await (await fetch(`${this.api}/api/pedidos?fecha=${this.manana}&size=1000`, { headers: { Authorization: this.autorizacion } })).json()
   const pedidos = lista.filter((pedido) => pedido.clienteNombres === this.cliente)
   assert.strictEqual(pedidos.length, 1, `se esperaba 1 pedido de ${this.cliente} y hay ${pedidos.length}`)
   assert.strictEqual(pedidos[0].estado, estado)
@@ -158,12 +158,12 @@ Then('el pedido de la prueba quedó registrado por el personal del negocio', asy
 })
 
 Then('el sistema no registró ningún pedido del cliente de la prueba', async function () {
-  const lista = await (await fetch(`${this.api}/api/pedidos?size=1000`)).json()
+  const lista = await (await fetch(`${this.api}/api/pedidos?size=1000`, { headers: { Authorization: this.autorizacion } })).json()
   assert.strictEqual(lista.filter((pedido) => pedido.clienteNombres === this.cliente).length, 0)
 })
 
 Then('el sistema conserva el pedido de la prueba pendiente', async function () {
-  const respuesta = await fetch(`${this.api}/api/pedidos/${this.pedido.id}`)
+  const respuesta = await fetch(`${this.api}/api/pedidos/${this.pedido.id}`, { headers: { Authorization: this.autorizacion } })
   assert.strictEqual(respuesta.status, 200, 'el pedido ya no existe')
   assert.strictEqual((await respuesta.json()).estado, 'PENDIENTE')
 })
@@ -171,7 +171,7 @@ Then('el sistema conserva el pedido de la prueba pendiente', async function () {
 Then('el sistema eliminó el pedido de la prueba', async function () {
   // la web llama a la API recién al terminar los 6 segundos de "Deshacer": se consulta hasta que el pedido desaparece
   for (let intento = 0; intento < 20; intento++) {
-    const respuesta = await fetch(`${this.api}/api/pedidos/${this.pedido.id}`)
+    const respuesta = await fetch(`${this.api}/api/pedidos/${this.pedido.id}`, { headers: { Authorization: this.autorizacion } })
     if (respuesta.status === 404) return
     await this.pagina.waitForTimeout(500)
   }
@@ -179,7 +179,7 @@ Then('el sistema eliminó el pedido de la prueba', async function () {
 })
 
 Then('el pedido de la prueba sigue pendiente con la dirección {string}', async function (direccion) {
-  const pedido = await (await fetch(`${this.api}/api/pedidos/${this.pedido.id}`)).json()
+  const pedido = await (await fetch(`${this.api}/api/pedidos/${this.pedido.id}`, { headers: { Authorization: this.autorizacion } })).json()
   assert.strictEqual(pedido.direccion, direccion)
   assert.strictEqual(pedido.estado, 'PENDIENTE')
 })

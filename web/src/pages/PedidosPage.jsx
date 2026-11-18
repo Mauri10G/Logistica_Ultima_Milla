@@ -1,6 +1,6 @@
 import { Eye, PackageSearch, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { crearPedido, editarPedido, eliminarPedido, listarPedidos, obtenerHoraServidor } from '../api/pedidosApi'
+import { crearPedido, editarPedido, eliminarPedido, obtenerHoraServidor } from '../api/pedidosApi'
 import { listarZonas } from '../api/zonasApi'
 import { mensajeDeError, mensajeDeErrorPedido } from '../utils/errores'
 import Avisos from '../components/Avisos'
@@ -12,11 +12,11 @@ import EstadoBadge from '../components/EstadoBadge'
 import EstadoVacio from '../components/EstadoVacio'
 import Modal from '../components/Modal'
 import PedidoForm from '../components/PedidoForm'
-import Tabla from '../components/Tabla'
+import { TablaVista } from '../components/Tabla'
 import { fechaIso } from '../hooks/fechas'
 import { DURACION_DESHACER_MS, useAccionDeshacible } from '../hooks/useAccionDeshacible'
 import { useConfirmacion } from '../hooks/useConfirmacion'
-import { coincide } from '../utils/busqueda'
+import { usePedidosTabla } from '../hooks/usePedidosTabla'
 import { ESTADOS_PEDIDO, ETIQUETAS_ESTADO } from '../utils/estados'
 import { formatearFecha } from '../utils/formatos'
 import { horaServidorValida } from '../utils/validacionPedido'
@@ -43,17 +43,12 @@ const VALORES = {
   estado: (pedido) => ESTADOS_PEDIDO.indexOf(pedido.estado),
 }
 
-// Al cargar o recargar, la tabla viene por número de pedido de menor a mayor.
-const ORDEN_INICIAL = { clave: 'id', direccion: 'asc' }
-
 /** Explica por qué un pedido que no está PENDIENTE no se puede editar ni eliminar (CP-05). */
 function ayudaNoEditable(estado) {
   return `Solo se edita o elimina un pedido pendiente; este ya está ${(ETIQUETAS_ESTADO[estado] ?? estado).toLowerCase()}.`
 }
 
 export default function PedidosPage() {
-  const [pedidos, setPedidos] = useState([])
-  const [total, setTotal] = useState(0)
   const [zonas, setZonas] = useState([])
   const [horaServidor, setHoraServidor] = useState(null)
   const consultaHora = useRef(0)
@@ -64,30 +59,21 @@ export default function PedidosPage() {
   const [pedidoEnEdicion, setPedidoEnEdicion] = useState(null)
   const [enviando, setEnviando] = useState(false)
   const [errorForm, setErrorForm] = useState(null)
-  const [errorLista, setErrorLista] = useState(null)
   const [mensaje, setMensaje] = useState(null)
-  const [cargando, setCargando] = useState(true)
   const [ocultos, setOcultos] = useState(() => new Set()) // pedidos eliminados a la espera de que termine el "Deshacer"
   const formModificado = useRef(false)
   const { pedir, dialogo } = useConfirmacion()
   const { programar, avisosDeshacer } = useAccionDeshacible()
 
-  const cargar = useCallback(async () => {
-    try {
-      const resultado = await listarPedidos({ ...filtros, size: 200 })
-      setPedidos(resultado.pedidos)
-      setTotal(resultado.total)
-      setErrorLista(null)
-    } catch (error) {
-      setErrorLista(mensajeDeError(error))
-    } finally {
-      setCargando(false)
-    }
-  }, [filtros])
-
-  useEffect(() => {
-    cargar()
-  }, [cargar])
+  // El backend pagina: solo se piden los pedidos de la página que se muestra. Con búsqueda u orden por columna se traen
+  // todos los del filtro y se resuelven en el navegador (el backend aún no busca ni ordena).
+  const {
+    tabla,
+    cargando,
+    error: errorLista,
+    setError: setErrorLista,
+    recargar: cargar,
+  } = usePedidosTabla({ filtros, busqueda, valores: VALORES, excluir: ocultos })
 
   // Las zonas se vuelven a pedir cada vez que se abre el formulario: así el mapa de referencia
   // refleja las zonas creadas, editadas o dadas de baja desde la pantalla de Zonas.
@@ -97,7 +83,7 @@ export default function PedidosPage() {
     } catch (error) {
       setErrorLista(mensajeDeError(error))
     }
-  }, [])
+  }, [setErrorLista])
 
   useEffect(() => {
     cargarZonas()
@@ -237,9 +223,6 @@ export default function PedidosPage() {
 
   const hoy = fechaIso(0)
   const manana = fechaIso(1)
-  const sinOcultos = pedidos.filter((pedido) => !ocultos.has(pedido.id))
-  const visibles = sinOcultos.filter((pedido) => coincide(busqueda, pedido.clienteNombres, pedido.direccion))
-  const totalMostrado = total - (pedidos.length - sinOcultos.length)
 
   return (
     <section>
@@ -328,19 +311,15 @@ export default function PedidosPage() {
           onCambiar={setBusqueda}
           placeholder="Nombre o calle"
         />
-        <p className="total">
-          {totalMostrado} pedido(s){totalMostrado > sinOcultos.length ? ` (mostrando ${sinOcultos.length})` : ''}
-        </p>
+        <p className="total">{tabla.total} pedido(s)</p>
       </div>
 
-      <Tabla
+      <TablaVista
+        tabla={tabla}
         titulo="Lista de pedidos"
         columnas={COLUMNAS}
         valores={VALORES}
-        filas={visibles}
         cargando={cargando}
-        ordenInicial={ORDEN_INICIAL}
-        reiniciarCon={[filtros, busqueda]}
         vacio={
           <EstadoVacio
             icono={PackageSearch}

@@ -29,19 +29,26 @@ export function ordenarFilas(filas, valor, direccion) {
 }
 
 /**
- * Orden y paginación de una tabla, hechos en el navegador sobre las filas ya cargadas.
+ * Orden y paginación de una tabla. Tiene dos modos; las pantallas no notan la diferencia:
  *
- * Este hook es el único punto que hay que cambiar el día que la paginación y el orden pasen al backend:
- * las pantallas solo le dan `filas` y reciben `filasPagina`, `total` y los controles, y no saben quién pagina.
+ * - **Navegador** (por defecto): `filas` son todas las filas (ya filtradas por la pantalla) y el hook ordena y corta la página.
+ * - **Servidor** (`remoto`): `filas` es solo la página que se muestra y `remoto.total` el total que informa el backend
+ *   (cabecera X-Total-Count). La pantalla pide esa página con `pagina` y `tamano`. El backend todavía no ordena por columna
+ *   ni busca por texto: mientras el usuario ordena o busca (`orden` o `remoto.buscando`) el hook pasa solo a modo navegador
+ *   (`enServidor` = false) y la pantalla debe traer todas las filas; al limpiar la búsqueda vuelve a pedir página por página.
  *
- * @param {object[]} filas todas las filas (ya filtradas por la pantalla)
+ * @param {object[]} filas todas las filas (modo navegador) o solo las de la página actual (modo servidor)
  * @param {object} opciones
  * @param {Record<string, (fila: object) => string | number | null>} opciones.valores valor ordenable de cada columna
  * @param {{ clave: string, direccion: 'asc' | 'desc' }} [opciones.ordenInicial]
  * @param {number} [opciones.tamanoInicial] filas por página (10 por defecto)
  * @param {unknown[]} [opciones.reiniciarCon] al cambiar cualquiera de estos valores (filtros, búsqueda) vuelve a la página 1
+ * @param {{ total: number, buscando?: boolean }} [opciones.remoto] activa el modo servidor
  */
-export function useTabla(filas, { valores, ordenInicial = null, tamanoInicial = TAMANO_PAGINA_INICIAL, reiniciarCon = [] }) {
+export function useTabla(
+  filas,
+  { valores, ordenInicial = null, tamanoInicial = TAMANO_PAGINA_INICIAL, reiniciarCon = [], remoto = null },
+) {
   const [orden, setOrden] = useState(ordenInicial)
   const [tamano, setTamano] = useState(tamanoInicial)
   const claveReinicio = JSON.stringify(reiniciarCon)
@@ -50,16 +57,21 @@ export function useTabla(filas, { valores, ordenInicial = null, tamanoInicial = 
   // La página pedida solo vale mientras no cambie un filtro: así la vuelta a la página 1 no necesita un efecto.
   const paginaSolicitada = solicitud.clave === claveReinicio ? solicitud.pagina : 1
 
+  const enServidor = Boolean(remoto) && !orden && !remoto.buscando
+
   const ordenadas = useMemo(() => {
     const valor = orden && valores[orden.clave]
     return valor ? ordenarFilas(filas, valor, orden.direccion) : filas
   }, [filas, orden, valores])
 
-  const total = ordenadas.length
+  const total = enServidor ? remoto.total : ordenadas.length
   const totalPaginas = Math.max(1, Math.ceil(total / tamano))
   const pagina = Math.min(paginaSolicitada, totalPaginas) // si las filas bajan (p. ej. se elimina una), no queda en una página vacía
   const inicio = (pagina - 1) * tamano
-  const filasPagina = useMemo(() => ordenadas.slice(inicio, inicio + tamano), [ordenadas, inicio, tamano])
+  const filasPagina = useMemo(
+    () => (enServidor ? ordenadas : ordenadas.slice(inicio, inicio + tamano)),
+    [enServidor, ordenadas, inicio, tamano],
+  )
 
   const irAPagina = useCallback(
     (nueva) => setSolicitud({ pagina: Math.max(1, Math.min(nueva, totalPaginas)), clave: claveReinicio }),
@@ -85,12 +97,13 @@ export function useTabla(filas, { valores, ordenInicial = null, tamanoInicial = 
 
   return {
     filasPagina,
+    enServidor,
     total,
     pagina,
     totalPaginas,
     tamano,
     desde: total === 0 ? 0 : inicio + 1,
-    hasta: Math.min(inicio + tamano, total),
+    hasta: enServidor ? inicio + filasPagina.length : Math.min(inicio + tamano, total),
     orden,
     ordenarPor,
     irAPagina,

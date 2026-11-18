@@ -1,13 +1,11 @@
 # language: es
-@pendiente
 Característica: Ajustes manuales de rutas
   Para corregir una ruta armada antes de que salga el repartidor
   Como personal del negocio
   Quiero subir, bajar, sacar y mover pedidos y cambiar el repartidor de una ruta
 
-  # @pendiente: los endpoints de ajuste (PATCH /api/rutas/{id}/repartidor, POST y DELETE /api/rutas/{id}/pedidos/{pedidoId},
-  # PUT /api/rutas/{id}/orden) los publica Joseph. Mientras no existan, la web avisa "Función disponible cuando el backend la
-  # publique" y estos escenarios no se ejecutan. Se corren con:  npm run test:pendientes
+  Antecedentes:
+    Dado que el personal inició sesión
 
   Escenario: Subir y bajar la parada de un pedido dentro de una ruta
     Dado que existen 3 pedidos pendientes en la zona "Centro" para una fecha futura

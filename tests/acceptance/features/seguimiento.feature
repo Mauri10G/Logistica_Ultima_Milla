@@ -4,6 +4,9 @@ Característica: Seguimiento de entregas en tiempo real
   Como personal del negocio
   Quiero ver en Seguimiento los cambios de estado que hace el repartidor desde la app móvil
 
+  Antecedentes:
+    Dado que el personal inició sesión
+
   Escenario: CP-11 Marcar un pedido como entregado y verificar reflejo inmediato en la web
     Dado que existe un pedido del cliente de la prueba en la zona "Centro" para una fecha futura
     Y que el repartidor ya recogió el pedido y va en camino

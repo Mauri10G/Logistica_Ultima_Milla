@@ -1,7 +1,7 @@
 import { Activity, CalendarClock, MapPinned, Package, PackagePlus, Route, Truck, Users } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { listarPedidos } from '../api/pedidosApi'
+import { listarTodosLosPedidos } from '../api/pedidosApi'
 import { listarRepartidores } from '../api/repartidoresApi'
 import { listarRutas } from '../api/rutasApi'
 import Avisos from '../components/Avisos'
@@ -98,7 +98,8 @@ export default function InicioPage() {
 
   const cargarPedidos = useCallback(async () => {
     try {
-      setPedidos((await listarPedidos({ fecha: fechaIso(0), size: 1000 })).pedidos)
+      // todos los pedidos de hoy, por lotes de 1000: las tarjetas y el avance cuentan el día completo, no la primera página
+      setPedidos((await listarTodosLosPedidos({ fecha: fechaIso(0) })).pedidos)
       marcar('pedidos', false)
     } catch (e) {
       marcar('pedidos', true)

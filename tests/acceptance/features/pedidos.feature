@@ -4,6 +4,9 @@ Característica: Registro de pedidos
   Como personal del negocio
   Quiero registrar y editar pedidos desde la web
 
+  Antecedentes:
+    Dado que el personal inició sesión
+
   Escenario: CP-01 Registrar un pedido nuevo con datos completos
     Dado que el personal abre la pantalla de "Pedidos"
     Cuando pulsa el botón "Nuevo pedido"

@@ -85,34 +85,19 @@ export function Paginacion({ desde, hasta, total, pagina, totalPaginas, tamano, 
 }
 
 /**
- * Tabla reutilizable con encabezados que ordenan y paginación. Las pantallas le pasan las filas ya filtradas
- * y dibujan cada fila; el orden y la página viven en `useTabla` (hoy en el navegador, mañana en el backend).
+ * Dibuja una tabla ya controlada: encabezados que ordenan, filas de la página actual y paginación. El estado (orden,
+ * página, tamaño) viene de `useTabla`; las pantallas que paginan en el backend lo crean ellas mismas y usan esta vista.
  *
+ * @param {ReturnType<typeof useTabla>} tabla controlador devuelto por `useTabla`
  * @param {string} titulo texto de la caption (solo para lectores de pantalla)
  * @param {{ clave: string, titulo: string, className?: string, ordenable?: boolean }[]} columnas
  *   una columna con `valores[clave]` ordena al pulsar su encabezado; `ordenable: false` lo desactiva
  * @param {Record<string, (fila: object) => string | number | null>} valores valor ordenable de cada columna (constante de módulo)
- * @param {object[]} filas filas ya filtradas
  * @param {(fila: object) => import('react').ReactElement} renderFila devuelve el <tr> de la fila, con su key
  * @param {boolean} [cargando] muestra filas de esqueleto y marca la tabla como ocupada
  * @param {import('react').ReactNode} [vacio] contenido cuando no hay filas
- * @param {{ clave: string, direccion: 'asc' | 'desc' }} [ordenInicial]
- * @param {unknown[]} [reiniciarCon] valores (filtros, búsqueda) que devuelven la tabla a la página 1 al cambiar
- * @param {number} [tamanoInicial] filas por página, 10 por defecto
  */
-export default function Tabla({
-  titulo,
-  columnas,
-  valores,
-  filas,
-  renderFila,
-  cargando = false,
-  vacio = null,
-  ordenInicial,
-  reiniciarCon,
-  tamanoInicial,
-}) {
-  const tabla = useTabla(filas, { valores, ordenInicial, reiniciarCon, tamanoInicial })
+export function TablaVista({ tabla, titulo, columnas, valores, renderFila, cargando = false, vacio = null }) {
   const sinFilas = !cargando && tabla.total === 0
 
   return (
@@ -158,4 +143,21 @@ export default function Tabla({
       )}
     </div>
   )
+}
+
+/**
+ * Tabla reutilizable con encabezados que ordenan y paginación en el navegador: las pantallas le pasan las filas ya
+ * filtradas y dibujan cada fila. Para paginar en el backend (Pedidos, Seguimiento) se usa `useTabla` con `remoto`
+ * y `TablaVista`.
+ *
+ * @param {object[]} filas filas ya filtradas
+ * @param {Record<string, (fila: object) => string | number | null>} valores valor ordenable de cada columna (constante de módulo)
+ * @param {{ clave: string, direccion: 'asc' | 'desc' }} [ordenInicial]
+ * @param {unknown[]} [reiniciarCon] valores (filtros, búsqueda) que devuelven la tabla a la página 1 al cambiar
+ * @param {number} [tamanoInicial] filas por página, 10 por defecto
+ * El resto de propiedades son las de `TablaVista`.
+ */
+export default function Tabla({ filas, ordenInicial, reiniciarCon, tamanoInicial, ...vista }) {
+  const tabla = useTabla(filas, { valores: vista.valores, ordenInicial, reiniciarCon, tamanoInicial })
+  return <TablaVista tabla={tabla} {...vista} />
 }

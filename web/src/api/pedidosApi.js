@@ -1,6 +1,12 @@
 import { api } from './client'
 
-/** @returns {Promise<{ pedidos: object[], total: number }>} (el total viene en la cabecera X-Total-Count) */
+/** Máximo de pedidos por petición que acepta el backend (pide más y lo recorta a 1000). */
+export const TAMANO_LOTE = 1000
+
+/**
+ * Una página de pedidos (el backend los ordena por fecha y hora de entrega y luego por id).
+ * @returns {Promise<{ pedidos: object[], total: number }>} el total (de todas las páginas) viene en la cabecera X-Total-Count
+ */
 export async function listarPedidos({ fecha, zonaId, estado, page = 0, size = 100 } = {}) {
   const params = { page, size }
   if (fecha) params.fecha = fecha
@@ -11,6 +17,16 @@ export async function listarPedidos({ fecha, zonaId, estado, page = 0, size = 10
     pedidos: respuesta.data,
     total: Number(respuesta.headers['x-total-count'] ?? respuesta.data.length),
   }
+}
+
+/** Todos los pedidos que cumplen el filtro, pidiéndolos por lotes de 1000 (nunca se queda en la primera página). */
+export async function listarTodosLosPedidos(filtros = {}) {
+  const primero = await listarPedidos({ ...filtros, page: 0, size: TAMANO_LOTE })
+  const lotes = Math.ceil(primero.total / TAMANO_LOTE)
+  const restantes = await Promise.all(
+    Array.from({ length: Math.max(0, lotes - 1) }, (_, i) => listarPedidos({ ...filtros, page: i + 1, size: TAMANO_LOTE })),
+  )
+  return { pedidos: [primero, ...restantes].flatMap((lote) => lote.pedidos), total: primero.total }
 }
 
 export async function crearPedido(datos) {

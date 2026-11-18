@@ -6,6 +6,7 @@ import {
   editarPedido,
   eliminarPedido,
   listarPedidos,
+  listarTodosLosPedidos,
   obtenerHoraServidor,
 } from './pedidosApi'
 import { cambiarDisponibilidad, crearRepartidor, listarRepartidores } from './repartidoresApi'
@@ -54,6 +55,31 @@ describe('pedidosApi', () => {
     api.get.mockResolvedValue({ data: [], headers: {} })
     await listarPedidos({ estado: 'PENDIENTE' })
     expect(api.get).toHaveBeenCalledWith('/pedidos', { params: { page: 0, size: 100, estado: 'PENDIENTE' } })
+  })
+
+  test('listarTodosLosPedidos pide por lotes de 1000 hasta juntar el total', async () => {
+    const lote = (desde, cantidad, total) => ({
+      data: Array.from({ length: cantidad }, (_, i) => ({ id: desde + i })),
+      headers: { 'x-total-count': String(total) },
+    })
+    api.get.mockResolvedValueOnce(lote(1, 1000, 2300)).mockResolvedValueOnce(lote(1001, 1000, 2300)).mockResolvedValueOnce(lote(2001, 300, 2300))
+
+    const resultado = await listarTodosLosPedidos({ fecha: '2026-03-01' })
+
+    expect(api.get).toHaveBeenCalledTimes(3)
+    expect(api.get).toHaveBeenCalledWith('/pedidos', { params: { page: 0, size: 1000, fecha: '2026-03-01' } })
+    expect(api.get).toHaveBeenCalledWith('/pedidos', { params: { page: 1, size: 1000, fecha: '2026-03-01' } })
+    expect(api.get).toHaveBeenCalledWith('/pedidos', { params: { page: 2, size: 1000, fecha: '2026-03-01' } })
+    expect(resultado.total).toBe(2300)
+    expect(resultado.pedidos).toHaveLength(2300)
+    expect(resultado.pedidos.map((p) => p.id).slice(998, 1002)).toEqual([999, 1000, 1001, 1002])
+  })
+
+  test('listarTodosLosPedidos hace una sola petición cuando todo cabe en un lote o no hay pedidos', async () => {
+    api.get.mockResolvedValue({ data: [], headers: { 'x-total-count': '0' } })
+
+    expect(await listarTodosLosPedidos()).toEqual({ pedidos: [], total: 0 })
+    expect(api.get).toHaveBeenCalledTimes(1)
   })
 
   test('crear, editar, eliminar y cambiar estado', async () => {
@@ -144,13 +170,18 @@ describe('repartidoresApi, seguimientoApi y authApi', () => {
     expect(api.get).toHaveBeenCalledWith('/seguimiento/pedidos/8/historial')
   })
 
-  test('login devuelve token, rol y repartidorId (null si falta)', async () => {
+  test('login devuelve token, rol, repartidorId y expiraEn (null si faltan)', async () => {
     api.post.mockResolvedValue({ data: { token: 't', rol: 'STAFF' } })
 
     const sesion = await iniciarSesionApi('admin', 'clave')
 
     expect(api.post).toHaveBeenCalledWith('/auth/login', { usuario: 'admin', clave: 'clave' })
-    expect(sesion).toEqual({ token: 't', rol: 'STAFF', repartidorId: null })
+    expect(sesion).toEqual({ token: 't', rol: 'STAFF', repartidorId: null, expiraEn: null })
+  })
+
+  test('login conserva expiraEn, el instante en que vence el token', async () => {
+    api.post.mockResolvedValue({ data: { token: 't', rol: 'STAFF', repartidorId: null, expiraEn: '2026-11-19T08:00:00Z' } })
+    expect((await iniciarSesionApi('staff', 'staff123')).expiraEn).toBe('2026-11-19T08:00:00Z')
   })
 
   test('login con repartidor conserva su id', async () => {

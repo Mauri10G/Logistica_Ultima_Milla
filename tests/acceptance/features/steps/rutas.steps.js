@@ -17,7 +17,7 @@ Given('que existen {int} pedidos pendientes en la zona {string} para una fecha f
   for (let i = 0; i < cantidad; i++) {
     const respuesta = await fetch(`${this.api}/api/pedidos`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: this.autorizacion },
       body: JSON.stringify({
         clienteNombres: `${this.cliente} ${i}`,
         clienteTelefono: '0990000000',
@@ -33,7 +33,7 @@ Given('que existen {int} pedidos pendientes en la zona {string} para una fecha f
 })
 
 Given('que las rutas de esa fecha ya están armadas', async function () {
-  const respuesta = await fetch(`${this.api}/api/rutas/armar?fecha=${this.fechaLejana}`, { method: 'POST' })
+  const respuesta = await fetch(`${this.api}/api/rutas/armar?fecha=${this.fechaLejana}`, { method: 'POST', headers: { Authorization: this.autorizacion } })
   assert.strictEqual(respuesta.status, 200)
   this.rutas = await respuesta.json()
 })
@@ -83,7 +83,7 @@ Then('los {int} pedidos quedaron repartidos entre las rutas', async function (ca
 })
 
 Then('el sistema asignó los {int} pedidos y cada uno está en una sola ruta', async function (cantidad) {
-  const pedidos = await (await fetch(`${this.api}/api/pedidos?fecha=${this.fechaLejana}&size=1000`)).json()
+  const pedidos = await (await fetch(`${this.api}/api/pedidos?fecha=${this.fechaLejana}&size=1000`, { headers: { Authorization: this.autorizacion } })).json()
   assert.strictEqual(pedidos.length, cantidad)
   for (const pedido of pedidos) {
     assert.strictEqual(pedido.estado, 'ASIGNADO', `el pedido ${pedido.id} está ${pedido.estado}`)
@@ -120,30 +120,33 @@ When('mueve el primer pedido de la primera ruta a la segunda ruta', async functi
 
 When('cambia el repartidor de la primera ruta', async function () {
   this.repartidorAntes = this.rutas[0].repartidorId
-  await this.pagina.locator(`#repartidor-ruta-${this.rutas[0].id}`).selectOption({ index: 1 })
+  // la lista va en orden alfabético y el repartidor actual puede estar en cualquier posición: se elige otro distinto
+  const lista = this.pagina.locator(`#repartidor-ruta-${this.rutas[0].id}`)
+  const ids = await lista.locator('option').evaluateAll((opciones) => opciones.map((opcion) => opcion.value))
+  await lista.selectOption(ids.find((id) => id !== String(this.repartidorAntes)))
 })
 
 Then('ve que el orden de las paradas cambió', async function () {
   await this.pagina.getByText('Se cambió el orden de las paradas').first().waitFor()
-  const ruta = await (await fetch(`${this.api}/api/rutas/${this.rutas[0].id}`)).json()
+  const ruta = await (await fetch(`${this.api}/api/rutas/${this.rutas[0].id}`, { headers: { Authorization: this.autorizacion } })).json()
   assert.notDeepStrictEqual(ruta.pedidos.map((pedido) => pedido.id), this.ordenAntes)
 })
 
 Then('el pedido sacado vuelve a PENDIENTE sin ruta', async function () {
   await this.pagina.getByText('volvió a PENDIENTE').first().waitFor()
-  const pedido = await (await fetch(`${this.api}/api/pedidos/${this.pedidoSacado}`)).json()
+  const pedido = await (await fetch(`${this.api}/api/pedidos/${this.pedidoSacado}`, { headers: { Authorization: this.autorizacion } })).json()
   assert.strictEqual(pedido.estado, 'PENDIENTE')
   assert.strictEqual(pedido.rutaId, null)
 })
 
 Then('el pedido movido queda en la segunda ruta', async function () {
   await this.pagina.getByText(`El pedido ${this.pedidoMovido} se movió a la ruta ${this.rutas[1].id}`).first().waitFor()
-  const pedido = await (await fetch(`${this.api}/api/pedidos/${this.pedidoMovido}`)).json()
+  const pedido = await (await fetch(`${this.api}/api/pedidos/${this.pedidoMovido}`, { headers: { Authorization: this.autorizacion } })).json()
   assert.strictEqual(pedido.rutaId, this.rutas[1].id)
 })
 
 Then('la ruta tiene otro repartidor', async function () {
   await this.pagina.getByText('Se cambió el repartidor de la ruta').first().waitFor()
-  const ruta = await (await fetch(`${this.api}/api/rutas/${this.rutas[0].id}`)).json()
+  const ruta = await (await fetch(`${this.api}/api/rutas/${this.rutas[0].id}`, { headers: { Authorization: this.autorizacion } })).json()
   assert.notStrictEqual(ruta.repartidorId, this.repartidorAntes)
 })

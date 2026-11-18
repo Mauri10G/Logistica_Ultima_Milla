@@ -4,6 +4,9 @@ Característica: Gestión de zonas de reparto
   Como personal del negocio
   Quiero dibujar, editar y revisar las zonas de reparto en el mapa
 
+  Antecedentes:
+    Dado que el personal inició sesión
+
   # Las zonas de prueba se dibujan en una franja vacía al sur de las zonas base (latitud menor a -1.2730),
   # así no se superponen con ellas salvo en CP-08.
 

@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { API_URL } from '../entorno'
-import { cerrarSesion, obtenerToken } from '../auth/sesion'
+import { expirarSesion, obtenerToken } from '../auth/sesion'
 
 export { mensajeDeError } from '../utils/errores'
 
@@ -17,10 +17,13 @@ export function agregarToken(config) {
   return config
 }
 
-/** Un 401 (token vencido o inválido) borra la sesión; el login mismo no cuenta (credenciales erróneas). */
+/**
+ * 401 NO_AUTENTICADO (token ausente, vencido o inválido): borra la sesión y la web vuelve al login con el aviso.
+ * 403 ACCESO_DENEGADO no cierra la sesión: el usuario sigue dentro y la pantalla muestra el aviso (ver mensajeDeError).
+ * El login fallido responde 401 CREDENCIALES_INVALIDAS, que no entra aquí.
+ */
 export function manejarRespuestaFallida(error) {
-  const esLogin = error?.config?.url?.includes('/auth/login')
-  if (error?.response?.status === 401 && !esLogin) cerrarSesion()
+  if (error?.response?.status === 401 && error.response.data?.codigo === 'NO_AUTENTICADO') expirarSesion()
   return Promise.reject(error)
 }
 
