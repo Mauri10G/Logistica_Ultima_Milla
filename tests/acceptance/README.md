@@ -7,15 +7,15 @@ Playwright (`waitFor`) más `assert` de Node. Sin page objects, sin helpers y si
 que usa `page.request` para simular a la app móvil llamando a la API.
 
 ```bash
-# 1. Backend y web corriendo (docker compose up -d · ./mvnw spring-boot:run · npm run dev)
+# 1. Backend CON LA SEGURIDAD ENCENDIDA y web corriendo (docker compose up -d · SEGURIDAD_HABILITADA=true ./mvnw spring-boot:run
+#    · npm run dev con VITE_AUTH_HABILITADA=true). En PowerShell: $env:SEGURIDAD_HABILITADA="true"; .\mvnw spring-boot:run
 # 2. Una sola vez:
 cd tests/acceptance
 npm install
 npm run navegador        # descarga Chromium para Playwright
 
-npm test                 # ejecuta los escenarios (todo menos @pendiente)
+npm test                 # ejecuta todos los escenarios
 npm run test:dry         # solo valida que todos los pasos estén definidos (no necesita backend)
-npm run test:pendientes  # ejecuta solo los @pendiente (hoy fallan: faltan endpoints)
 npx cucumber-js features/zonas.feature:7   # un escenario por su línea
 ```
 
@@ -36,9 +36,11 @@ Remove-Item Env:HEADED, Env:SLOWMO -ErrorAction SilentlyContinue
 Git Bash: `HEADED=1 SLOWMO=600 npm test`. Conviene combinarlo con un solo escenario:
 `$env:HEADED = '1'; npx cucumber-js --name "CP-11"`.
 
+Los usuarios de prueba son los de `docs/api-auth.md` (`staff` / `staff123` y, para CP-11, el repartidor dueño de la ruta, con clave `repartidor123`);
+`ACEP_USUARIO_PERSONAL`, `ACEP_CLAVE_PERSONAL`, `ACEP_USUARIO_REPARTIDOR` y `ACEP_CLAVE_REPARTIDOR` los cambian.
 Variables: `WEB_URL` (por defecto `http://localhost:5173`), `API_URL` (por defecto `http://localhost:8080`) y
 `DB_CONTENEDOR` (por defecto `logistica-postgis`, el contenedor del `docker compose`).
-El reporte HTML queda en `reports/cucumber.html` (`reports/cucumber-pendientes.html` para los `@pendiente`); `reports/` no se versiona.
+El reporte HTML queda en `reports/cucumber.html`; `reports/` no se versiona.
 Una copia con la fecha en el nombre se guarda como evidencia en `docs/evidencias/aceptacion/cucumber-AAAA-MM-DD.html`.
 
 ## Escenarios
@@ -50,8 +52,12 @@ Una copia con la fecha en el nombre se guarda como evidencia en `docs/evidencias
 | `ruta-maximo-pedidos.feature` | CP-09 |
 | `repartidores.feature` | CP-10 |
 | `seguimiento.feature` | CP-11 (dos páginas: el "móvil" llama a la API y Seguimiento cambia sin recargar) |
-| `rutas-ajustes.feature` `@pendiente` | subir/bajar, sacar, mover y cambiar repartidor: esperan los endpoints de ajuste de Joseph |
-| `login.feature` `@pendiente` | login del personal: espera `POST /api/auth/login` y la web con `VITE_AUTH_HABILITADA=true` (ver el feature) |
+| `rutas-ajustes.feature` | subir/bajar, sacar, mover y cambiar repartidor de una ruta armada |
+| `login.feature` | sin sesión pide login, login del personal, usuario o clave incorrectos, repartidor sin acceso y cerrar sesión |
+
+Todos los features menos `login.feature` empiezan con el Antecedente **"que el personal inició sesión"** (entra por la pantalla de login como `staff`).
+Las llamadas directas a la API que hacen los pasos (preparar datos, comprobar resultados) llevan el token de `staff`; en CP-11 el "móvil"
+inicia sesión con el repartidor dueño de la ruta (p. ej. `carlos`) y cambia el estado con su token, por eso el historial sale con origen `MOVIL`.
 
 ## Datos de cada escenario
 

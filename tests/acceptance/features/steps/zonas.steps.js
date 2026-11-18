@@ -9,7 +9,7 @@ async function crearZonaPorApi(mundo, nombre, tabla) {
   anillo.push(anillo[0])
   const respuesta = await fetch(`${mundo.api}/api/zonas`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: mundo.autorizacion },
     body: JSON.stringify({ nombre, area: { type: 'Polygon', coordinates: [anillo] }, activa: true }),
   })
   const zona = await respuesta.json()
@@ -64,7 +64,7 @@ Then('no ve ninguna advertencia de superposición', async function () {
 // ---------- Comprobaciones contra el backend ----------
 
 Then('el sistema guardó la zona de la prueba como activa', async function () {
-  const zonas = await (await fetch(`${this.api}/api/zonas`)).json()
+  const zonas = await (await fetch(`${this.api}/api/zonas`, { headers: { Authorization: this.autorizacion } })).json()
   const zona = zonas.find((z) => z.nombre === this.zona)
   assert.ok(zona, `la zona ${this.zona} no existe`)
   assert.strictEqual(zona.activa, true)
@@ -72,12 +72,12 @@ Then('el sistema guardó la zona de la prueba como activa', async function () {
 })
 
 Then('el sistema no guardó la zona de la prueba', async function () {
-  const zonas = await (await fetch(`${this.api}/api/zonas`)).json()
+  const zonas = await (await fetch(`${this.api}/api/zonas`, { headers: { Authorization: this.autorizacion } })).json()
   assert.strictEqual(zonas.filter((z) => z.nombre === this.zona).length, 0)
 })
 
 Then('la zona de la prueba queda con límites entre las longitudes {float} y {float}', async function (minimo, maximo) {
-  const zonas = await (await fetch(`${this.api}/api/zonas`)).json()
+  const zonas = await (await fetch(`${this.api}/api/zonas`, { headers: { Authorization: this.autorizacion } })).json()
   const zona = zonas.find((z) => z.nombre === this.zona)
   const longitudes = zona.area.coordinates[0].map((punto) => punto[0])
   assert.ok(Math.abs(Math.min(...longitudes) - minimo) < 0.0005, `longitud mínima ${Math.min(...longitudes)}, se esperaba ${minimo}`)
@@ -85,7 +85,7 @@ Then('la zona de la prueba queda con límites entre las longitudes {float} y {fl
 })
 
 Then('la zona de la prueba comparte el borde con la zona vecina', async function () {
-  const zonas = await (await fetch(`${this.api}/api/zonas`)).json()
+  const zonas = await (await fetch(`${this.api}/api/zonas`, { headers: { Authorization: this.autorizacion } })).json()
   const nueva = zonas.find((z) => z.nombre === this.zona)
   const vecina = zonas.find((z) => z.nombre === `${this.zona} vecina`)
   const vertices = (zona) => zona.area.coordinates[0].map((punto) => punto.join(','))

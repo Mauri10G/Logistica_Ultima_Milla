@@ -4,6 +4,9 @@ Característica: Armado de rutas
   Como personal del negocio
   Quiero que cada ruta respete el máximo de pedidos configurado
 
+  Antecedentes:
+    Dado que el personal inició sesión
+
   Escenario: CP-09 Armar automáticamente una ruta respetando el máximo de pedidos
     Dado que existen 9 pedidos pendientes en la zona "Centro" para una fecha futura
     Cuando el personal pide armar las rutas de esa fecha desde la web

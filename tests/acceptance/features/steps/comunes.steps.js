@@ -27,7 +27,7 @@ When('hace clic en el mapa en la latitud {float} y longitud {float}', async func
     // antes del primer clic: el mapa visible y las zonas existentes ya dibujadas (un <path> por zona activa).
     // La zona de la prueba no cuenta: al editarla (CP-07) su polígono se borra con "Limpiar" antes de dibujar el nuevo.
     await mapa.waitFor()
-    const zonas = await (await fetch(`${this.api}/api/zonas?soloActivas=true`)).json()
+    const zonas = await (await fetch(`${this.api}/api/zonas?soloActivas=true`, { headers: { Authorization: this.autorizacion } })).json()
     const dibujadas = zonas.filter((zona) => zona.nombre !== this.zona).length
     if (dibujadas > 0) await this.pagina.locator('.leaflet-overlay-pane path').nth(dibujadas - 1).waitFor()
     this.mapaListo = true

@@ -1,6 +1,7 @@
 const { Before, After, Status, setDefaultTimeout } = require('@cucumber/cucumber')
 const { chromium } = require('playwright')
 const { execFileSync } = require('child_process')
+const assert = require('assert')
 
 setDefaultTimeout(30 * 1000)
 
@@ -21,6 +22,19 @@ Before(async function () {
   this.zona = `Zona ${this.etiqueta}`
   this.repartidor = `Repartidor ${this.etiqueta}`
 
+  // El backend corre con la seguridad encendida: las llamadas directas a la API (preparar datos, comprobar resultados)
+  // llevan el token del personal. Usuario y clave de desarrollo: docs/api-auth.md (se pueden cambiar por variables de entorno).
+  const login = await fetch(`${this.api}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      usuario: process.env.ACEP_USUARIO_PERSONAL ?? 'staff',
+      clave: process.env.ACEP_CLAVE_PERSONAL ?? 'staff123',
+    }),
+  })
+  assert.strictEqual(login.status, 200, `no se pudo iniciar sesión como personal (HTTP ${login.status})`)
+  this.autorizacion = `Bearer ${(await login.json()).token}`
+
   // Las fechas salen de la hora del SERVIDOR (la que usa el sistema), no de la del computador.
   const hora = await (await fetch(`${this.api}/api/servidor/hora`)).json()
   const sumarDias = (fecha, dias) => new Date(Date.parse(`${fecha}T12:00:00Z`) + dias * 24 * 3600 * 1000).toISOString().slice(0, 10)
@@ -31,7 +45,7 @@ Before(async function () {
   // Fecha lejana y sin pedidos: el armado de rutas de un día no se mezcla con otros datos.
   for (let intento = 0; intento < 20; intento++) {
     this.fechaLejana = sumarDias(hora.fecha, 200 + Math.floor(Math.random() * 3000))
-    const lista = await fetch(`${this.api}/api/pedidos?fecha=${this.fechaLejana}&size=1`)
+    const lista = await fetch(`${this.api}/api/pedidos?fecha=${this.fechaLejana}&size=1`, { headers: { Authorization: this.autorizacion } })
     if (Number(lista.headers.get('X-Total-Count')) === 0) break
   }
 })
