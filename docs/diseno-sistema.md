@@ -107,8 +107,13 @@ Ruta:   ARMADA → EN_CURSO (se recoge el primer pedido) → FINALIZADA (todos E
 2. **Armar rutas** (`POST /api/rutas/armar?fecha=` o `@Scheduled`): ver sección 5.
 3. **Repartidor** consulta `GET /api/repartidores/{id}/ruta-actual` y marca `RECOGIDO → EN_CAMINO → ENTREGADO`
    (cada `PATCH` valida la transición, guarda historial y publica en `/topic/pedidos`; la ruta cambia de estado sola).
-4. **Último momento** (`POST /api/rutas/ultimo-momento/{pedidoId}`): se inserta en una ruta `ARMADA` de su zona y fecha
-   con espacio (la de parada más cercana) o se crea una ruta nueva con el repartidor de menor carga.
+4. **Último momento automático**: al registrar un pedido (`POST /api/pedidos`) para una fecha que **ya tiene rutas
+   armadas**, `PedidoService` publica `PedidoRegistradoEvent` y `UltimoMomentoAutomatico` (módulo rutas, en la misma
+   transacción) lo inserta en una ruta `ARMADA` de su zona y fecha con espacio (la de parada más cercana) o crea una
+   ruta nueva con el repartidor de menor carga. La respuesta ya sale `ASIGNADO` con `rutaId` y `ordenEnRuta`. Si la fecha
+   aún no tiene rutas, o no hay repartidores disponibles, queda `PENDIENTE` para el armado. Se apaga con
+   `logistica.rutas.ultimo-momento-automatico=false`; el endpoint manual `POST /api/rutas/ultimo-momento/{pedidoId}`
+   sigue existiendo. Usa el mismo bloqueo por (zona, fecha) que el armado.
 5. **Ajustes manuales** (solo STAFF, solo rutas `ARMADA`; `AjusteRutasService`), para corregir lo que el armado no
    asignó bien. Toman el mismo bloqueo por (zona, fecha) que el armado, en orden ascendente de zona, y releen la ruta
    y el pedido con bloqueo antes de decidir. Cada cambio se publica en `/topic/rutas` (`RUTA_ACTUALIZADA` con su motivo).
@@ -206,6 +211,7 @@ dos rutas.
 | CP-11 | Seguimiento en tiempo real | Verificado a mano con un cliente STOMP real; pendiente automatizar con Playwright |
 | — | Transiciones de estado | `EstadoPedidoTest`, `ApiRestIT` |
 | — | Algoritmo de rutas | `ClusterPorZonaVecinoMasCercanoTest`, `ArmadoRutasServiceTest` |
+| — | Último momento automático al registrar, y su concurrencia con el armado | `PedidoServiceTest`, `UltimoMomentoAutomaticoTest`, `UltimoMomentoAutomaticoIT` |
 | — | Ajustes manuales de rutas (máximo, renumeración, solo ARMADA, 403 para COURIER, concurrencia con el armado) | `RutaTest`, `AjusteRutasServiceTest`, `AjusteRutasIT` |
 | — | Login, roles y permisos (401/403, COURIER contra ruta ajena, origen por rol, CONNECT de STOMP, cabeceras) | `AuthServiceTest`, `SeguridadConfigTest`, `ControlAccesoTest`, `AutenticacionStompInterceptorTest`, `PedidoServiceTest`, `SeguridadIT` |
 
@@ -214,7 +220,6 @@ Los CP-01, CP-02 y CP-10 no se detallaron en el enunciado de esta base: quedan p
 ## 9. Pendiente (después de esta base)
 
 - Confirmar el algoritmo de armado y sus parámetros (ver sección 5).
-- Disparar la inserción de último momento automáticamente al registrar un pedido cuando ya hay rutas armadas.
 - Encender `logistica.seguridad.habilitada` cuando la web y el móvil manden el token; ventana de tiempo para el armado
   programado por zona.
 - Automatizar CP-11 con Playwright (dos páginas: una hace el `PATCH`, la otra observa la tabla).
