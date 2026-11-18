@@ -12,6 +12,7 @@ import java.util.List;
 import ec.edu.uta.logistica.IntegrationTestBase;
 import ec.edu.uta.logistica.common.geo.GeoUtil;
 import ec.edu.uta.logistica.pedidos.entity.Cliente;
+import ec.edu.uta.logistica.pedidos.entity.DatosEntrega;
 import ec.edu.uta.logistica.pedidos.entity.EstadoPedido;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.pedidos.entity.PrioridadPedido;
@@ -45,8 +46,8 @@ class PedidoRepositoryIT extends IntegrationTestBase {
 
     private Pedido nuevoPedido(Zona zona, LocalDate fecha, double lat, double lng) {
         Cliente cliente = clienteRepository.save(new Cliente("Cliente IT", "0990000000", null));
-        return pedidoRepository.save(new Pedido(cliente, "Direccion IT", GeoUtil.punto(lat, lng), zona, fecha,
-                LocalTime.of(10, 0), LocalDateTime.now(reloj), PrioridadPedido.NORMAL, true));
+        return pedidoRepository.save(new Pedido(cliente, "Direccion IT", GeoUtil.punto(lat, lng), zona,
+                new DatosEntrega(fecha, LocalTime.of(10, 0), PrioridadPedido.NORMAL), LocalDateTime.now(reloj), true));
     }
 
     @Test

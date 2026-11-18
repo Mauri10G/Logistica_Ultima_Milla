@@ -29,6 +29,7 @@ import ec.edu.uta.logistica.IntegracionConSeguridadBase;
 import ec.edu.uta.logistica.common.exception.ApiException;
 import ec.edu.uta.logistica.common.geo.GeoUtil;
 import ec.edu.uta.logistica.pedidos.entity.Cliente;
+import ec.edu.uta.logistica.pedidos.entity.DatosEntrega;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.pedidos.entity.PrioridadPedido;
 import ec.edu.uta.logistica.pedidos.repository.ClienteRepository;
@@ -69,8 +70,9 @@ class AjusteRutasIT extends IntegracionConSeguridadBase {
         for (int i = 0; i < cantidad; i++) {
             Cliente cliente = clienteRepository.save(new Cliente("Cliente ajuste " + i, "0990000000", null));
             ids.add(pedidoRepository.save(new Pedido(cliente, "Direccion ajuste " + i,
-                    GeoUtil.punto(lat + i * 0.0003, lng + i * 0.0002), z, fecha, LocalTime.of(9, 0).plusMinutes(i),
-                    LocalDateTime.now(reloj), PrioridadPedido.NORMAL, true)).getId());
+                    GeoUtil.punto(lat + i * 0.0003, lng + i * 0.0002), z,
+                    new DatosEntrega(fecha, LocalTime.of(9, 0).plusMinutes(i), PrioridadPedido.NORMAL),
+                    LocalDateTime.now(reloj), true)).getId());
         }
         return ids;
     }
