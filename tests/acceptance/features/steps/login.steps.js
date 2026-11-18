@@ -54,3 +54,8 @@ Then('ve la pantalla de Inicio', async function () {
 Then('ve la pantalla {string}', async function (titulo) {
   await this.pagina.getByRole('heading', { name: titulo, level: 1 }).waitFor()
 })
+
+Then('la pantalla Sin acceso muestra el candado y el nombre del repartidor', async function () {
+  await this.pagina.locator('.sin-acceso-candado svg').waitFor()
+  await this.pagina.locator('.sin-acceso-usuario').getByText(USUARIO_REPARTIDOR, { exact: true }).waitFor()
+})

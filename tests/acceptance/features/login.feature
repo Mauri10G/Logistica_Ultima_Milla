@@ -37,6 +37,9 @@ Característica: Inicio de sesión del personal
     Cuando escribe el usuario y la clave de un repartidor
     Y pulsa el botón "Ingresar"
     Entonces ve la pantalla "Sin acceso"
+    Y la pantalla Sin acceso muestra el candado y el nombre del repartidor
+    Cuando pulsa el botón "Cerrar sesión"
+    Entonces ve la pantalla de inicio de sesión
 
   Escenario: Cerrar sesión devuelve a la pantalla de inicio de sesión
     Dado que el personal abre la pantalla de inicio de sesión

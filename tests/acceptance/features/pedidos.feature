@@ -139,3 +139,14 @@ Característica: Registro de pedidos
     Y pulsa "Descartar cambios" en el diálogo de confirmación
     Entonces el formulario de pedido está cerrado
     Y el sistema no registró ningún pedido del cliente de la prueba
+
+  Escenario: CP-17 Buscar un pedido que no está en la primera página de la lista
+    Dado que existen 12 pedidos de la prueba en la zona "Centro" para una fecha lejana
+    Y que el personal abre la pantalla de "Pedidos"
+    Cuando elige la fecha lejana en el filtro de fecha de la lista
+    Entonces la paginación indica "Mostrando 1 a 10 de 12"
+    Y el pedido 12 de la prueba no está en la primera página de la lista
+    Cuando busca el pedido 12 de la prueba en la lista de pedidos
+    Entonces ve el pedido 12 de la prueba en la lista
+    Y la paginación indica "Mostrando 1 a 1 de 1"
+    Y la lista no muestra el pedido 1 de la prueba
