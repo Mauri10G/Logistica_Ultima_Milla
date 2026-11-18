@@ -20,21 +20,25 @@ volumen, carga y estrés.
 
 ## Estado actual
 
-- **Hecho por Mauricio:** web completa con diseño, tablas, confirmaciones y deshacer, zonas contiguas con imán, validación de
-  hora del servidor, pruebas Jest, aceptación CP-01 a CP-13 y análisis SonarQube.
-- **Login encendido e integrado** (rama `feature/web-integrar-backend`): `VITE_AUTH_HABILITADA=true` en `web/.env.example`. La web
-  guarda `expiraEn` y cierra la sesión sola al vencer ("Tu sesión expiró, ingresa de nuevo"); un 401 `NO_AUTENTICADO` borra la
-  sesión y vuelve al login con el mismo aviso; un 403 `ACCESO_DENEGADO` muestra "Acceso denegado…" sin cerrar sesión; un COURIER
-  que entra a la web ve "Sin acceso". El WebSocket manda el token en el `CONNECT`. Para probar todo hay que levantar el backend con
-  `SEGURIDAD_HABILITADA=true` (ver README, "Login y seguridad").
-- **Ajustes manuales de rutas funcionando** (cambiar repartidor, mover, sacar y reordenar, con sus pruebas de aceptación).
-- **Paginación en el backend:** Pedidos y Seguimiento piden solo la página que se ve (`page`/`size`, total en `X-Total-Count`);
-  Inicio recorre todos los pedidos del día por lotes de 1000. Detalles en "Web: rutas y tablas".
-- **Pruebas de aceptación:** 26 escenarios en verde con la seguridad encendida; todos (menos `login.feature`) empiezan con
-  "que el personal inició sesión"; CP-11 cambia el estado con el token del repartidor dueño de la ruta (origen MOVIL).
-- **Pendiente de Joseph (anotado por Mauricio):** `GET /api/pedidos` no tiene búsqueda por texto ni orden por columna, así que la web
-  trae todos los pedidos del filtro cuando el usuario busca u ordena. Pedir `q` (cliente o dirección) y `sort` (columna y dirección)
-  quitaría esa carga y dejaría a la web paginar siempre en el backend. El orden por defecto del backend es entrega (fecha y hora) y luego `#`.
+**Web, backend e integración completos.** Pendiente solo el **móvil (Erick)** y las **pruebas no funcionales (Robert:
+volumen, carga, estrés y seguridad)**.
+
+- **Web (Mauricio):** diseño, tablas, confirmaciones y deshacer, zonas contiguas con imán, validación de hora del servidor,
+  ajustes manuales de rutas (cambiar repartidor, mover, sacar y reordenar), pruebas Jest y análisis SonarQube.
+- **Login encendido e integrado:** `VITE_AUTH_HABILITADA=true` en `web/.env.example`. La web guarda `expiraEn` y cierra la sesión sola
+  al vencer ("Tu sesión expiró, ingresa de nuevo"); un 401 `NO_AUTENTICADO` borra la sesión y vuelve al login con el mismo aviso; un
+  403 `ACCESO_DENEGADO` muestra "Acceso denegado…" sin cerrar sesión. El WebSocket manda el token en el `CONNECT`. Para probar todo
+  hay que levantar el backend con `SEGURIDAD_HABILITADA=true` (ver README, "Login y seguridad").
+- **Pantalla "Sin acceso":** un COURIER que entra a la web ve el mismo diseño de dos columnas del login (ilustración de Ambato a la
+  izquierda; a la derecha candado, título, texto, nombre del usuario y "Cerrar sesión"). El nombre sale del `sub` del token
+  (`SinAccesoPage`, `PanelLogin` compartido con el login).
+- **Backend de pedidos terminado:** `GET /api/pedidos` pagina (`page`, `size`, total en `X-Total-Count`), busca (`q`: cliente o
+  dirección, sin mayúsculas ni tildes) y ordena (`sort` de Spring: `id`, `cliente`, `direccion`, `zona`, `fechaEntrega`,
+  `fechaRegistro`, `estado`; otra columna da 400). Contrato en `docs/api-auth.md`, lógica en `pedidos/repository/ConsultaPedidos`.
+- **Pedidos y Seguimiento 100 % contra el backend:** la web ya no trae todo por lotes al buscar u ordenar; ver "Web: rutas y tablas".
+- **Pruebas de aceptación:** 27 escenarios en verde con la seguridad encendida (CP-17 busca un pedido que no está en la primera
+  página); todos (menos `login.feature`) empiezan con "que el personal inició sesión"; CP-11 cambia el estado con el token del
+  repartidor dueño de la ruta (origen MOVIL). Último reporte en `docs/evidencias/aceptacion/`.
 
 ## Stack — NO CAMBIARLO
 
@@ -105,13 +109,14 @@ ec.edu.uta.logistica
 - Todas las tablas (Pedidos, Seguimiento, Zonas, Repartidores) usan `components/Tabla.jsx` + `hooks/useTabla.js`: 10 filas por
   página (selector 10/25/50, "Mostrando 1 a 10 de 24", anterior/siguiente/números), orden al pulsar los encabezados y vuelta a la
   página 1 al cambiar filtro, búsqueda u orden. Zonas y Repartidores ordenan y paginan en el navegador (al cargar, por `#`).
-- **Pedidos y Seguimiento paginan en el backend** con `usePedidosTabla` (sobre `useTabla` con la opción `remoto` y `TablaVista`):
-  cada página es una petición `GET /api/pedidos?page=&size=` y el total sale de `X-Total-Count`. Los filtros (fecha, zona, estado)
-  viajan al backend; en Seguimiento las pastillas de estado son una consulta de tamaño 1 por estado (solo cuenta el total).
-  Como el backend aún no busca ni ordena, **mientras el usuario escribe en el buscador o pulsa un encabezado** el hook trae todos los
-  pedidos del filtro por lotes de 1000 (`listarTodosLosPedidos`) y los filtra y ordena en el navegador; al vaciar la búsqueda vuelve
-  a pedir página por página. Sin orden elegido la tabla sigue el orden del backend (entrega y `#`), no `#`. Inicio usa
-  `listarTodosLosPedidos` para tarjetas y avance del día (nunca solo los primeros 100).
+- **Pedidos y Seguimiento paginan, buscan y ordenan en el backend** con `usePedidosTabla` (sobre `useTabla` con la opción `remoto` y
+  `TablaVista`): cada cambio de página, tamaño, orden, búsqueda o filtro es una petición
+  `GET /api/pedidos?page=&size=&sort=&q=&fecha=&zonaId=&estado=` y el total sale de `X-Total-Count`. Nada se filtra ni se ordena en el
+  navegador. El orden con que abre la tabla es por `#` de menor a mayor (`sort=id,asc`). Las columnas pasan a `sort` así: Entrega y
+  Hora → `fechaEntrega`, Registro → `fechaRegistro`; Ruta, Historial y Acciones no ordenan. El buscador espera 300 ms tras la
+  última tecla (`useRetraso`) y manda `q`. En Seguimiento las pastillas de estado son una consulta de tamaño 1 por estado (solo
+  cuenta el total). Solo Inicio usa `listarTodosLosPedidos` (lotes de 1000) para sus tarjetas y el avance del día. En las pruebas
+  Jest, `src/__mocks__/backendPedidos.js` simula `GET /api/pedidos` (estado, `q`, `sort`, página).
 - Pedidos: filtro de fecha en hoy al abrir (Hoy / Mañana / Todas), buscador por cliente o dirección, botón Ver (modal de solo
   lectura con datos, ruta y historial) y, si el pedido no es PENDIENTE, un candado con tooltip en vez de Editar/Eliminar.
 - Rutas: cada ruta es un resumen; los controles de ajuste salen con "Ajustar ruta". El mapa queda fijo y resalta la ruta bajo el mouse.
