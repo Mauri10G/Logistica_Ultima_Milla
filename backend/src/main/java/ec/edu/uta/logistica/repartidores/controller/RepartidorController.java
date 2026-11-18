@@ -9,6 +9,7 @@ import ec.edu.uta.logistica.repartidores.dto.RepartidorResponse;
 import ec.edu.uta.logistica.repartidores.service.RepartidorService;
 import ec.edu.uta.logistica.rutas.dto.RutaResponse;
 import ec.edu.uta.logistica.rutas.service.RutaService;
+import ec.edu.uta.logistica.seguridad.service.ControlAcceso;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,10 +28,13 @@ public class RepartidorController {
 
     private final RepartidorService repartidorService;
     private final RutaService rutaService;
+    private final ControlAcceso controlAcceso;
 
-    public RepartidorController(RepartidorService repartidorService, RutaService rutaService) {
+    public RepartidorController(RepartidorService repartidorService, RutaService rutaService,
+                                ControlAcceso controlAcceso) {
         this.repartidorService = repartidorService;
         this.rutaService = rutaService;
+        this.controlAcceso = controlAcceso;
     }
 
     @GetMapping
@@ -63,6 +67,7 @@ public class RepartidorController {
     /** Usado por la app movil: la ruta que el repartidor tiene que recorrer (en curso o la proxima armada). */
     @GetMapping("/{id}/ruta-actual")
     public RutaResponse rutaActual(@PathVariable Long id) {
+        controlAcceso.exigirRepartidorPropio(id); // un COURIER solo ve su propia ruta (403)
         repartidorService.obtener(id); // 404 si el repartidor no existe
         return rutaService.rutaActualDe(id);
     }

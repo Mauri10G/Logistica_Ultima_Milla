@@ -44,6 +44,15 @@ logistica:
       programado-habilitado: true # armado automatico con @Scheduled
       cron: "0 0 18 * * *" # todos los dias a las 18:00 (hora de logistica.zona-horaria)
       dias-adelante: 1 # arma rutas del dia siguiente
+  seguridad:
+    # false: toda la API queda abierta (sin token) mientras la web y el movil terminan el login. El login igual
+    # funciona. Para encenderla: SEGURIDAD_HABILITADA=true. Contrato y permisos en docs/api-auth.md.
+    habilitada: ${SEGURIDAD_HABILITADA:false}
+    jwt:
+      # Clave HMAC-SHA256 (minimo 32 caracteres). Este valor es solo para desarrollo: en un despliegue real se pasa
+      # por la variable de entorno JWT_SECRETO.
+      secreto: ${JWT_SECRETO:dev-logistica-ultima-milla-clave-hs256-solo-desarrollo}
+      expiracion-minutos: 720 # 12 horas: una jornada de trabajo
   cors:
     origenes-permitidos:
       - http://localhost:5173 # app web (Vite)

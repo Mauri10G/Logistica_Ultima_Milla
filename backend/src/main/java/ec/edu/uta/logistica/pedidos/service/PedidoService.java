@@ -21,6 +21,7 @@ import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.pedidos.repository.ClienteRepository;
 import ec.edu.uta.logistica.pedidos.repository.PedidoRepository;
 import ec.edu.uta.logistica.seguimiento.service.SeguimientoService;
+import ec.edu.uta.logistica.seguridad.service.ControlAcceso;
 import ec.edu.uta.logistica.zonas.entity.Zona;
 import ec.edu.uta.logistica.zonas.repository.ZonaRepository;
 import org.locationtech.jts.geom.Point;
@@ -39,6 +40,7 @@ public class PedidoService {
     private final ClienteRepository clienteRepository;
     private final ZonaRepository zonaRepository;
     private final SeguimientoService seguimientoService;
+    private final ControlAcceso controlAcceso;
     private final Clock reloj;
     private final int anticipacionMinimaMinutos;
 
@@ -47,12 +49,14 @@ public class PedidoService {
      *                                  ({@code logistica.pedidos.anticipacion-minima-minutos}, 30 por defecto)
      */
     public PedidoService(PedidoRepository pedidoRepository, ClienteRepository clienteRepository,
-                         ZonaRepository zonaRepository, SeguimientoService seguimientoService, Clock reloj,
+                         ZonaRepository zonaRepository, SeguimientoService seguimientoService,
+                         ControlAcceso controlAcceso, Clock reloj,
                          @Value("${logistica.pedidos.anticipacion-minima-minutos:30}") int anticipacionMinimaMinutos) {
         this.pedidoRepository = pedidoRepository;
         this.clienteRepository = clienteRepository;
         this.zonaRepository = zonaRepository;
         this.seguimientoService = seguimientoService;
+        this.controlAcceso = controlAcceso;
         this.reloj = reloj;
         this.anticipacionMinimaMinutos = Math.max(anticipacionMinimaMinutos, 0);
     }
@@ -86,7 +90,9 @@ public class PedidoService {
 
     @Transactional(readOnly = true)
     public PedidoResponse obtener(Long id) {
-        return PedidoResponse.desde(buscar(id));
+        Pedido pedido = buscar(id);
+        controlAcceso.exigirPedidoPropio(pedido); // un COURIER solo ve pedidos de sus rutas
+        return PedidoResponse.desde(pedido);
     }
 
     /** Devuelve la pagina solicitada; el total sale en la cabecera X-Total-Count. */
@@ -104,10 +110,14 @@ public class PedidoService {
         pedidoRepository.delete(pedido);
     }
 
-    /** PATCH /api/pedidos/{id}/estado: valida la transicion, guarda el historial y notifica por WebSocket. */
+    /**
+     * PATCH /api/pedidos/{id}/estado: valida la transicion, guarda el historial y notifica por WebSocket.
+     * Un COURIER solo puede cambiar pedidos de una ruta suya (403). El origen sale del rol del token.
+     */
     @Transactional
     public PedidoResponse cambiarEstado(Long id, EstadoPedidoRequest solicitud) {
         Pedido pedido = buscar(id);
+        controlAcceso.exigirPedidoPropio(pedido);
         if (solicitud.estado() == EstadoPedido.ASIGNADO) {
             throw new ReglaNegocioException("ESTADO_NO_PERMITIDO",
                     "El estado ASIGNADO solo se establece al asignar el pedido a una ruta");
@@ -115,7 +125,8 @@ public class PedidoService {
         EstadoPedido anterior = pedido.getEstado();
         pedido.cambiarEstado(solicitud.estado()); // lanza TransicionInvalidaException si no es el siguiente estado
         pedidoRepository.saveAndFlush(pedido);
-        seguimientoService.registrarCambio(pedido.getId(), anterior, pedido.getEstado(), solicitud.origenOWeb());
+        seguimientoService.registrarCambio(pedido.getId(), anterior, pedido.getEstado(),
+                controlAcceso.origen(solicitud.origen()));
         return PedidoResponse.desde(pedido);
     }
 
