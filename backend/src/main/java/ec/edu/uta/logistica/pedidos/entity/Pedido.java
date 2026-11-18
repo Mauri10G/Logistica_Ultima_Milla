@@ -128,6 +128,25 @@ public class Pedido {
         this.ordenEnRuta = orden;
     }
 
+    /**
+     * Lo invoca {@code Ruta.quitarPedido} en un ajuste manual: ASIGNADO -> PENDIENTE y sin ruta. Es la unica forma de
+     * retroceder un estado, y solo antes de que el repartidor recoja el pedido.
+     */
+    public void desasignarDeRuta() {
+        if (estado != EstadoPedido.ASIGNADO) {
+            throw new ConflictoException("PEDIDO_NO_DESASIGNABLE",
+                    "Solo se puede sacar de la ruta un pedido ASIGNADO (estado actual: " + estado + ")");
+        }
+        this.estado = EstadoPedido.PENDIENTE;
+        this.ruta = null;
+        this.ordenEnRuta = null;
+    }
+
+    /** Lo invoca la ruta al renumerar sus paradas. */
+    public void cambiarOrdenEnRuta(int orden) {
+        this.ordenEnRuta = orden;
+    }
+
     public Long getId() {
         return id;
     }

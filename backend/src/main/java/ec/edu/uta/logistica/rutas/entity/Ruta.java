@@ -3,8 +3,14 @@ package ec.edu.uta.logistica.rutas.entity;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import ec.edu.uta.logistica.common.exception.ConflictoException;
+import ec.edu.uta.logistica.common.exception.ReglaNegocioException;
 import ec.edu.uta.logistica.pedidos.entity.EstadoPedido;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.repartidores.entity.Repartidor;
@@ -83,6 +89,57 @@ public class Ruta {
         }
         pedido.asignarARuta(this, pedidos.size() + 1); // valida PENDIENTE -> ASIGNADO
         pedidos.add(pedido);
+    }
+
+    /** Los ajustes manuales solo se permiten antes de que el repartidor salga (ruta ARMADA). */
+    public void exigirModificable() {
+        if (estado != EstadoRuta.ARMADA) {
+            throw new ConflictoException("RUTA_NO_MODIFICABLE",
+                    "Solo se puede ajustar una ruta ARMADA (estado actual: " + estado + ")");
+        }
+    }
+
+    public boolean contiene(Pedido pedido) {
+        return pedidos.stream().anyMatch(p -> p.getId().equals(pedido.getId()));
+    }
+
+    /** Saca un pedido (vuelve a PENDIENTE) y renumera las paradas que quedan: 1, 2, 3... */
+    public void quitarPedido(Pedido pedido) {
+        exigirModificable();
+        Pedido enRuta = pedidos.stream().filter(p -> p.getId().equals(pedido.getId())).findFirst()
+                .orElseThrow(() -> new ConflictoException("PEDIDO_NO_ESTA_EN_RUTA",
+                        "El pedido " + pedido.getId() + " no esta en la ruta " + id));
+        enRuta.desasignarDeRuta();
+        pedidos.remove(enRuta);
+        renumerar();
+    }
+
+    /**
+     * Cambia el orden de visita. {@code idsEnOrden} debe tener exactamente los mismos pedidos que la ruta, sin
+     * repetir ni agregar ninguno.
+     */
+    public void reordenar(List<Long> idsEnOrden) {
+        exigirModificable();
+        Set<Long> actuales = pedidos.stream().map(Pedido::getId).collect(Collectors.toSet());
+        if (idsEnOrden.size() != pedidos.size() || !actuales.equals(new HashSet<>(idsEnOrden))) {
+            throw new ReglaNegocioException("ORDEN_INVALIDO", "El nuevo orden debe incluir exactamente los pedidos "
+                    + "de la ruta, sin repetir ni agregar: " + actuales.stream().sorted().toList());
+        }
+        Map<Long, Pedido> porId = pedidos.stream().collect(Collectors.toMap(Pedido::getId, p -> p));
+        pedidos.clear();
+        idsEnOrden.forEach(pedidoId -> pedidos.add(porId.get(pedidoId)));
+        renumerar();
+    }
+
+    public void asignarRepartidor(Repartidor nuevo) {
+        exigirModificable();
+        this.repartidor = nuevo;
+    }
+
+    private void renumerar() {
+        for (int i = 0; i < pedidos.size(); i++) {
+            pedidos.get(i).cambiarOrdenEnRuta(i + 1);
+        }
     }
 
     public boolean tieneEspacio() {
