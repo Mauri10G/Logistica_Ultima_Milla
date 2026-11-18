@@ -21,6 +21,7 @@ import ec.edu.uta.logistica.pedidos.entity.EstadoPedido;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.pedidos.evento.PedidoRegistradoEvent;
 import ec.edu.uta.logistica.pedidos.repository.ClienteRepository;
+import ec.edu.uta.logistica.pedidos.repository.ConsultaPedidos;
 import ec.edu.uta.logistica.pedidos.repository.PedidoRepository;
 import ec.edu.uta.logistica.seguimiento.service.SeguimientoService;
 import ec.edu.uta.logistica.seguridad.service.ControlAcceso;
@@ -31,6 +32,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -105,12 +107,28 @@ public class PedidoService {
         return PedidoResponse.desde(pedido);
     }
 
-    /** Devuelve la pagina solicitada; el total sale en la cabecera X-Total-Count. */
+    /**
+     * Devuelve la pagina solicitada; el total sale en la cabecera X-Total-Count. {@code texto} busca en el nombre del
+     * cliente y la direccion sin importar mayusculas ni tildes. {@code orden} solo admite
+     * {@link ConsultaPedidos#COLUMNAS_ORDENABLES}; otra columna lanza 400.
+     */
     @Transactional(readOnly = true)
-    public Page<PedidoResponse> listar(LocalDate fecha, Long zonaId, EstadoPedido estado, int pagina, int tamano) {
+    public Page<PedidoResponse> listar(LocalDate fecha, Long zonaId, EstadoPedido estado, String texto, Sort orden,
+                                       int pagina, int tamano) {
+        exigirColumnasOrdenables(orden);
         int tamanoSeguro = Math.clamp(tamano, 1, 1000);
-        return pedidoRepository.buscar(fecha, zonaId, estado, PageRequest.of(Math.max(pagina, 0), tamanoSeguro))
+        return pedidoRepository.buscar(fecha, zonaId, estado, texto,
+                        PageRequest.of(Math.max(pagina, 0), tamanoSeguro, orden))
                 .map(PedidoResponse::desde);
+    }
+
+    private static void exigirColumnasOrdenables(Sort orden) {
+        for (Sort.Order pedida : orden) {
+            if (!ConsultaPedidos.COLUMNAS_ORDENABLES.contains(pedida.getProperty())) {
+                throw new SolicitudInvalidaException("No se puede ordenar por '" + pedida.getProperty()
+                        + "'. Columnas permitidas: " + String.join(", ", ConsultaPedidos.COLUMNAS_ORDENABLES));
+            }
+        }
     }
 
     @Transactional

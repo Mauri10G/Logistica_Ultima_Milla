@@ -1,55 +1,69 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { listarPedidos, listarTodosLosPedidos } from '../api/pedidosApi'
-import { coincide } from '../utils/busqueda'
+import { listarPedidos } from '../api/pedidosApi'
 import { mensajeDeError } from '../utils/errores'
+import { useRetraso } from './useRetraso'
 import { useTabla } from './useTabla'
 
 const SIN_EXCLUIDOS = new Set()
 
+/** Espera tras la última tecla antes de buscar en el backend, para no pedir una página por cada letra. */
+export const RETRASO_BUSQUEDA_MS = 300
+
+/** Orden con que arrancan las tablas de pedidos: por # de menor a mayor, pedido al backend. */
+export const ORDEN_INICIAL = { clave: 'id', direccion: 'asc' }
+
+/** Columna de la tabla → columna que entiende `sort` en GET /api/pedidos (id, cliente, direccion, zona, fechaEntrega, fechaRegistro, estado). */
+const COLUMNA_EN_BACKEND = {
+  id: 'id',
+  cliente: 'cliente',
+  direccion: 'direccion',
+  zona: 'zona',
+  entrega: 'fechaEntrega',
+  hora: 'fechaEntrega',
+  registro: 'fechaRegistro',
+  estado: 'estado',
+}
+
+/** Valor del parámetro `sort` para el orden de la tabla ("cliente,asc"), o undefined si la columna no la ordena el backend. */
+export function ordenParaBackend(orden) {
+  const columna = orden && COLUMNA_EN_BACKEND[orden.clave]
+  return columna ? `${columna},${orden.direccion}` : undefined
+}
+
 /**
- * Tabla de pedidos paginada por el backend: GET /api/pedidos?page=&size= devuelve solo la página que se muestra y el
- * total en X-Total-Count. Los filtros (fecha, zona, estado) viajan al backend. La búsqueda por cliente o dirección y el
- * orden por columna aún no existen allí: mientras se usan, el hook trae todos los pedidos del filtro (por lotes de 1000)
- * y los filtra y ordena en el navegador; al limpiar la búsqueda vuelve a pedir página por página.
+ * Tabla de pedidos paginada, buscada y ordenada por el backend: cada cambio de página, tamaño, orden, búsqueda o filtro
+ * es una petición `GET /api/pedidos?page=&size=&sort=&q=&fecha=&zonaId=&estado=` que devuelve solo las filas de la página
+ * y el total en X-Total-Count. Nada se filtra ni se ordena en el navegador.
  *
  * @param {object} opciones
  * @param {{ fecha?: string, zonaId?: string | number, estado?: string }} opciones.filtros filtros para el backend (objeto estable: cambia solo al filtrar)
- * @param {string} [opciones.busqueda] texto a buscar en cliente y dirección
- * @param {Record<string, (pedido: object) => string | number | null>} opciones.valores valor ordenable de cada columna
+ * @param {string} [opciones.busqueda] texto a buscar en cliente y dirección (el backend ignora mayúsculas y tildes)
  * @param {Set<number>} [opciones.excluir] ids que no se muestran (p. ej. eliminados a la espera del "Deshacer")
  */
-export function usePedidosTabla({ filtros, busqueda = '', valores, excluir = SIN_EXCLUIDOS }) {
+export function usePedidosTabla({ filtros, busqueda = '', excluir = SIN_EXCLUIDOS }) {
   const [pedidos, setPedidos] = useState([])
   const [totalServidor, setTotalServidor] = useState(0)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState(null)
   const ultimaConsulta = useRef(0)
 
-  const buscando = busqueda.trim() !== ''
-  const sinExcluidos = useMemo(() => pedidos.filter((pedido) => !excluir.has(pedido.id)), [pedidos, excluir])
-  const visibles = useMemo(
-    () => (buscando ? sinExcluidos.filter((pedido) => coincide(busqueda, pedido.clienteNombres, pedido.direccion)) : sinExcluidos),
-    [buscando, busqueda, sinExcluidos],
-  )
-  const totalServidorVisible = totalServidor - (pedidos.length - sinExcluidos.length)
+  const texto = useRetraso(busqueda.trim(), RETRASO_BUSQUEDA_MS)
+  const visibles = useMemo(() => pedidos.filter((pedido) => !excluir.has(pedido.id)), [pedidos, excluir])
+  const totalVisible = totalServidor - (pedidos.length - visibles.length)
 
   const tabla = useTabla(visibles, {
-    valores,
-    reiniciarCon: [filtros, busqueda],
-    remoto: { total: totalServidorVisible, buscando },
+    ordenInicial: ORDEN_INICIAL,
+    reiniciarCon: [filtros, texto],
+    remoto: { total: totalVisible },
   })
 
-  // Solo en modo servidor la consulta depende de la página y el tamaño; en modo navegador se trae todo una vez.
-  const { enServidor } = tabla
-  const pagina = enServidor ? tabla.pagina : 0
-  const tamano = enServidor ? tabla.tamano : 0
+  const { pagina, tamano, orden } = tabla
+  const sort = ordenParaBackend(orden)
 
   const recargar = useCallback(async () => {
     const consulta = ++ultimaConsulta.current // una respuesta tardía de una consulta anterior no pisa a la última
     try {
-      const resultado = enServidor
-        ? await listarPedidos({ ...filtros, page: pagina - 1, size: tamano })
-        : await listarTodosLosPedidos(filtros)
+      const resultado = await listarPedidos({ ...filtros, q: texto, sort, page: pagina - 1, size: tamano })
       if (consulta !== ultimaConsulta.current) return
       setPedidos(resultado.pedidos)
       setTotalServidor(resultado.total)
@@ -59,7 +73,7 @@ export function usePedidosTabla({ filtros, busqueda = '', valores, excluir = SIN
     } finally {
       if (consulta === ultimaConsulta.current) setCargando(false)
     }
-  }, [filtros, enServidor, pagina, tamano])
+  }, [filtros, texto, sort, pagina, tamano])
 
   useEffect(() => {
     recargar()

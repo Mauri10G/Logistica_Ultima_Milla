@@ -29,19 +29,8 @@ const COLUMNAS = [
   { clave: 'entrega', titulo: 'Entrega' },
   { clave: 'registro', titulo: 'Registro' },
   { clave: 'estado', titulo: 'Estado' },
-  { clave: 'acciones', titulo: 'Acciones' },
+  { clave: 'acciones', titulo: 'Acciones', ordenable: false },
 ]
-
-// Valor por el que ordena cada columna. El estado ordena por su lugar en el flujo, no por orden alfabético.
-const VALORES = {
-  id: (pedido) => pedido.id,
-  cliente: (pedido) => pedido.clienteNombres,
-  direccion: (pedido) => pedido.direccion,
-  zona: (pedido) => pedido.zonaNombre,
-  entrega: (pedido) => (pedido.fechaEntrega ? `${pedido.fechaEntrega} ${pedido.horaEntrega ?? ''}` : null),
-  registro: (pedido) => pedido.fechaRegistro,
-  estado: (pedido) => ESTADOS_PEDIDO.indexOf(pedido.estado),
-}
 
 /** Explica por qué un pedido que no está PENDIENTE no se puede editar ni eliminar (CP-05). */
 function ayudaNoEditable(estado) {
@@ -65,15 +54,14 @@ export default function PedidosPage() {
   const { pedir, dialogo } = useConfirmacion()
   const { programar, avisosDeshacer } = useAccionDeshacible()
 
-  // El backend pagina: solo se piden los pedidos de la página que se muestra. Con búsqueda u orden por columna se traen
-  // todos los del filtro y se resuelven en el navegador (el backend aún no busca ni ordena).
+  // El backend pagina, busca y ordena: cada cambio de página, orden, búsqueda o filtro pide solo la página que se muestra.
   const {
     tabla,
     cargando,
     error: errorLista,
     setError: setErrorLista,
     recargar: cargar,
-  } = usePedidosTabla({ filtros, busqueda, valores: VALORES, excluir: ocultos })
+  } = usePedidosTabla({ filtros, busqueda, excluir: ocultos })
 
   // Las zonas se vuelven a pedir cada vez que se abre el formulario: así el mapa de referencia
   // refleja las zonas creadas, editadas o dadas de baja desde la pantalla de Zonas.
@@ -318,7 +306,6 @@ export default function PedidosPage() {
         tabla={tabla}
         titulo="Lista de pedidos"
         columnas={COLUMNAS}
-        valores={VALORES}
         cargando={cargando}
         vacio={
           <EstadoVacio

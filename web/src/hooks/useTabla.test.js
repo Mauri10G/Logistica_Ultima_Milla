@@ -60,38 +60,36 @@ describe('useTabla: modo servidor (remoto)', () => {
     expect(result.current.pagina).toBe(2)
   })
 
-  test('mientras se busca pasa al navegador: corta la página de las filas completas y no usa el total del backend', () => {
-    const { result, rerender } = renderHook(
-      ({ buscando, lista }) => useTabla(lista, { valores: VALORES, remoto: { total: 24, buscando } }),
-      { initialProps: { buscando: false, lista: filas(1, 10) } },
-    )
-    expect(result.current.enServidor).toBe(true)
-
-    rerender({ buscando: true, lista: filas(1, 15) }) // la pantalla trajo todos los que coinciden
-
-    expect(result.current.enServidor).toBe(false)
-    expect(result.current).toMatchObject({ total: 15, totalPaginas: 2, desde: 1, hasta: 10 })
-    expect(ids(result.current)).toHaveLength(10)
-
-    rerender({ buscando: false, lista: filas(1, 10) }) // se borró la búsqueda: vuelve al servidor
-
-    expect(result.current.enServidor).toBe(true)
-    expect(result.current.total).toBe(24)
-  })
-
-  test('al ordenar por una columna pasa al navegador y ordena todas las filas', () => {
-    const { result, rerender } = renderHook(
-      ({ lista }) => useTabla(lista, { valores: VALORES, remoto: { total: 24 } }),
-      { initialProps: { lista: filas(1, 10) } },
-    )
+  test('en modo servidor ordenar no reordena ni corta las filas: solo anota la columna y la dirección para pedirla al backend', () => {
+    const { result } = renderHook(() => useTabla(filas(1, 10), { valores: VALORES, remoto: { total: 24 } }))
 
     act(() => result.current.ordenarPor('id'))
-    act(() => result.current.ordenarPor('id')) // descendente
-    rerender({ lista: filas(1, 24) })
+    expect(result.current.orden).toEqual({ clave: 'id', direccion: 'asc' })
+    act(() => result.current.ordenarPor('id'))
 
-    expect(result.current.enServidor).toBe(false)
-    expect(result.current.total).toBe(24)
-    expect(ids(result.current)).toEqual([24, 23, 22, 21, 20, 19, 18, 17, 16, 15])
+    expect(result.current.orden).toEqual({ clave: 'id', direccion: 'desc' })
+    expect(result.current).toMatchObject({ enServidor: true, total: 24, desde: 1, hasta: 10 })
+    expect(ids(result.current)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) // el backend las manda ya ordenadas
+  })
+
+  test('arranca con el orden inicial y cambiar de columna empieza en ascendente y vuelve a la página 1', () => {
+    const { result } = renderHook(() =>
+      useTabla(filas(1, 10), { ordenInicial: { clave: 'id', direccion: 'asc' }, remoto: { total: 60 } }),
+    )
+    expect(result.current.orden).toEqual({ clave: 'id', direccion: 'asc' })
+    act(() => result.current.irAPagina(4))
+
+    act(() => result.current.ordenarPor('cliente'))
+
+    expect(result.current.orden).toEqual({ clave: 'cliente', direccion: 'asc' })
+    expect(result.current.pagina).toBe(1)
+  })
+
+  test('no necesita `valores`: en modo servidor ordena el backend', () => {
+    const { result } = renderHook(() => useTabla(filas(1, 10), { remoto: { total: 24 } }))
+
+    expect(result.current.enServidor).toBe(true)
+    expect(ids(result.current)).toHaveLength(10)
   })
 
   test('sin la opción remoto sigue paginando en el navegador, como siempre', () => {

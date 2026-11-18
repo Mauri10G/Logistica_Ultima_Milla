@@ -148,7 +148,7 @@ describe('LoginPage: estado de carga', () => {
     await act(async () => resolver({ token: 'tok', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z' }))
 
     expect(await screen.findByText('Pantalla de inicio')).toBeInTheDocument()
-    expect(obtenerSesion()).toEqual({ token: 'tok', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z' })
+    expect(obtenerSesion()).toEqual({ token: 'tok', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z', usuario: 'admin' })
   })
 
   test('si falla, el botón vuelve a Ingresar y se puede reintentar', async () => {

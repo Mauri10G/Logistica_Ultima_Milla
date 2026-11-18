@@ -108,6 +108,35 @@ el usuario de un repartidor, marcar un pedido y ver cómo **Seguimiento** se act
 Para reiniciar la base de datos desde cero (se vuelven a aplicar las migraciones al arrancar el backend):
 `docker compose down -v && docker compose up -d`.
 
+### Levantar todo con la seguridad encendida (revisión completa)
+
+Es la forma de probar el sistema como queda en producción: el backend exige token y la web exige login. **Las dos
+mitades deben coincidir**: backend con `SEGURIDAD_HABILITADA=true` y web con `VITE_AUTH_HABILITADA=true` (en `web/.env`).
+
+```bash
+# Terminal 1: base de datos
+docker compose up -d
+
+# Terminal 2: backend con login y permisos por rol
+cd backend
+SEGURIDAD_HABILITADA=true ./mvnw spring-boot:run           # PowerShell: $env:SEGURIDAD_HABILITADA="true"; .\mvnw spring-boot:run
+
+# Terminal 3: web (web/.env con VITE_AUTH_HABILITADA=true)
+cd web
+npm install && npm run dev                                 # http://localhost:5173
+
+# Terminal 4: pruebas de aceptación (las 27, con el navegador de Playwright)
+cd tests/acceptance
+npm install && npm run navegador && npm test               # reporte en tests/acceptance/reports/cucumber.html
+```
+
+Qué probar a mano: entrar como `staff` / `staff123` y recorrer Pedidos (buscar con o sin tildes, ordenar por cada encabezado,
+pasar de página), Seguimiento y Rutas; cerrar sesión y entrar como `carlos` / `repartidor123` para ver la pantalla **Sin
+acceso** (con el nombre del usuario y el botón Cerrar sesión). La búsqueda (`q`), el orden (`sort`) y la paginación los
+resuelve el backend: ver [docs/api-auth.md](docs/api-auth.md#listado-de-pedidos-filtros-búsqueda-orden-y-paginación).
+
+Al terminar, apaga el backend y la web con `Ctrl+C` en sus terminales (y `docker compose down` si ya no usarás la base).
+
 ### Backend con un PostGIS efímero (sin docker compose)
 
 `./mvnw spring-boot:test-run` levanta la app con un contenedor de Testcontainers (clase `TestLogisticaApplication`).
@@ -118,7 +147,7 @@ Documentación interactiva en **Swagger UI**. Todos los errores devuelven `{ tim
 
 | Método y ruta | Descripción |
 |---|---|
-| `GET/POST /api/pedidos` · `GET/PUT/DELETE /api/pedidos/{id}` | CRUD de pedidos. Filtros: `fecha`, `zonaId`, `estado`, `page`, `size` (total en `X-Total-Count`) |
+| `GET/POST /api/pedidos` · `GET/PUT/DELETE /api/pedidos/{id}` | CRUD de pedidos. Filtros: `fecha`, `zonaId`, `estado`; búsqueda `q` (cliente o dirección, sin tildes); orden `sort` (`id`, `cliente`, `direccion`, `zona`, `fechaEntrega`, `fechaRegistro`, `estado`); `page`, `size` (total en `X-Total-Count`). Detalle en `docs/api-auth.md` |
 | `PATCH /api/pedidos/{id}/estado` | Lo usa la app móvil: `{"estado":"RECOGIDO","origen":"MOVIL"}` |
 | `GET/POST /api/zonas` · `PUT/DELETE /api/zonas/{id}` | Zonas con el polígono en GeoJSON. `?confirmarSuperposicion=true` permite superponer |
 | `GET/POST /api/repartidores` · `PUT/DELETE /api/repartidores/{id}` | CRUD de repartidores |
@@ -145,7 +174,7 @@ Máximo de pedidos por ruta: `logistica.rutas.max-pedidos: 4`.
 | **Unitarias web** | Jest + React Testing Library + user-event v14 | `cd web && npm test` | — |
 | **Unitarias móvil** | `flutter_test` | `cd mobile && flutter test` | — |
 | **Integración móvil** | `integration_test` | `cd mobile && flutter test integration_test` | Emulador/dispositivo |
-| **Aceptación** | Cucumber.js + Playwright (features en español) | `cd tests/acceptance && npm install && npm run navegador && npm test` | Backend + web corriendo |
+| **Aceptación** | Cucumber.js + Playwright (features en español) | `cd tests/acceptance && npm install && npm run navegador && npm test` | Backend (con `SEGURIDAD_HABILITADA=true`) + web (con `VITE_AUTH_HABILITADA=true`) corriendo |
 | **Humo** | k6 | `k6 run tests/performance/smoke.js` | Backend corriendo |
 | **Carga** | k6 | `k6 run tests/performance/carga.js` | Backend corriendo |
 | **Estrés** | k6 | `k6 run tests/performance/estres.js` | Backend corriendo |

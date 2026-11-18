@@ -183,3 +183,53 @@ Then('el pedido de la prueba sigue pendiente con la dirección {string}', async 
   assert.strictEqual(pedido.direccion, direccion)
   assert.strictEqual(pedido.estado, 'PENDIENTE')
 })
+
+// ---------- Paginación y búsqueda en el backend (CP-17) ----------
+
+const nombreDelPedido = (mundo, numero) => `${mundo.cliente} ${String(numero).padStart(2, '0')}`
+
+Given('que existen {int} pedidos de la prueba en la zona {string} para una fecha lejana', async function (cantidad, zona) {
+  const [latitud, longitud] = PUNTOS[zona]
+  // uno tras otro: los números (#) quedan en el mismo orden que los nombres y el 12 cae en la segunda página
+  for (let numero = 1; numero <= cantidad; numero++) {
+    const respuesta = await fetch(`${this.api}/api/pedidos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: this.autorizacion },
+      body: JSON.stringify({
+        clienteNombres: nombreDelPedido(this, numero),
+        clienteTelefono: '0990000000',
+        direccion: `Calle ${numero} ${this.etiqueta}`,
+        latitud,
+        longitud,
+        fechaEntrega: this.fechaLejana,
+        horaEntrega: '10:00',
+      }),
+    })
+    assert.strictEqual(respuesta.status, 201)
+  }
+})
+
+When('elige la fecha lejana en el filtro de fecha de la lista', async function () {
+  await this.pagina.locator('#filtroFecha').fill(this.fechaLejana)
+})
+
+Then('la paginación indica {string}', async function (texto) {
+  await this.pagina.getByText(texto, { exact: true }).waitFor()
+})
+
+Then('el pedido {int} de la prueba no está en la primera página de la lista', async function (numero) {
+  await this.pagina.getByRole('row', { name: nombreDelPedido(this, 1) }).waitFor()
+  assert.strictEqual(await this.pagina.getByRole('row', { name: nombreDelPedido(this, numero) }).count(), 0)
+})
+
+When('busca el pedido {int} de la prueba en la lista de pedidos', async function (numero) {
+  await this.pagina.locator('#buscarPedido').fill(nombreDelPedido(this, numero))
+})
+
+Then('ve el pedido {int} de la prueba en la lista', async function (numero) {
+  await this.pagina.getByRole('row', { name: nombreDelPedido(this, numero) }).waitFor()
+})
+
+Then('la lista no muestra el pedido {int} de la prueba', async function (numero) {
+  await this.pagina.getByRole('row', { name: nombreDelPedido(this, numero) }).waitFor({ state: 'detached' })
+})

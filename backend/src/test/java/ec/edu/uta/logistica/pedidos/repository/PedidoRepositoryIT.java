@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 class PedidoRepositoryIT extends IntegrationTestBase {
@@ -98,6 +99,52 @@ class PedidoRepositoryIT extends IntegrationTestBase {
         assertThat(leido.getUbicacion().getSRID()).isEqualTo(4326);
         assertThat(leido.getEstado()).isEqualTo(EstadoPedido.PENDIENTE);
         assertThat(leido.getVersion()).isZero();
+    }
+
+    @Test
+    @DisplayName("sort por estado sigue el flujo (PENDIENTE ... ENTREGADO), no el orden alfabetico")
+    void ordenaEstadoPorFlujo() {
+        LocalDate fecha = LocalDate.now(reloj).plusDays(42);
+        Pedido pendiente = nuevoPedido(zona("Centro"), fecha, -1.2412, -78.6197);
+        Pedido asignado = nuevoPedido(zona("Centro"), fecha, -1.2413, -78.6197);
+        Pedido recogido = nuevoPedido(zona("Centro"), fecha, -1.2414, -78.6197);
+        asignado.cambiarEstado(EstadoPedido.ASIGNADO);
+        recogido.cambiarEstado(EstadoPedido.ASIGNADO);
+        recogido.cambiarEstado(EstadoPedido.RECOGIDO);
+        pedidoRepository.saveAll(List.of(asignado, recogido));
+
+        Page<Pedido> ascendente = pedidoRepository.buscar(fecha, null, null, null,
+                PageRequest.of(0, 10, Sort.by("estado")));
+        Page<Pedido> descendente = pedidoRepository.buscar(fecha, null, null, null,
+                PageRequest.of(0, 10, Sort.by(Sort.Order.desc("estado"))));
+
+        // alfabeticamente ASIGNADO iria primero; en el flujo va PENDIENTE
+        assertThat(ascendente.getContent()).extracting(Pedido::getId)
+                .containsExactly(pendiente.getId(), asignado.getId(), recogido.getId());
+        assertThat(descendente.getContent()).extracting(Pedido::getId)
+                .containsExactly(recogido.getId(), asignado.getId(), pendiente.getId());
+    }
+
+    @Test
+    @DisplayName("buscar con texto y orden: filtra, ordena y desempata por id para paginar sin repetir filas")
+    void buscaOrdenaYPagina() {
+        LocalDate fecha = LocalDate.now(reloj).plusDays(43);
+        for (int i = 0; i < 5; i++) {
+            nuevoPedido(zona("Centro"), fecha, -1.2412 - i * 0.0001, -78.6197); // mismo cliente: el orden sale del id
+        }
+
+        Page<Pedido> primera = pedidoRepository.buscar(fecha, null, null, "cliente it",
+                PageRequest.of(0, 3, Sort.by("cliente")));
+        Page<Pedido> segunda = pedidoRepository.buscar(fecha, null, null, "cliente it",
+                PageRequest.of(1, 3, Sort.by("cliente")));
+
+        assertThat(primera.getTotalElements()).isEqualTo(5);
+        assertThat(primera.getContent()).hasSize(3);
+        assertThat(segunda.getContent()).hasSize(2);
+        assertThat(primera.getContent()).extracting(Pedido::getId)
+                .doesNotContainAnyElementsOf(segunda.getContent().stream().map(Pedido::getId).toList());
+        assertThat(pedidoRepository.buscar(fecha, null, null, "otro nombre", PageRequest.of(0, 3))
+                .getTotalElements()).isZero();
     }
 
     @Test

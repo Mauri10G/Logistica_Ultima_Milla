@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { iniciarSesionApi } from '../api/authApi'
@@ -72,7 +72,7 @@ describe('LoginPage', () => {
 
     expect(iniciarSesionApi).toHaveBeenCalledWith('admin', 'secreta')
     expect(await screen.findByText('Pantalla de inicio')).toBeInTheDocument()
-    expect(obtenerSesion()).toEqual({ token: 'tok', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z' })
+    expect(obtenerSesion()).toEqual({ token: 'tok', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z', usuario: 'admin' })
   })
 
   test('credenciales incorrectas (401) muestran un mensaje claro y no guardan sesión', async () => {
@@ -175,6 +175,46 @@ describe('RutaProtegida', () => {
 
     expect(obtenerSesion()).toBeNull()
     expect(screen.getByText('Pantalla de login')).toBeInTheDocument()
+  })
+
+  describe('pantalla Sin acceso', () => {
+    test('tiene el estilo del login: dos columnas con la ilustración a la izquierda y el candado, el título y el aviso a la derecha', () => {
+      guardarSesion({ token: 't', rol: 'COURIER', repartidorId: 3 })
+      const { container } = dibujarProtegida()
+
+      expect(container.querySelector('main.login-pagina')).not.toBeNull()
+      const izquierda = container.querySelector('.login-panel')
+      expect(izquierda.querySelector('svg.login-ilustracion')).not.toBeNull()
+      const derecha = container.querySelector('.login-lado-form')
+      expect(derecha.querySelector('.sin-acceso-candado svg')).not.toBeNull()
+      expect(within(derecha).getByRole('heading', { name: 'Sin acceso' })).toBeInTheDocument()
+      expect(derecha).toHaveTextContent('Su usuario no tiene acceso a la aplicación web. Los repartidores deben usar la aplicación móvil.')
+      expect(within(derecha).getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument()
+    })
+
+    test('muestra el nombre del usuario que ingresó', () => {
+      guardarSesion({ token: 't', rol: 'COURIER', repartidorId: 3, usuario: 'carlos' })
+      dibujarProtegida()
+
+      expect(screen.getByText('carlos')).toBeInTheDocument()
+      expect(screen.getByText(/Sesión iniciada como/)).toBeInTheDocument()
+    })
+
+    test('si la sesión no guardó el nombre (sesión anterior), lo toma del token', () => {
+      const cuerpo = btoa(JSON.stringify({ sub: 'luis', rol: 'COURIER' })).replaceAll('=', '')
+      localStorage.setItem('logistica.sesion', JSON.stringify({ token: `a.${cuerpo}.c`, rol: 'COURIER', repartidorId: 2 }))
+      dibujarProtegida()
+
+      expect(screen.getByText('luis')).toBeInTheDocument()
+    })
+
+    test('sin nombre en la sesión ni en el token no muestra la línea del usuario', () => {
+      guardarSesion({ token: 't', rol: 'COURIER', repartidorId: 3 })
+      dibujarProtegida()
+
+      expect(screen.queryByText(/Sesión iniciada como/)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument()
+    })
   })
 
   test('si la sesión se invalida (401) vuelve al login', () => {

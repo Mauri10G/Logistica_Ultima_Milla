@@ -47,6 +47,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 
 /** Reglas CP-03 (zona), CP-04 (fecha y hora de entrega), CP-05 (edicion) y transiciones de estado. */
@@ -425,12 +426,54 @@ class PedidoServiceTest {
             "-3, -5, 0, 1"})
     @DisplayName("listar limita el tamano de pagina entre 1 y 1000 y la pagina a >= 0 (Math.clamp)")
     void limitaLaPaginacion(int pagina, int tamano, int paginaEsperada, int tamanoEsperado) {
-        when(pedidoRepository.buscar(any(), any(), any(), any())).thenReturn(org.springframework.data.domain.Page.empty());
+        when(pedidoRepository.buscar(any(), any(), any(), any(), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
 
-        servicio.listar(null, null, null, pagina, tamano);
+        servicio.listar(null, null, null, null, Sort.unsorted(), pagina, tamano);
 
-        verify(pedidoRepository).buscar(null, null, null,
+        verify(pedidoRepository).buscar(null, null, null, null,
                 org.springframework.data.domain.PageRequest.of(paginaEsperada, tamanoEsperado));
+    }
+
+    @Test
+    @DisplayName("listar pasa el texto de busqueda y el orden pedido al repositorio")
+    void pasaBusquedaYOrden() {
+        when(pedidoRepository.buscar(any(), any(), any(), any(), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        Sort orden = Sort.by(Sort.Order.desc("fechaEntrega"), Sort.Order.asc("id"));
+
+        servicio.listar(HOY, 3L, EstadoPedido.PENDIENTE, "bolivar", orden, 2, 25);
+
+        verify(pedidoRepository).buscar(HOY, 3L, EstadoPedido.PENDIENTE, "bolivar",
+                org.springframework.data.domain.PageRequest.of(2, 25, orden));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "sort={0} es una columna permitida")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"id", "cliente", "direccion", "zona", "fechaEntrega",
+            "fechaRegistro", "estado"})
+    @DisplayName("listar acepta cada columna ordenable")
+    void aceptaColumnasOrdenables(String columna) {
+        when(pedidoRepository.buscar(any(), any(), any(), any(), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        servicio.listar(null, null, null, null, Sort.by(columna), 0, 10);
+
+        verify(pedidoRepository).buscar(any(), any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "sort={0} se rechaza")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"telefono", "ubicacion", "version", "cliente.email",
+            "ruta"})
+    @DisplayName("listar rechaza con 400 las columnas que no son ordenables")
+    void rechazaColumnasNoOrdenables(String columna) {
+        Sort orden = Sort.by(columna);
+
+        assertThatThrownBy(() -> servicio.listar(null, null, null, null, orden, 0, 10))
+                .isInstanceOfSatisfying(SolicitudInvalidaException.class, ex -> {
+                    assertThat(ex.getStatus().value()).isEqualTo(400);
+                    assertThat(ex.getMessage()).contains(columna).contains("fechaEntrega");
+                });
+        verifyNoInteractions(pedidoRepository);
     }
 
     @Nested

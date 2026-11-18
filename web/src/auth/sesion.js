@@ -26,7 +26,7 @@ function vencida(sesion) {
 }
 
 /**
- * @returns {{ token: string, rol: string, repartidorId: number|null, expiraEn: string|null } | null}
+ * @returns {{ token: string, rol: string, repartidorId: number|null, expiraEn: string|null, usuario: string|null } | null}
  *   null si no hay sesión o si ya venció (en ese caso se borra y queda el aviso de sesión expirada).
  */
 export function obtenerSesion() {
@@ -66,9 +66,24 @@ export function vigilarExpiracion() {
   }, Math.min(Math.max(falta, 0), MAXIMO_TEMPORIZADOR_MS))
 }
 
-export function guardarSesion({ token, rol, repartidorId = null, expiraEn = null }) {
+/** Nombre de usuario que lleva el token (campo `sub` del JWT); null si el token no se puede leer. */
+export function usuarioDelToken(token) {
+  try {
+    const carga = token.split('.')[1].replaceAll('-', '+').replaceAll('_', '/')
+    return JSON.parse(atob(carga)).sub ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Guarda la sesión. `usuario` es el nombre con que se ingresó; el que trae el token (el oficial, sin importar
+ * mayúsculas) tiene prioridad.
+ */
+export function guardarSesion({ token, rol, repartidorId = null, expiraEn = null, usuario = null }) {
   aviso = null
-  localStorage.setItem(CLAVE, JSON.stringify({ token, rol, repartidorId, expiraEn }))
+  const nombre = usuarioDelToken(token) ?? usuario
+  localStorage.setItem(CLAVE, JSON.stringify({ token, rol, repartidorId, expiraEn, usuario: nombre }))
   vigilarExpiracion()
   avisar()
 }

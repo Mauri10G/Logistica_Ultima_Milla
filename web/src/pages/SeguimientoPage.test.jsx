@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { listarPedidos, listarTodosLosPedidos } from '../api/pedidosApi'
+import { consultarPedidos } from '../__mocks__/backendPedidos'
+import { listarPedidos } from '../api/pedidosApi'
 import { obtenerHistorial } from '../api/seguimientoApi'
 import { fechaIso } from '../hooks/fechas'
 import { useWebSocketTopic } from '../hooks/useWebSocketTopic'
@@ -24,23 +25,12 @@ const HISTORIAL = [
   { id: 2, pedidoId: 1, estadoAnterior: 'PENDIENTE', estadoNuevo: 'ASIGNADO', fechaCambio: '2026-03-01T18:00:00', origen: 'WEB' },
 ]
 
-// Simula el backend con los pedidos de `backend`: filtra por estado, pagina con page/size y devuelve el total de todas las páginas.
+// Simula el backend con los pedidos de `backend`: filtra por estado, busca (q), ordena (sort), pagina con page/size y devuelve el total de todas las páginas.
 let backend
-
-function consultar({ estado } = {}) {
-  return backend.filter((pedido) => !estado || pedido.estado === estado)
-}
 
 function servir(pedidos) {
   backend = pedidos
-  listarPedidos.mockImplementation(async ({ page = 0, size = 100, ...filtros } = {}) => {
-    const todos = consultar(filtros)
-    return { pedidos: todos.slice(page * size, (page + 1) * size), total: todos.length }
-  })
-  listarTodosLosPedidos.mockImplementation(async (filtros = {}) => {
-    const todos = consultar(filtros)
-    return { pedidos: todos, total: todos.length }
-  })
+  listarPedidos.mockImplementation(async (consulta = {}) => consultarPedidos(backend, consulta))
 }
 
 function cambio(pedidoId, estadoNuevo, estadoAnterior = 'EN_CAMINO') {
@@ -67,7 +57,7 @@ describe('SeguimientoPage: tabla y resumen', () => {
   test('carga los pedidos de hoy y cuenta cuántos hay por estado', async () => {
     await dibujar()
 
-    expect(listarPedidos).toHaveBeenCalledWith({ fecha: fechaIso(0), estado: '', page: 0, size: 10 }) // la página
+    expect(listarPedidos).toHaveBeenCalledWith({ fecha: fechaIso(0), estado: '', q: '', sort: 'id,asc', page: 0, size: 10 }) // la página
     expect(listarPedidos).toHaveBeenCalledWith({ fecha: fechaIso(0), estado: 'PENDIENTE', size: 1 }) // el total de cada pastilla
     expect(screen.getByTestId('estado-pedido-1')).toHaveTextContent('En camino')
     const resumen = await screen.findByRole('list', { name: 'Filtrar por estado' })
@@ -97,7 +87,7 @@ describe('SeguimientoPage: tabla y resumen', () => {
     const user = userEvent.setup()
     await dibujar()
 
-    const consultaDe = (fecha) => expect(listarPedidos).toHaveBeenCalledWith({ fecha, estado: '', page: 0, size: 10 })
+    const consultaDe = (fecha) => expect(listarPedidos).toHaveBeenCalledWith({ fecha, estado: '', q: '', sort: 'id,asc', page: 0, size: 10 })
 
     fireEvent.change(screen.getByLabelText('Fecha de entrega'), { target: { value: '2026-03-10' } })
     await waitFor(() => consultaDe('2026-03-10'))
@@ -270,27 +260,31 @@ const idsSeg = () =>
     .map((fila) => Number(fila.cells[0].textContent))
 
 describe('SeguimientoPage: orden, búsqueda y paginación', () => {
-  test('viene en el orden del backend (hora de entrega y #), sin ninguna flecha de orden', async () => {
+  test('viene ordenado por # de menor a mayor, y ese orden se lo pide al backend', async () => {
     servir([PEDIDOS[2], PEDIDOS[0], PEDIDOS[1]])
     await dibujar()
 
-    expect(idsSeg()).toEqual([3, 1, 2])
-    expect(screen.getByRole('columnheader', { name: '#' })).not.toHaveAttribute('aria-sort')
+    expect(idsSeg()).toEqual([1, 2, 3])
+    expect(listarPedidos).toHaveBeenCalledWith(expect.objectContaining({ sort: 'id,asc', page: 0, size: 10 }))
+    expect(screen.getByRole('columnheader', { name: '#' })).toHaveAttribute('aria-sort', 'ascending')
+    expect(screen.getByRole('columnheader', { name: 'Cliente' })).not.toHaveAttribute('aria-sort')
   })
 
-  test('el usuario cambia el orden con los encabezados', async () => {
+  test('el usuario cambia el orden con los encabezados y el backend lo ordena', async () => {
     const user = userEvent.setup()
     await dibujar()
 
     await user.click(screen.getByRole('button', { name: 'Cliente' }))
-    expect(idsSeg()).toEqual([3, 2, 1]) // Ana, Luis, Maria
+    await waitFor(() => expect(idsSeg()).toEqual([3, 2, 1])) // Ana, Luis, Maria
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'cliente,asc', page: 0 }))
 
     await user.click(screen.getByRole('button', { name: 'Cliente' }))
-    expect(idsSeg()).toEqual([1, 2, 3])
+    await waitFor(() => expect(idsSeg()).toEqual([1, 2, 3]))
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'cliente,desc' }))
     expect(screen.getByRole('columnheader', { name: 'Cliente' })).toHaveAttribute('aria-sort', 'descending')
   })
 
-  test('la columna Hora ordena por hora de entrega', async () => {
+  test('la columna Hora ordena por hora de entrega (sort=fechaEntrega)', async () => {
     const user = userEvent.setup()
     servir([pedidoSeg(1, { horaEntrega: '15:00:00' }), pedidoSeg(2, { horaEntrega: '09:30:00' }), pedidoSeg(3, { horaEntrega: '11:00:00' })])
     render(<SeguimientoPage />)
@@ -298,39 +292,64 @@ describe('SeguimientoPage: orden, búsqueda y paginación', () => {
 
     await user.click(screen.getByRole('button', { name: 'Hora' }))
 
-    expect(idsSeg()).toEqual([2, 3, 1])
+    await waitFor(() => expect(idsSeg()).toEqual([2, 3, 1]))
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'fechaEntrega,asc' }))
     expect(screen.getByText('09:30')).toBeInTheDocument()
   })
 
-  test('al recargar la pantalla vuelve al orden del backend', async () => {
+  test.each([
+    ['#', 'id,desc'],
+    ['Dirección', 'direccion,asc'],
+    ['Zona', 'zona,asc'],
+    ['Estado', 'estado,asc'],
+  ])('el encabezado %s pide sort=%s', async (titulo, esperado) => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: titulo }))
+
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: esperado })))
+  })
+
+  test('Ruta e Historial no ordenan: el backend no ordena por esas columnas', async () => {
+    await dibujar()
+
+    expect(screen.queryByRole('button', { name: 'Ruta' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Historial' })).not.toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Ruta' })).toBeInTheDocument()
+  })
+
+  test('al recargar la pantalla vuelve al orden por #', async () => {
     const user = userEvent.setup()
     const { unmount } = render(<SeguimientoPage />)
     await screen.findByText('Maria Torres')
     await user.click(screen.getByRole('button', { name: 'Cliente' }))
-    expect(idsSeg()).toEqual([3, 2, 1])
+    await waitFor(() => expect(idsSeg()).toEqual([3, 2, 1]))
 
     unmount()
     render(<SeguimientoPage />)
     await screen.findByText('Maria Torres')
 
     expect(idsSeg()).toEqual([1, 2, 3])
+    expect(screen.getByRole('columnheader', { name: '#' })).toHaveAttribute('aria-sort', 'ascending')
     expect(screen.getByRole('columnheader', { name: 'Cliente' })).not.toHaveAttribute('aria-sort')
   })
 
-  test('el buscador filtra por cliente o dirección', async () => {
+  test('el buscador manda q al backend y filtra por cliente o dirección', async () => {
     const user = userEvent.setup()
     await dibujar()
 
     await user.type(screen.getByRole('searchbox', { name: 'Buscar por cliente o dirección' }), 'montalvo')
-    expect(idsSeg()).toEqual([3])
+    await waitFor(() => expect(idsSeg()).toEqual([3]))
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'montalvo', page: 0, size: 10 }))
 
     await user.clear(screen.getByRole('searchbox'))
     await user.type(screen.getByRole('searchbox'), 'luis')
-    expect(idsSeg()).toEqual([2])
+    await waitFor(() => expect(idsSeg()).toEqual([2]))
 
     await user.clear(screen.getByRole('searchbox'))
     await user.type(screen.getByRole('searchbox'), 'zzz')
-    expect(screen.getByText('No hay pedidos para esta fecha.')).toBeInTheDocument()
+    expect(await screen.findByText('No hay pedidos para esta fecha.')).toBeInTheDocument()
   })
 
   test('pagina de a 10 con "Mostrando 1 a 10 de 24" y vuelve a la página 1 al buscar', async () => {
@@ -344,7 +363,7 @@ describe('SeguimientoPage: orden, búsqueda y paginación', () => {
     expect(screen.getByText('Mostrando 11 a 20 de 24')).toBeInTheDocument()
 
     await user.type(screen.getByRole('searchbox'), 'cliente')
-    expect(screen.getByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
+    expect(await screen.findByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
   })
 
   test('cada página es una consulta al backend y las pastillas cuentan todo el día, no solo la página', async () => {
@@ -355,7 +374,6 @@ describe('SeguimientoPage: orden, búsqueda y paginación', () => {
 
     expect(await screen.findByRole('button', { name: /^Todos 24$/ })).toBeInTheDocument()
     expect(idsSeg()).toHaveLength(10)
-    expect(listarTodosLosPedidos).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: /Siguiente/ }))
     await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 10 })))
@@ -363,16 +381,19 @@ describe('SeguimientoPage: orden, búsqueda y paginación', () => {
     expect(idsSeg()).toEqual([11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
   })
 
-  test('buscar trae todos los pedidos de la fecha y encuentra los de cualquier página', async () => {
+  test('buscar encuentra pedidos de cualquier página con una consulta de una página al backend', async () => {
     const user = userEvent.setup()
     servir(Array.from({ length: 24 }, (_, i) => pedidoSeg(i + 1)))
     render(<SeguimientoPage />)
     await screen.findByText('Cliente 01')
+    expect(idsSeg()).not.toContain(23)
 
     await user.type(screen.getByRole('searchbox'), 'Cliente 23')
 
-    expect(listarTodosLosPedidos).toHaveBeenCalledWith(expect.objectContaining({ fecha: fechaIso(0) }))
-    expect(idsSeg()).toEqual([23])
+    await waitFor(() => expect(idsSeg()).toEqual([23]))
+    expect(listarPedidos).toHaveBeenLastCalledWith(
+      expect.objectContaining({ fecha: fechaIso(0), q: 'Cliente 23', page: 0, size: 10 }),
+    )
   })
 
   test('el historial abierto no se cierra al cambiar de página', async () => {
@@ -454,7 +475,8 @@ describe('SeguimientoPage: pastillas de estado como filtro', () => {
     await user.click(pastilla(/^Pendiente 1$/))
     await user.type(screen.getByRole('searchbox'), 'maria')
 
-    expect(screen.getByText('No hay pedidos para esta fecha.')).toBeInTheDocument()
+    expect(await screen.findByText('No hay pedidos para esta fecha.')).toBeInTheDocument()
+    expect(listarPedidos).toHaveBeenCalledWith(expect.objectContaining({ estado: 'PENDIENTE', q: 'maria' }))
     expect(pastilla(/^Todos 3$/)).toBeInTheDocument()
   })
 

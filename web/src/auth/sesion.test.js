@@ -7,6 +7,7 @@ import {
   obtenerAvisoSesion,
   obtenerSesion,
   obtenerToken,
+  usuarioDelToken,
   vigilarExpiracion,
 } from './sesion'
 
@@ -18,6 +19,12 @@ beforeEach(() => {
 
 afterEach(() => jest.useRealTimers())
 
+// JWT de mentira: solo importa el cuerpo (segundo tramo, base64url), que es lo que lee la web.
+function jwtDe(cuerpo) {
+  const base64url = btoa(JSON.stringify(cuerpo)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+  return `cabecera.${base64url}.firma`
+}
+
 describe('sesion', () => {
   test('sin sesión no hay token', () => {
     expect(obtenerSesion()).toBeNull()
@@ -26,13 +33,28 @@ describe('sesion', () => {
 
   test('guardarSesion conserva token, rol, repartidorId y expiraEn', () => {
     guardarSesion({ token: 'abc', rol: 'STAFF', expiraEn: '2999-01-01T00:00:00Z' })
-    expect(obtenerSesion()).toEqual({ token: 'abc', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z' })
+    expect(obtenerSesion()).toEqual({ token: 'abc', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z', usuario: null })
     expect(obtenerToken()).toBe('abc')
   })
 
   test('sin expiraEn la sesión no vence', () => {
     guardarSesion({ token: 'abc', rol: 'STAFF' })
-    expect(obtenerSesion()).toEqual({ token: 'abc', rol: 'STAFF', repartidorId: null, expiraEn: null })
+    expect(obtenerSesion()).toEqual({ token: 'abc', rol: 'STAFF', repartidorId: null, expiraEn: null, usuario: null })
+  })
+
+  test('guarda el nombre de usuario con que se ingresó', () => {
+    guardarSesion({ token: 'abc', rol: 'STAFF', usuario: 'Staff' })
+    expect(obtenerSesion().usuario).toBe('Staff')
+  })
+
+  test('si el token trae el usuario (campo sub), ese nombre manda sobre el escrito', () => {
+    guardarSesion({ token: jwtDe({ sub: 'carlos', rol: 'COURIER' }), rol: 'COURIER', usuario: 'CARLOS' })
+    expect(obtenerSesion().usuario).toBe('carlos')
+    expect(usuarioDelToken(obtenerToken())).toBe('carlos')
+  })
+
+  test.each([['abc'], ['a.b.c'], [`a.${btoa('{}')}.c`], [undefined]])('usuarioDelToken devuelve null con el token %p', (token) => {
+    expect(usuarioDelToken(token)).toBeNull()
   })
 
   test('cerrarSesion borra todo', () => {
@@ -46,7 +68,7 @@ describe('sesion', () => {
     const cancelar = alCambiarSesion(oyente)
 
     guardarSesion({ token: 'x', rol: 'STAFF' })
-    expect(oyente).toHaveBeenLastCalledWith({ token: 'x', rol: 'STAFF', repartidorId: null, expiraEn: null })
+    expect(oyente).toHaveBeenLastCalledWith({ token: 'x', rol: 'STAFF', repartidorId: null, expiraEn: null, usuario: null })
     cerrarSesion()
     expect(oyente).toHaveBeenLastCalledWith(null)
 

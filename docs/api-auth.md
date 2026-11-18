@@ -76,6 +76,37 @@ La web y el móvil deben borrar la sesión y volver al login ante un 401.
 | `GET /api/rutas`, `GET /api/rutas/{id}` | sí | `GET /api/rutas/{id}` solo de una ruta suya |
 | `GET /api/seguimiento/**` | sí | no (403) |
 
+## Listado de pedidos: filtros, búsqueda, orden y paginación
+
+`GET /api/pedidos` (solo STAFF). Todos los parámetros son opcionales y se combinan:
+
+| Parámetro | Ejemplo | Qué hace |
+|---|---|---|
+| `fecha` | `fecha=2026-11-19` | Solo pedidos con esa fecha de entrega (`AAAA-MM-DD`) |
+| `zonaId` | `zonaId=3` | Solo pedidos de esa zona |
+| `estado` | `estado=PENDIENTE` | Solo pedidos en ese estado (`PENDIENTE`, `ASIGNADO`, `RECOGIDO`, `EN_CAMINO`, `ENTREGADO`) |
+| `q` | `q=bolivar` | Busca el texto dentro del nombre del cliente **o** de la dirección, sin importar mayúsculas ni tildes (`angela` encuentra "Ángela", `nunez` encuentra "Núñez"). `%` y `_` se buscan como texto. Un texto en blanco no filtra |
+| `sort` | `sort=fechaEntrega,desc` | Orden con el formato de Spring: `columna` o `columna,asc` / `columna,desc`. Se puede repetir (`sort=estado,asc&sort=id,desc`) |
+| `page` | `page=0` | Número de página, desde 0 (por defecto 0) |
+| `size` | `size=10` | Filas por página, de 1 a 1000 (por defecto 100) |
+
+Columnas permitidas en `sort`: `id`, `cliente`, `direccion`, `zona`, `fechaEntrega`, `fechaRegistro` y `estado`.
+
+- `fechaEntrega` ordena por fecha y luego por hora. `estado` ordena por su lugar en el flujo
+  (`PENDIENTE` → `ASIGNADO` → `RECOGIDO` → `EN_CAMINO` → `ENTREGADO`), no alfabéticamente.
+- Siempre se desempata por `id` ascendente, así una misma fila nunca aparece en dos páginas.
+- Sin `sort` el orden es entrega (fecha y hora) y luego `id`.
+- Cualquier otra columna da `400` con `codigo` `SOLICITUD_INVALIDA` y la lista de columnas permitidas en `mensaje`.
+- La respuesta es la lista de la página pedida y el total de **todas** las páginas (con los filtros y `q` aplicados) va en
+  la cabecera `X-Total-Count`.
+
+```
+GET /api/pedidos?fecha=2026-11-19&q=bolivar&sort=cliente,asc&page=1&size=10
+200 OK
+X-Total-Count: 24
+[ { "id": 31, "clienteNombres": "...", ... }, ... ]
+```
+
 ### Origen de los cambios de estado
 
 El campo `origen` del cuerpo de `PATCH /api/pedidos/{id}/estado` **ya no se usa cuando hay sesión**: el backend lo
