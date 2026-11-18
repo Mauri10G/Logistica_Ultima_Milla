@@ -15,6 +15,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.Optional;
 
+import ec.edu.uta.logistica.common.exception.AccesoDenegadoException;
 import ec.edu.uta.logistica.common.exception.ConflictoException;
 import ec.edu.uta.logistica.common.exception.ReglaNegocioException;
 import ec.edu.uta.logistica.common.exception.SolicitudInvalidaException;
@@ -29,8 +30,11 @@ import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.pedidos.entity.TransicionInvalidaException;
 import ec.edu.uta.logistica.pedidos.repository.ClienteRepository;
 import ec.edu.uta.logistica.pedidos.repository.PedidoRepository;
+import ec.edu.uta.logistica.rutas.entity.Ruta;
 import ec.edu.uta.logistica.seguimiento.service.SeguimientoService;
+import ec.edu.uta.logistica.seguridad.service.ControlAcceso;
 import ec.edu.uta.logistica.testutil.Fabrica;
+import ec.edu.uta.logistica.testutil.Sesiones;
 import ec.edu.uta.logistica.zonas.entity.Zona;
 import ec.edu.uta.logistica.zonas.repository.ZonaRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,8 +74,8 @@ class PedidoServiceTest {
     }
 
     private PedidoService servicioCon(Clock reloj, int anticipacionMinutos) {
-        return new PedidoService(pedidoRepository, clienteRepository, zonaRepository, seguimientoService, reloj,
-                anticipacionMinutos);
+        return new PedidoService(pedidoRepository, clienteRepository, zonaRepository, seguimientoService,
+                new ControlAcceso(), reloj, anticipacionMinutos);
     }
 
     private static Clock relojA(String instanteUtc) {
@@ -394,5 +398,63 @@ class PedidoServiceTest {
                 .isInstanceOf(ReglaNegocioException.class);
 
         verifyNoInteractions(seguimientoService);
+    }
+
+    @Nested
+    @DisplayName("Permisos: un COURIER solo cambia pedidos de su ruta y el origen sale del rol")
+    class Permisos {
+
+        @org.junit.jupiter.api.AfterEach
+        void cerrarSesion() {
+            Sesiones.cerrar();
+        }
+
+        private Pedido asignadoA(long repartidorId) {
+            Pedido pedido = Fabrica.pedido(7L, centro, HOY.plusDays(1));
+            new Ruta(HOY.plusDays(1), centro, Fabrica.repartidor(repartidorId, "R"), 4).agregarPedido(pedido);
+            when(pedidoRepository.findById(7L)).thenReturn(Optional.of(pedido));
+            return pedido;
+        }
+
+        @Test
+        @DisplayName("COURIER sobre un pedido de otra ruta: 403 y el pedido no cambia ni deja historial")
+        void courierRutaAjena() {
+            Pedido pedido = asignadoA(2L);
+            Sesiones.comoCourier(1L);
+
+            assertThatThrownBy(() -> servicio.cambiarEstado(7L, new EstadoPedidoRequest(EstadoPedido.RECOGIDO, null)))
+                    .isInstanceOf(AccesoDenegadoException.class)
+                    .satisfies(e -> assertThat(((AccesoDenegadoException) e).getStatus())
+                            .isEqualTo(HttpStatus.FORBIDDEN));
+            assertThatThrownBy(() -> servicio.obtener(7L)).isInstanceOf(AccesoDenegadoException.class);
+
+            assertThat(pedido.getEstado()).isEqualTo(EstadoPedido.ASIGNADO);
+            verify(pedidoRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(seguimientoService);
+        }
+
+        @Test
+        @DisplayName("COURIER sobre su pedido: avanza y el historial dice MOVIL aunque el cuerpo diga WEB")
+        void courierRutaPropia() {
+            asignadoA(1L);
+            Sesiones.comoCourier(1L);
+
+            servicio.cambiarEstado(7L, new EstadoPedidoRequest(EstadoPedido.RECOGIDO, OrigenCambio.WEB));
+
+            verify(seguimientoService).registrarCambio(7L, EstadoPedido.ASIGNADO, EstadoPedido.RECOGIDO,
+                    OrigenCambio.MOVIL);
+        }
+
+        @Test
+        @DisplayName("STAFF cambia cualquier pedido y el historial dice WEB aunque el cuerpo diga MOVIL")
+        void staffOrigenWeb() {
+            asignadoA(2L);
+            Sesiones.comoStaff();
+
+            servicio.cambiarEstado(7L, new EstadoPedidoRequest(EstadoPedido.RECOGIDO, OrigenCambio.MOVIL));
+
+            verify(seguimientoService).registrarCambio(7L, EstadoPedido.ASIGNADO, EstadoPedido.RECOGIDO,
+                    OrigenCambio.WEB);
+        }
     }
 }
