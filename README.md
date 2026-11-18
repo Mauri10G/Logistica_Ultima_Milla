@@ -118,7 +118,7 @@ Documentación interactiva en **Swagger UI**. Todos los errores devuelven `{ tim
 
 | Método y ruta | Descripción |
 |---|---|
-| `GET/POST /api/pedidos` · `GET/PUT/DELETE /api/pedidos/{id}` | CRUD de pedidos. Filtros: `fecha`, `zonaId`, `estado`, `page`, `size` (total en `X-Total-Count`) |
+| `GET/POST /api/pedidos` · `GET/PUT/DELETE /api/pedidos/{id}` | CRUD de pedidos. Filtros: `fecha`, `zonaId`, `estado`; búsqueda `q` (cliente o dirección, sin tildes); orden `sort` (`id`, `cliente`, `direccion`, `zona`, `fechaEntrega`, `fechaRegistro`, `estado`); `page`, `size` (total en `X-Total-Count`). Detalle en `docs/api-auth.md` |
 | `PATCH /api/pedidos/{id}/estado` | Lo usa la app móvil: `{"estado":"RECOGIDO","origen":"MOVIL"}` |
 | `GET/POST /api/zonas` · `PUT/DELETE /api/zonas/{id}` | Zonas con el polígono en GeoJSON. `?confirmarSuperposicion=true` permite superponer |
 | `GET/POST /api/repartidores` · `PUT/DELETE /api/repartidores/{id}` | CRUD de repartidores |

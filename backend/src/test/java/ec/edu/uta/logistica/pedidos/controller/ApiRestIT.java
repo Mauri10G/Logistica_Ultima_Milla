@@ -1,5 +1,7 @@
 package ec.edu.uta.logistica.pedidos.controller;
 
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -205,6 +207,139 @@ class ApiRestIT extends IntegrationTestBase {
                 .andExpect(header().string("X-Total-Count", "20"))
                 .andExpect(jsonPath("$", hasSize(5)));
         mvc.perform(get("/api/pedidos").param("estado", "NO_EXISTE")).andExpect(status().isBadRequest());
+    }
+
+    private void registrar(LocalDate fecha, String hora, String cliente, String direccion) throws Exception {
+        postJson("/api/pedidos", """
+                {"clienteNombres": "%s", "clienteTelefono": "0991112223", "direccion": "%s", %s,
+                 "fechaEntrega": "%s", "horaEntrega": "%s"}
+                """.formatted(cliente, direccion, CENTRO, fecha, hora)).andExpect(status().isCreated());
+    }
+
+    /** Cuatro pedidos de una fecha propia (hoy + 45) para probar q y sort sin tocar los datos base. */
+    private LocalDate sembrarParaBusqueda() throws Exception {
+        LocalDate fecha = hoy().plusDays(45);
+        if (totalDe(fecha) == 0) {
+            registrar(fecha, "11:00", "Ángela Núñez", "Calle Bolívar y Mera");
+            registrar(fecha, "09:00", "Zoe Álvarez", "Av. Cevallos 100%");
+            registrar(fecha, "10:00", "bruno diaz", "Montalvo_2 y Sucre");
+            registrar(fecha, "08:00", "Carlos Peña", "Av. Los Chasquis");
+        }
+        return fecha;
+    }
+
+    private int totalDe(LocalDate fecha) throws Exception {
+        String total = mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("size", "1"))
+                .andReturn().getResponse().getHeader("X-Total-Count");
+        return Integer.parseInt(total);
+    }
+
+    @Test
+    @DisplayName("GET /api/pedidos?q= busca en cliente y direccion sin importar mayusculas ni tildes")
+    void buscaPorTexto() throws Exception {
+        LocalDate fecha = sembrarParaBusqueda();
+
+        // la busqueda sin tilde encuentra el nombre con tilde, y al reves
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("q", "angela nunez"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Total-Count", "1"))
+                .andExpect(jsonPath("$[0].clienteNombres").value("Ángela Núñez"));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("q", "ZOÉ"))
+                .andExpect(header().string("X-Total-Count", "1"));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("q", "ÁLVAREZ"))
+                .andExpect(header().string("X-Total-Count", "1"));
+        // en la direccion: "bolivar" sin tilde encuentra "Bolívar"
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("q", "BOLIVAR"))
+                .andExpect(header().string("X-Total-Count", "1"))
+                .andExpect(jsonPath("$[0].direccion").value("Calle Bolívar y Mera"));
+        // un texto sin coincidencias da lista vacia y total 0; el blanco no filtra
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("q", "no existe"))
+                .andExpect(header().string("X-Total-Count", "0"))
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("q", "   "))
+                .andExpect(header().string("X-Total-Count", "4"));
+    }
+
+    @Test
+    @DisplayName("GET /api/pedidos?q= trata % y _ como texto, no como comodines")
+    void losComodinesSeBuscanTalCual() throws Exception {
+        LocalDate fecha = sembrarParaBusqueda();
+
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("q", "100%"))
+                .andExpect(header().string("X-Total-Count", "1"))
+                .andExpect(jsonPath("$[0].clienteNombres").value("Zoe Álvarez"));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("q", "%"))
+                .andExpect(header().string("X-Total-Count", "1"));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("q", "_"))
+                .andExpect(header().string("X-Total-Count", "1"))
+                .andExpect(jsonPath("$[0].direccion").value("Montalvo_2 y Sucre"));
+    }
+
+    @Test
+    @DisplayName("GET /api/pedidos?sort= ordena por cada columna permitida, ascendente y descendente")
+    void ordenaPorColumna() throws Exception {
+        LocalDate fecha = sembrarParaBusqueda();
+
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("sort", "cliente,asc"))
+                .andExpect(jsonPath("$[*].clienteNombres")
+                        .value(contains("Ángela Núñez", "bruno diaz", "Carlos Peña", "Zoe Álvarez")));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("sort", "cliente,desc"))
+                .andExpect(jsonPath("$[0].clienteNombres").value("Zoe Álvarez"));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("sort", "fechaEntrega,desc"))
+                .andExpect(jsonPath("$[*].horaEntrega").value(contains("11:00:00", "10:00:00", "09:00:00", "08:00:00")));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("sort", "fechaEntrega,asc"))
+                .andExpect(jsonPath("$[0].horaEntrega").value("08:00:00"));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("sort", "direccion,asc"))
+                .andExpect(jsonPath("$[0].direccion").value("Av. Cevallos 100%"));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("sort", "id,desc"))
+                .andExpect(jsonPath("$[0].clienteNombres").value("Carlos Peña"));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("sort", "id"))
+                .andExpect(jsonPath("$[0].clienteNombres").value("Ángela Núñez"));
+        for (String columna : new String[] {"zona", "fechaRegistro", "estado"}) {
+            mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("sort", columna + ",desc"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(4)));
+        }
+    }
+
+    @Test
+    @DisplayName("GET /api/pedidos combina q, sort y pagina; acepta varios sort")
+    void combinaBusquedaOrdenYPagina() throws Exception {
+        LocalDate fecha = sembrarParaBusqueda();
+
+        // "a" aparece en los 4 pedidos; segunda pagina de tamano 2, ordenada por cliente
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()).param("q", "a")
+                        .param("sort", "cliente,asc").param("page", "1").param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Total-Count", "4"))
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].clienteNombres").value("Carlos Peña"))
+                .andExpect(jsonPath("$[1].clienteNombres").value("Zoe Álvarez"));
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString())
+                        .param("sort", "estado,asc").param("sort", "cliente,desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].clienteNombres").value("Zoe Álvarez"));
+    }
+
+    @Test
+    @DisplayName("GET /api/pedidos sin sort sigue el orden por entrega (fecha y hora) y luego id")
+    void ordenPorDefecto() throws Exception {
+        LocalDate fecha = sembrarParaBusqueda();
+
+        mvc.perform(get("/api/pedidos").param("fecha", fecha.toString()))
+                .andExpect(jsonPath("$[*].horaEntrega").value(contains("08:00:00", "09:00:00", "10:00:00", "11:00:00")));
+    }
+
+    @Test
+    @DisplayName("GET /api/pedidos?sort= con una columna que no esta permitida da 400")
+    void rechazaColumnaNoPermitida() throws Exception {
+        mvc.perform(get("/api/pedidos").param("sort", "telefono,asc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("SOLICITUD_INVALIDA"))
+                .andExpect(jsonPath("$.mensaje").value(containsString("telefono")));
+        mvc.perform(get("/api/pedidos").param("sort", "cliente.email")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/pedidos").param("sort", "id,asc").param("sort", "version,desc"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
