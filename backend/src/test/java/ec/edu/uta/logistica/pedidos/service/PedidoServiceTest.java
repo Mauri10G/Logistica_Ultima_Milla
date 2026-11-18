@@ -420,6 +420,19 @@ class PedidoServiceTest {
         verifyNoInteractions(seguimientoService);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest(name = "pagina {0}, tamano {1} -> pagina {2}, tamano {3}")
+    @org.junit.jupiter.params.provider.CsvSource({"0, 0, 0, 1", "0, 1, 0, 1", "2, 1000, 2, 1000", "0, 1001, 0, 1000",
+            "-3, -5, 0, 1"})
+    @DisplayName("listar limita el tamano de pagina entre 1 y 1000 y la pagina a >= 0 (Math.clamp)")
+    void limitaLaPaginacion(int pagina, int tamano, int paginaEsperada, int tamanoEsperado) {
+        when(pedidoRepository.buscar(any(), any(), any(), any())).thenReturn(org.springframework.data.domain.Page.empty());
+
+        servicio.listar(null, null, null, pagina, tamano);
+
+        verify(pedidoRepository).buscar(null, null, null,
+                org.springframework.data.domain.PageRequest.of(paginaEsperada, tamanoEsperado));
+    }
+
     @Nested
     @DisplayName("Permisos: un COURIER solo cambia pedidos de su ruta y el origen sale del rol")
     class Permisos {
