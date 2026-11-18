@@ -18,6 +18,7 @@ import ec.edu.uta.logistica.pedidos.dto.PedidoResponse;
 import ec.edu.uta.logistica.pedidos.entity.Cliente;
 import ec.edu.uta.logistica.pedidos.entity.EstadoPedido;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
+import ec.edu.uta.logistica.pedidos.evento.PedidoRegistradoEvent;
 import ec.edu.uta.logistica.pedidos.repository.ClienteRepository;
 import ec.edu.uta.logistica.pedidos.repository.PedidoRepository;
 import ec.edu.uta.logistica.seguimiento.service.SeguimientoService;
@@ -26,6 +27,7 @@ import ec.edu.uta.logistica.zonas.entity.Zona;
 import ec.edu.uta.logistica.zonas.repository.ZonaRepository;
 import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -41,6 +43,7 @@ public class PedidoService {
     private final ZonaRepository zonaRepository;
     private final SeguimientoService seguimientoService;
     private final ControlAcceso controlAcceso;
+    private final ApplicationEventPublisher publicador;
     private final Clock reloj;
     private final int anticipacionMinimaMinutos;
 
@@ -50,13 +53,14 @@ public class PedidoService {
      */
     public PedidoService(PedidoRepository pedidoRepository, ClienteRepository clienteRepository,
                          ZonaRepository zonaRepository, SeguimientoService seguimientoService,
-                         ControlAcceso controlAcceso, Clock reloj,
+                         ControlAcceso controlAcceso, ApplicationEventPublisher publicador, Clock reloj,
                          @Value("${logistica.pedidos.anticipacion-minima-minutos:30}") int anticipacionMinimaMinutos) {
         this.pedidoRepository = pedidoRepository;
         this.clienteRepository = clienteRepository;
         this.zonaRepository = zonaRepository;
         this.seguimientoService = seguimientoService;
         this.controlAcceso = controlAcceso;
+        this.publicador = publicador;
         this.reloj = reloj;
         this.anticipacionMinimaMinutos = Math.max(anticipacionMinimaMinutos, 0);
     }
@@ -71,7 +75,12 @@ public class PedidoService {
         Pedido pedido = new Pedido(cliente, solicitud.direccion().trim(), ubicacion, zona,
                 solicitud.fechaEntrega(), solicitud.horaEntrega(), LocalDateTime.now(reloj),
                 solicitud.prioridad(), solicitud.registradoPorPersonal() == null || solicitud.registradoPorPersonal());
-        return PedidoResponse.desde(pedidoRepository.save(pedido));
+        Pedido guardado = pedidoRepository.save(pedido);
+        // Si la fecha ya tiene rutas armadas, el modulo de rutas lo inserta como ultimo momento en esta misma
+        // transaccion (UltimoMomentoAutomatico); la respuesta ya sale ASIGNADO y con su ruta.
+        publicador.publishEvent(new PedidoRegistradoEvent(guardado.getId(), guardado.getFechaEntrega(),
+                zona.getId()));
+        return PedidoResponse.desde(guardado);
     }
 
     @Transactional
