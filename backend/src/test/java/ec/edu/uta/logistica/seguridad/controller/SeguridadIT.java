@@ -158,7 +158,8 @@ class SeguridadIT extends IntegracionConSeguridadBase {
 
         // el dueno: ve su ruta y su pedido, y avanza el estado (el cuerpo dice WEB pero el rol manda: MOVIL)
         mvc.perform(get("/api/repartidores/" + dueno + "/ruta-actual").with(bearer(propio)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(rutaId));
+                // puede devolver otra ruta suya EN_CURSO de otra prueba (la base se comparte): basta con que sea suya
+                .andExpect(status().isOk()).andExpect(jsonPath("$.repartidorId").value(dueno));
         mvc.perform(get("/api/rutas/" + rutaId).with(bearer(propio))).andExpect(status().isOk());
         mvc.perform(get("/api/pedidos/" + pedidoId).with(bearer(propio))).andExpect(status().isOk());
         patchEstado(pedidoId, "RECOGIDO", "WEB", propio).andExpect(status().isOk())
