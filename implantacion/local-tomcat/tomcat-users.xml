@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Reemplaza C:\tomcat11\conf\tomcat-users.xml. Crea un usuario para la aplicacion Manager.
+  Cambiar la clave antes de usarlo. Manager solo acepta conexiones desde la propia PC.
+-->
+<tomcat-users xmlns="http://tomcat.apache.org/xml"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://tomcat.apache.org/xml tomcat-users.xsd"
+              version="1.0">
+  <role rolename="manager-gui"/>
+  <user username="admin-logistica" password="CAMBIAR_ESTA_CLAVE" roles="manager-gui"/>
+</tomcat-users>

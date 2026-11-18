@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- El APK de release lo necesita para llamar a la API. En debug lo agrega Flutter solo. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
+        android:usesCleartextTraffic="true"
         android:label="logistica_repartidor"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

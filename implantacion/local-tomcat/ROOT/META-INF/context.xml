@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Activa el RewriteValve solo para la web. Las reglas estan en WEB-INF/rewrite.config -->
+<Context>
+    <Valve className="org.apache.catalina.valves.rewrite.RewriteValve"/>
+</Context>
