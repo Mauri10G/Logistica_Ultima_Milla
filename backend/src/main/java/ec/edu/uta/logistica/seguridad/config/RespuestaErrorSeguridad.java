@@ -1,6 +1,7 @@
 package ec.edu.uta.logistica.seguridad.config;
 
 import java.io.IOException;
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 import ec.edu.uta.logistica.common.exception.AccesoDenegadoException;
@@ -27,9 +28,11 @@ public class RespuestaErrorSeguridad implements AuthenticationEntryPoint, Access
     public static final String CODIGO_NO_AUTENTICADO = "NO_AUTENTICADO";
 
     private final ObjectMapper json;
+    private final Clock reloj;
 
-    public RespuestaErrorSeguridad(ObjectMapper json) {
+    public RespuestaErrorSeguridad(ObjectMapper json, Clock reloj) {
         this.json = json;
+        this.reloj = reloj;
     }
 
     /** 401: sin token, token mal formado, vencido o con firma invalida. */
@@ -55,6 +58,6 @@ public class RespuestaErrorSeguridad implements AuthenticationEntryPoint, Access
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         json.writeValue(response.getOutputStream(),
-                new ErrorRespuesta(LocalDateTime.now(), status.value(), codigo, mensaje, null));
+                new ErrorRespuesta(LocalDateTime.now(reloj), status.value(), codigo, mensaje, null));
     }
 }
