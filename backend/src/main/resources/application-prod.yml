@@ -15,3 +15,12 @@ management:
 logging:
   level:
     ec.edu.uta.logistica: INFO
+
+
+
+# En produccion no se publica la documentacion de la API
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
