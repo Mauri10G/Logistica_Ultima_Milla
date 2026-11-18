@@ -91,13 +91,15 @@ export function Paginacion({ desde, hasta, total, pagina, totalPaginas, tamano, 
  * @param {ReturnType<typeof useTabla>} tabla controlador devuelto por `useTabla`
  * @param {string} titulo texto de la caption (solo para lectores de pantalla)
  * @param {{ clave: string, titulo: string, className?: string, ordenable?: boolean }[]} columnas
- *   una columna con `valores[clave]` ordena al pulsar su encabezado; `ordenable: false` lo desactiva
- * @param {Record<string, (fila: object) => string | number | null>} valores valor ordenable de cada columna (constante de módulo)
+ *   todas ordenan al pulsar su encabezado salvo las que llevan `ordenable: false`; si se pasa `valores`, solo ordenan
+ *   las columnas que tengan valor ahí
+ * @param {Record<string, (fila: object) => string | number | null>} [valores] valor ordenable de cada columna (constante de módulo); en
+ *   las tablas que ordena el backend se omite
  * @param {(fila: object) => import('react').ReactElement} renderFila devuelve el <tr> de la fila, con su key
  * @param {boolean} [cargando] muestra filas de esqueleto y marca la tabla como ocupada
  * @param {import('react').ReactNode} [vacio] contenido cuando no hay filas
  */
-export function TablaVista({ tabla, titulo, columnas, valores, renderFila, cargando = false, vacio = null }) {
+export function TablaVista({ tabla, titulo, columnas, valores = null, renderFila, cargando = false, vacio = null }) {
   const sinFilas = !cargando && tabla.total === 0
 
   return (
@@ -110,7 +112,7 @@ export function TablaVista({ tabla, titulo, columnas, valores, renderFila, carga
               <EncabezadoColumna
                 key={columna.clave}
                 columna={columna}
-                ordenable={columna.ordenable !== false && Boolean(valores[columna.clave])}
+                ordenable={columna.ordenable !== false && (!valores || Boolean(valores[columna.clave]))}
                 orden={tabla.orden}
                 onOrdenar={tabla.ordenarPor}
               />
@@ -147,8 +149,8 @@ export function TablaVista({ tabla, titulo, columnas, valores, renderFila, carga
 
 /**
  * Tabla reutilizable con encabezados que ordenan y paginación en el navegador: las pantallas le pasan las filas ya
- * filtradas y dibujan cada fila. Para paginar en el backend (Pedidos, Seguimiento) se usa `useTabla` con `remoto`
- * y `TablaVista`.
+ * filtradas y dibujan cada fila. Para paginar, buscar y ordenar en el backend (Pedidos, Seguimiento) se usa `useTabla` con
+ * `remoto` (vía `usePedidosTabla`) y `TablaVista`.
  *
  * @param {object[]} filas filas ya filtradas
  * @param {Record<string, (fila: object) => string | number | null>} valores valor ordenable de cada columna (constante de módulo)

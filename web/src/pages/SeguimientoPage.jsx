@@ -23,20 +23,10 @@ const COLUMNAS = [
   { clave: 'direccion', titulo: 'Dirección' },
   { clave: 'zona', titulo: 'Zona' },
   { clave: 'hora', titulo: 'Hora' },
-  { clave: 'ruta', titulo: 'Ruta' },
+  { clave: 'ruta', titulo: 'Ruta', ordenable: false },
   { clave: 'estado', titulo: 'Estado' },
-  { clave: 'historial', titulo: 'Historial' },
+  { clave: 'historial', titulo: 'Historial', ordenable: false },
 ]
-
-const VALORES = {
-  id: (pedido) => pedido.id,
-  cliente: (pedido) => pedido.clienteNombres,
-  direccion: (pedido) => pedido.direccion,
-  zona: (pedido) => pedido.zonaNombre,
-  hora: (pedido) => pedido.horaEntrega,
-  ruta: (pedido) => pedido.rutaId,
-  estado: (pedido) => ESTADOS_PEDIDO.indexOf(pedido.estado),
-}
 
 /** Cuántos pedidos hay de la fecha en cada estado (una consulta de tamaño 1 por estado: solo interesa X-Total-Count). */
 async function contarPorEstado(fecha) {
@@ -62,12 +52,11 @@ export default function SeguimientoPage() {
   const temporizadores = useRef([])
   const seleccionadoRef = useRef(null)
 
-  // El estado se filtra en el backend; el buscador y el orden por columna se resuelven en el navegador (ver usePedidosTabla).
+  // El backend filtra por fecha y estado, busca por cliente o dirección, ordena y pagina (ver usePedidosTabla).
   const filtros = useMemo(() => ({ fecha, estado: estadoFiltro }), [fecha, estadoFiltro])
   const { tabla, setPedidos, cargando, error: errorLista, setError: setErrorLista, recargar } = usePedidosTabla({
     filtros,
     busqueda,
-    valores: VALORES,
   })
 
   // Las pastillas cuentan todos los pedidos de la fecha, no solo la página que se ve.
@@ -208,7 +197,6 @@ export default function SeguimientoPage() {
           tabla={tabla}
           titulo="Pedidos de la fecha con su estado actual"
           columnas={COLUMNAS}
-          valores={VALORES}
           cargando={cargando}
           vacio={
             <EstadoVacio

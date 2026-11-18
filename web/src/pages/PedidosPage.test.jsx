@@ -6,9 +6,9 @@ import {
   editarPedido,
   eliminarPedido,
   listarPedidos,
-  listarTodosLosPedidos,
   obtenerHoraServidor,
 } from '../api/pedidosApi'
+import { consultarPedidos } from '../__mocks__/backendPedidos'
 import { obtenerHistorial } from '../api/seguimientoApi'
 import { listarZonas } from '../api/zonasApi'
 import { fechaIso } from '../hooks/fechas'
@@ -72,13 +72,9 @@ function errorHttp(status, codigo, mensaje) {
   return { response: { status, data: { codigo, mensaje } } }
 }
 
-// Simula el backend: listarPedidos devuelve solo la página pedida (con el total de todas) y listarTodosLosPedidos, todo el conjunto.
+// Simula el backend: listarPedidos filtra por estado, busca (q), ordena (sort) y devuelve solo la página pedida con el total de todas.
 function servir(pedidos) {
-  listarPedidos.mockImplementation(async ({ page = 0, size = 100 } = {}) => ({
-    pedidos: pedidos.slice(page * size, (page + 1) * size),
-    total: pedidos.length,
-  }))
-  listarTodosLosPedidos.mockResolvedValue({ pedidos, total: pedidos.length })
+  listarPedidos.mockImplementation(async (consulta = {}) => consultarPedidos(pedidos, consulta))
 }
 
 async function dibujar() {
@@ -131,7 +127,6 @@ describe('PedidosPage: lista y filtros', () => {
     await screen.findByText('Cliente 01')
 
     expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 10 }))
-    expect(listarTodosLosPedidos).not.toHaveBeenCalled()
     expect(screen.getByText('350 pedido(s)')).toBeInTheDocument()
     expect(screen.getByText('Mostrando 1 a 10 de 350')).toBeInTheDocument()
     expect(idsEnTabla()).toHaveLength(10)
@@ -906,32 +901,35 @@ describe('PedidosPage: filtro de fecha rápido', () => {
 })
 
 describe('PedidosPage: orden, búsqueda y paginación', () => {
-  test('al abrir viene en el orden del backend (entrega y #), sin ninguna flecha de orden', async () => {
+  test('al abrir viene ordenado por # de menor a mayor, y ese orden se lo pide al backend', async () => {
     servir([pedidoNumero(3), pedidoNumero(1), pedidoNumero(2)])
     render(<PedidosPage />)
     await screen.findByText('Cliente 01')
 
-    expect(idsEnTabla()).toEqual([3, 1, 2])
-    expect(screen.getByRole('columnheader', { name: '#' })).not.toHaveAttribute('aria-sort')
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'id,asc', page: 0, size: 10 }))
+    expect(idsEnTabla()).toEqual([1, 2, 3])
+    expect(screen.getByRole('columnheader', { name: '#' })).toHaveAttribute('aria-sort', 'ascending')
     expect(screen.getByRole('columnheader', { name: 'Entrega' })).not.toHaveAttribute('aria-sort')
   })
 
-  test('el encabezado Entrega ordena por fecha y hora, y otro clic invierte', async () => {
+  test('el encabezado Entrega pide sort=fechaEntrega al backend, y otro clic invierte', async () => {
     const user = userEvent.setup()
     servir([
-        pedidoNumero(1, { fechaEntrega: '2031-05-19', horaEntrega: '08:00:00' }),
-        pedidoNumero(2, { fechaEntrega: '2031-05-18', horaEntrega: '15:00:00' }),
-        pedidoNumero(3, { fechaEntrega: '2031-05-18', horaEntrega: '09:00:00' }),
-      ])
+      pedidoNumero(1, { fechaEntrega: '2031-05-19', horaEntrega: '08:00:00' }),
+      pedidoNumero(2, { fechaEntrega: '2031-05-18', horaEntrega: '15:00:00' }),
+      pedidoNumero(3, { fechaEntrega: '2031-05-18', horaEntrega: '09:00:00' }),
+    ])
     render(<PedidosPage />)
     await screen.findByText('Cliente 01')
 
     await user.click(screen.getByRole('button', { name: 'Entrega' }))
-    expect(idsEnTabla()).toEqual([3, 2, 1])
+    await waitFor(() => expect(idsEnTabla()).toEqual([3, 2, 1]))
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'fechaEntrega,asc', page: 0 }))
     expect(screen.getByRole('columnheader', { name: 'Entrega' })).toHaveAttribute('aria-sort', 'ascending')
 
     await user.click(screen.getByRole('button', { name: 'Entrega' }))
-    expect(idsEnTabla()).toEqual([1, 2, 3])
+    await waitFor(() => expect(idsEnTabla()).toEqual([1, 2, 3]))
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'fechaEntrega,desc' }))
   })
 
   test('el encabezado Estado ordena según el flujo del pedido, no alfabéticamente', async () => {
@@ -942,65 +940,104 @@ describe('PedidosPage: orden, búsqueda y paginación', () => {
 
     await user.click(screen.getByRole('button', { name: 'Estado' }))
 
-    expect(idsEnTabla()).toEqual([2, 3, 1])
+    await waitFor(() => expect(idsEnTabla()).toEqual([2, 3, 1]))
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'estado,asc' }))
   })
 
-  test('el buscador filtra por cliente o por dirección, sin importar mayúsculas ni acentos', async () => {
+  test.each([
+    ['Cliente', 'cliente'],
+    ['Dirección', 'direccion'],
+    ['Zona', 'zona'],
+    ['Registro', 'fechaRegistro'],
+  ])('el encabezado %s pide sort=%s,asc y después %s,desc', async (titulo, columna) => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: titulo }))
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: `${columna},asc` })))
+    await user.click(screen.getByRole('button', { name: titulo }))
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: `${columna},desc` })))
+  })
+
+  test('Acciones no ordena: no es una columna del backend', async () => {
+    await dibujar()
+
+    expect(screen.queryByRole('button', { name: 'Acciones' })).not.toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Acciones' })).not.toHaveAttribute('aria-sort')
+  })
+
+  test('el buscador manda q al backend y filtra por cliente o dirección, sin importar mayúsculas ni acentos', async () => {
     const user = userEvent.setup()
     servir([
-        pedidoNumero(1, { clienteNombres: 'María Torres', direccion: 'Bolívar y Mera' }),
-        pedidoNumero(2, { clienteNombres: 'Luis Mora', direccion: 'Cevallos y Sucre' }),
-      ])
+      pedidoNumero(1, { clienteNombres: 'María Torres', direccion: 'Bolívar y Mera' }),
+      pedidoNumero(2, { clienteNombres: 'Luis Mora', direccion: 'Cevallos y Sucre' }),
+    ])
     render(<PedidosPage />)
     await screen.findByText('María Torres')
 
     await user.type(screen.getByRole('searchbox', { name: 'Buscar por cliente o dirección' }), 'maria')
-    expect(idsEnTabla()).toEqual([1])
+    await waitFor(() => expect(idsEnTabla()).toEqual([1]))
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'maria', page: 0, size: 10 }))
 
     await user.clear(screen.getByRole('searchbox'))
     await user.type(screen.getByRole('searchbox'), 'CEVALLOS')
-    expect(idsEnTabla()).toEqual([2])
+    await waitFor(() => expect(idsEnTabla()).toEqual([2]))
 
     await user.clear(screen.getByRole('searchbox'))
     await user.type(screen.getByRole('searchbox'), 'nadie')
-    expect(screen.getByText('No hay pedidos con esos filtros.')).toBeInTheDocument()
+    expect(await screen.findByText('No hay pedidos con esos filtros.')).toBeInTheDocument()
   })
 
-  test('buscar trae todos los pedidos del filtro una sola vez y las letras siguientes no consultan más', async () => {
+  test('buscar es una consulta de una página al backend: no trae todos los pedidos ni filtra en el navegador', async () => {
     const user = userEvent.setup()
     await dibujar()
-    expect(listarTodosLosPedidos).not.toHaveBeenCalled()
+    listarPedidos.mockClear()
 
     await user.type(screen.getByRole('searchbox'), 'Luis')
 
-    expect(listarTodosLosPedidos).toHaveBeenCalledTimes(1)
-    expect(listarTodosLosPedidos).toHaveBeenCalledWith(expect.objectContaining({ fecha: fechaIso(0) }))
-    expect(idsEnTabla()).toEqual([2])
+    await waitFor(() => expect(idsEnTabla()).toEqual([2]))
+    expect(listarPedidos).toHaveBeenCalledTimes(1) // las cuatro letras se juntan: no se consulta una vez por tecla
+    expect(listarPedidos).toHaveBeenCalledWith(expect.objectContaining({ fecha: fechaIso(0), q: 'Luis', page: 0, size: 10 }))
   })
 
-  test('buscar encuentra pedidos de cualquier página, no solo de la que se ve', async () => {
+  test('buscar encuentra pedidos que no están en la primera página', async () => {
     const user = userEvent.setup()
     servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
     render(<PedidosPage />)
     await screen.findByText('Cliente 01')
+    expect(idsEnTabla()).not.toContain(22)
 
     await user.type(screen.getByRole('searchbox'), 'Cliente 22')
 
-    expect(idsEnTabla()).toEqual([22])
+    await waitFor(() => expect(idsEnTabla()).toEqual([22]))
     expect(screen.getByText('1 pedido(s)')).toBeInTheDocument()
   })
 
-  test('al borrar la búsqueda vuelve a pedir página por página al backend', async () => {
+  test('al borrar la búsqueda vuelve a pedir página por página, sin q', async () => {
     const user = userEvent.setup()
     servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
     render(<PedidosPage />)
     await screen.findByText('Cliente 01')
 
     await user.type(screen.getByRole('searchbox'), 'Cliente 2')
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'Cliente 2' })))
     await user.clear(screen.getByRole('searchbox'))
 
-    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 10 })))
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ q: '', page: 0, size: 10 })))
     expect(await screen.findByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
+  })
+
+  test('buscar y ordenar a la vez mandan q y sort juntos', async () => {
+    const user = userEvent.setup()
+    servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+
+    await user.type(screen.getByRole('searchbox'), 'Cliente 2')
+    await user.click(screen.getByRole('button', { name: '#' })) // el # ya estaba ascendente: pasa a descendente
+
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'Cliente 2', sort: 'id,desc', page: 0 })))
+    await waitFor(() => expect(idsEnTabla()[0]).toBe(24))
   })
 
   test('pagina de a 10 en el backend: cada página es una consulta y la 3 trae las últimas 4', async () => {
@@ -1020,7 +1057,6 @@ describe('PedidosPage: orden, búsqueda y paginación', () => {
     await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, size: 10 })))
     expect(await screen.findByText('Mostrando 21 a 24 de 24')).toBeInTheDocument()
     expect(idsEnTabla()).toEqual([21, 22, 23, 24])
-    expect(listarTodosLosPedidos).not.toHaveBeenCalled()
   })
 
   test('cambiar las filas por página pide ese tamaño al backend desde la página 1', async () => {
@@ -1036,18 +1072,31 @@ describe('PedidosPage: orden, búsqueda y paginación', () => {
     expect(idsEnTabla()).toHaveLength(25)
   })
 
-  test('ordenar por una columna trae todos los pedidos y ordena en el navegador, página por página', async () => {
+  test('ordenar por # descendente pide sort=id,desc al backend y muestra la página 1 de ese orden', async () => {
     const user = userEvent.setup()
     servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
     render(<PedidosPage />)
     await screen.findByText('Cliente 01')
 
-    await user.click(screen.getByRole('button', { name: '#' }))
-    await user.click(screen.getByRole('button', { name: '#' })) // descendente
+    await user.click(screen.getByRole('button', { name: '#' })) // ya venía ascendente: pasa a descendente
 
-    expect(listarTodosLosPedidos).toHaveBeenCalled()
+    await waitFor(() => expect(idsEnTabla()).toEqual([24, 23, 22, 21, 20, 19, 18, 17, 16, 15]))
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'id,desc', page: 0, size: 10 }))
+    expect(screen.getByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
+  })
+
+  test('cambiar el orden vuelve a la página 1', async () => {
+    const user = userEvent.setup()
+    servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    expect(await screen.findByText('Mostrando 11 a 20 de 24')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cliente' }))
+
     expect(await screen.findByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
-    expect(idsEnTabla()).toEqual([24, 23, 22, 21, 20, 19, 18, 17, 16, 15])
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'cliente,asc', page: 0 }))
   })
 
   test('buscar vuelve a la página 1', async () => {

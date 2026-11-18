@@ -4,14 +4,17 @@ import { api } from './client'
 export const TAMANO_LOTE = 1000
 
 /**
- * Una página de pedidos (el backend los ordena por fecha y hora de entrega y luego por id).
+ * Una página de pedidos. El backend busca (`q`: cliente o dirección, sin mayúsculas ni tildes), ordena (`sort`, con el
+ * formato de Spring: "fechaEntrega,desc"; sin orden va por entrega y luego id) y pagina (`page` desde 0, `size`).
  * @returns {Promise<{ pedidos: object[], total: number }>} el total (de todas las páginas) viene en la cabecera X-Total-Count
  */
-export async function listarPedidos({ fecha, zonaId, estado, page = 0, size = 100 } = {}) {
+export async function listarPedidos({ fecha, zonaId, estado, q, sort, page = 0, size = 100 } = {}) {
   const params = { page, size }
   if (fecha) params.fecha = fecha
   if (zonaId) params.zonaId = zonaId
   if (estado) params.estado = estado
+  if (q?.trim()) params.q = q.trim()
+  if (sort) params.sort = sort
   const respuesta = await api.get('/pedidos', { params })
   return {
     pedidos: respuesta.data,
@@ -19,7 +22,7 @@ export async function listarPedidos({ fecha, zonaId, estado, page = 0, size = 10
   }
 }
 
-/** Todos los pedidos que cumplen el filtro, pidiéndolos por lotes de 1000 (nunca se queda en la primera página). */
+/** Todos los pedidos que cumplen el filtro, pidiéndolos por lotes de 1000 (nunca se queda en la primera página). Lo usa Inicio. */
 export async function listarTodosLosPedidos(filtros = {}) {
   const primero = await listarPedidos({ ...filtros, page: 0, size: TAMANO_LOTE })
   const lotes = Math.ceil(primero.total / TAMANO_LOTE)

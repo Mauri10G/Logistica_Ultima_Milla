@@ -57,6 +57,27 @@ describe('pedidosApi', () => {
     expect(api.get).toHaveBeenCalledWith('/pedidos', { params: { page: 0, size: 100, estado: 'PENDIENTE' } })
   })
 
+  test('listarPedidos envía la búsqueda (q) y el orden (sort) para que el backend los resuelva', async () => {
+    api.get.mockResolvedValue({ data: [{ id: 5 }], headers: { 'x-total-count': '1' } })
+
+    const resultado = await listarPedidos({ fecha: '2026-03-01', q: '  Bolívar ', sort: 'fechaEntrega,desc', page: 2, size: 25 })
+
+    expect(api.get).toHaveBeenCalledWith('/pedidos', {
+      params: { page: 2, size: 25, fecha: '2026-03-01', q: 'Bolívar', sort: 'fechaEntrega,desc' },
+    })
+    expect(resultado).toEqual({ pedidos: [{ id: 5 }], total: 1 })
+  })
+
+  test('listarPedidos no manda q ni sort cuando están vacíos', async () => {
+    api.get.mockResolvedValue({ data: [], headers: {} })
+
+    await listarPedidos({ q: '   ', sort: undefined })
+    await listarPedidos({ q: '', sort: '' })
+
+    expect(api.get).toHaveBeenNthCalledWith(1, '/pedidos', { params: { page: 0, size: 100 } })
+    expect(api.get).toHaveBeenNthCalledWith(2, '/pedidos', { params: { page: 0, size: 100 } })
+  })
+
   test('listarTodosLosPedidos pide por lotes de 1000 hasta juntar el total', async () => {
     const lote = (desde, cantidad, total) => ({
       data: Array.from({ length: cantidad }, (_, i) => ({ id: desde + i })),
