@@ -109,6 +109,21 @@ Ruta:   ARMADA → EN_CURSO (se recoge el primer pedido) → FINALIZADA (todos E
    (cada `PATCH` valida la transición, guarda historial y publica en `/topic/pedidos`; la ruta cambia de estado sola).
 4. **Último momento** (`POST /api/rutas/ultimo-momento/{pedidoId}`): se inserta en una ruta `ARMADA` de su zona y fecha
    con espacio (la de parada más cercana) o se crea una ruta nueva con el repartidor de menor carga.
+5. **Ajustes manuales** (solo STAFF, solo rutas `ARMADA`; `AjusteRutasService`), para corregir lo que el armado no
+   asignó bien. Toman el mismo bloqueo por (zona, fecha) que el armado, en orden ascendente de zona, y releen la ruta
+   y el pedido con bloqueo antes de decidir. Cada cambio se publica en `/topic/rutas` (`RUTA_ACTUALIZADA` con su motivo).
+
+   | Endpoint | Qué hace | Errores |
+   |---|---|---|
+   | `PATCH /api/rutas/{id}/repartidor` `{ "repartidorId": 3 }` | Cambia el repartidor (activo y disponible) | 404 repartidor, 422 `REPARTIDOR_NO_DISPONIBLE` |
+   | `POST /api/rutas/{id}/pedidos/{pedidoId}` | Mueve el pedido al final de la ruta, desde otra ruta `ARMADA` de la misma fecha (aunque sea de otra zona) o desde `PENDIENTE` | 409 `RUTA_LLENA` (respeta el máximo), `PEDIDO_YA_EN_RUTA`, `PEDIDO_NO_MOVIBLE`; 422 `FECHA_DISTINTA` |
+   | `DELETE /api/rutas/{id}/pedidos/{pedidoId}` | Saca el pedido: vuelve a `PENDIENTE` sin ruta (queda en el historial) y se renumeran las paradas | 409 `PEDIDO_NO_ESTA_EN_RUTA` |
+   | `PUT /api/rutas/{id}/orden` `{ "pedidos": [12, 7, 9] }` | Nuevo orden de visita; debe traer exactamente los pedidos de la ruta | 422 `ORDEN_INVALIDO` |
+
+   Todos responden 409 `RUTA_NO_MODIFICABLE` si la ruta ya está `EN_CURSO` o `FINALIZADA`, y devuelven la ruta actualizada.
+   `V5__orden_en_ruta_diferido.sql` cambia el índice único `(ruta_id, orden_en_ruta)` por una restricción `UNIQUE
+   DEFERRABLE INITIALLY DEFERRED`: se sigue garantizando al hacer commit, pero permite renumerar (intercambiar 1 y 2) en
+   la misma transacción.
 
 ### Mensajes WebSocket (STOMP sobre `ws://host:8080/ws`)
 
@@ -191,6 +206,7 @@ dos rutas.
 | CP-11 | Seguimiento en tiempo real | Verificado a mano con un cliente STOMP real; pendiente automatizar con Playwright |
 | — | Transiciones de estado | `EstadoPedidoTest`, `ApiRestIT` |
 | — | Algoritmo de rutas | `ClusterPorZonaVecinoMasCercanoTest`, `ArmadoRutasServiceTest` |
+| — | Ajustes manuales de rutas (máximo, renumeración, solo ARMADA, 403 para COURIER, concurrencia con el armado) | `RutaTest`, `AjusteRutasServiceTest`, `AjusteRutasIT` |
 | — | Login, roles y permisos (401/403, COURIER contra ruta ajena, origen por rol, CONNECT de STOMP, cabeceras) | `AuthServiceTest`, `SeguridadConfigTest`, `ControlAccesoTest`, `AutenticacionStompInterceptorTest`, `PedidoServiceTest`, `SeguridadIT` |
 
 Los CP-01, CP-02 y CP-10 no se detallaron en el enunciado de esta base: quedan por mapear por el equipo.
