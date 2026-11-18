@@ -45,9 +45,11 @@ class ControlAccesoTest {
         Sesiones.comoCourier(3L);
 
         assertThatCode(() -> control.exigirPedidoPropio(pedidoDe(3L))).doesNotThrowAnyException();
-        assertThatThrownBy(() -> control.exigirPedidoPropio(pedidoDe(4L)))
+        var pedido = pedidoDe(4L);
+        assertThatThrownBy(() -> control.exigirPedidoPropio(pedido))
                 .isInstanceOf(AccesoDenegadoException.class).hasMessageContaining("10");
-        assertThatThrownBy(() -> control.exigirPedidoPropio(Fabrica.pedido(11L, centro, FECHA)))
+        var pedido2 = Fabrica.pedido(11L, centro, FECHA);
+        assertThatThrownBy(() -> control.exigirPedidoPropio(pedido2))
                 .isInstanceOf(AccesoDenegadoException.class);
     }
 

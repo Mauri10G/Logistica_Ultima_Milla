@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -117,7 +118,7 @@ class ArmadoRutasServiceTest {
         assertThat(List.of(p1, p2, p3)).allMatch(p -> p.getEstado() == EstadoPedido.ASIGNADO);
         assertThat(p1.getOrdenEnRuta()).isEqualTo(1);
         assertThat(p2.getOrdenEnRuta()).isEqualTo(2);
-        verify(seguimientoService, org.mockito.Mockito.times(3)).registrarCambio(anyLong(),
+        verify(seguimientoService, times(3)).registrarCambio(anyLong(),
                 eq(EstadoPedido.PENDIENTE), eq(EstadoPedido.ASIGNADO), eq(OrigenCambio.WEB));
 
         ArgumentCaptor<RutasArmadasEvent> evento = ArgumentCaptor.forClass(RutasArmadasEvent.class);

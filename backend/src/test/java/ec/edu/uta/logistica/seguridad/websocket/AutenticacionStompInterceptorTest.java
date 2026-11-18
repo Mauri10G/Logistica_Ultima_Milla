@@ -66,11 +66,14 @@ class AutenticacionStompInterceptorTest {
     void sinTokenOInvalido() {
         AutenticacionStompInterceptor interceptor = interceptor(true);
 
-        assertThatThrownBy(() -> interceptor.preSend(frame(StompCommand.CONNECT, null), canal))
+        var mensaje = frame(StompCommand.CONNECT, null);
+        assertThatThrownBy(() -> interceptor.preSend(mensaje, canal))
                 .isInstanceOf(MessageDeliveryException.class).hasMessageContaining("Falta el token");
-        assertThatThrownBy(() -> interceptor.preSend(frame(StompCommand.CONNECT, "Basic abc"), canal))
+        var mensaje2 = frame(StompCommand.CONNECT, "Basic abc");
+        assertThatThrownBy(() -> interceptor.preSend(mensaje2, canal))
                 .isInstanceOf(MessageDeliveryException.class);
-        assertThatThrownBy(() -> interceptor.preSend(frame(StompCommand.CONNECT, "Bearer no.es.jwt"), canal))
+        var mensaje3 = frame(StompCommand.CONNECT, "Bearer no.es.jwt");
+        assertThatThrownBy(() -> interceptor.preSend(mensaje3, canal))
                 .isInstanceOf(MessageDeliveryException.class).hasMessageContaining("invalido");
     }
 

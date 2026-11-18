@@ -136,7 +136,8 @@ class AjusteRutasServiceTest {
     void rutaInexistente() {
         when(rutaRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> servicio.reordenar(99L, List.of(1L))).isInstanceOf(RecursoNoEncontradoException.class);
+        var orden = List.of(1L);
+        assertThatThrownBy(() -> servicio.reordenar(99L, orden)).isInstanceOf(RecursoNoEncontradoException.class);
         verifyNoInteractions(bloqueo);
     }
 

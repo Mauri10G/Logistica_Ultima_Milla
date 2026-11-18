@@ -16,6 +16,7 @@ import java.time.ZoneId;
 import java.util.Optional;
 
 import ec.edu.uta.logistica.common.exception.AccesoDenegadoException;
+import ec.edu.uta.logistica.common.exception.ApiException;
 import ec.edu.uta.logistica.common.exception.ConflictoException;
 import ec.edu.uta.logistica.common.exception.ReglaNegocioException;
 import ec.edu.uta.logistica.common.exception.SolicitudInvalidaException;
@@ -107,10 +108,11 @@ class PedidoServiceTest {
     void direccionFueraDeZona() {
         when(zonaRepository.buscarZonaQueContiene(-1.2412, -78.6197)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> servicio.registrar(solicitud(HOY)))
+        var solicitud = solicitud(HOY);
+        assertThatThrownBy(() -> servicio.registrar(solicitud))
                 .isInstanceOf(DireccionFueraDeZonaException.class)
                 .hasMessage("La dirección no corresponde a ninguna zona configurada")
-                .satisfies(e -> assertThat(((ReglaNegocioException) e).getStatus())
+                .satisfies(e -> assertThat(((ApiException) e).getStatus())
                         .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT));
 
         verify(pedidoRepository, never()).save(any());
@@ -120,7 +122,8 @@ class PedidoServiceTest {
     @Test
     @DisplayName("CP-04: no se permite una fecha de entrega anterior a hoy")
     void fechaPasada() {
-        assertThatThrownBy(() -> servicio.registrar(solicitud(HOY.minusDays(1))))
+        var solicitud = solicitud(HOY.minusDays(1));
+        assertThatThrownBy(() -> servicio.registrar(solicitud))
                 .isInstanceOf(ReglaNegocioException.class)
                 .hasMessageContaining("anterior a hoy");
 
@@ -153,7 +156,8 @@ class PedidoServiceTest {
         @Test
         @DisplayName("registrar: hoy con una hora ya pasada se rechaza con 422 y el mensaje con la hora del servidor")
         void registrarHoyConHoraPasada() {
-            assertThatThrownBy(() -> servicio.registrar(solicitud(HOY, LocalTime.of(7, 0))))
+            var solicitud = solicitud(HOY, LocalTime.of(7, 0));
+            assertThatThrownBy(() -> servicio.registrar(solicitud))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessage("La hora de entrega debe ser al menos 30 minutos después de la hora actual del "
                             + "servidor, 10:00")
@@ -169,10 +173,12 @@ class PedidoServiceTest {
         @Test
         @DisplayName("registrar: hoy con una hora dentro de la anticipacion (10:29 con ahora 10:00) se rechaza")
         void registrarHoyDentroDeLaAnticipacion() {
-            assertThatThrownBy(() -> servicio.registrar(solicitud(HOY, LocalTime.of(10, 29))))
+            var solicitud = solicitud(HOY, LocalTime.of(10, 29));
+            assertThatThrownBy(() -> servicio.registrar(solicitud))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessageContaining("al menos 30 minutos");
-            assertThatThrownBy(() -> servicio.registrar(solicitud(HOY, LocalTime.of(10, 0))))
+            var solicitud2 = solicitud(HOY, LocalTime.of(10, 0));
+            assertThatThrownBy(() -> servicio.registrar(solicitud2))
                     .isInstanceOf(ReglaNegocioException.class);
 
             verifyNoInteractions(zonaRepository, clienteRepository, pedidoRepository);
@@ -205,10 +211,12 @@ class PedidoServiceTest {
             Pedido pendiente = Fabrica.pedido(7L, centro, HOY.plusDays(1));
             when(pedidoRepository.findById(7L)).thenReturn(Optional.of(pendiente));
 
-            assertThatThrownBy(() -> servicio.editar(7L, solicitud(HOY, LocalTime.of(7, 0))))
+            var solicitud = solicitud(HOY, LocalTime.of(7, 0));
+            assertThatThrownBy(() -> servicio.editar(7L, solicitud))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessageContaining("hora actual del servidor, 10:00");
-            assertThatThrownBy(() -> servicio.editar(7L, solicitud(HOY, LocalTime.of(10, 15))))
+            var solicitud2 = solicitud(HOY, LocalTime.of(10, 15));
+            assertThatThrownBy(() -> servicio.editar(7L, solicitud2))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessageContaining("al menos 30 minutos");
 
@@ -252,7 +260,8 @@ class PedidoServiceTest {
 
             assertThat(conSegundos.registrar(solicitud(HOY, LocalTime.of(10, 30))).horaEntrega())
                     .isEqualTo(LocalTime.of(10, 30));
-            assertThatThrownBy(() -> conSegundos.registrar(solicitud(HOY, LocalTime.of(10, 29))))
+            var solicitud = solicitud(HOY, LocalTime.of(10, 29));
+            assertThatThrownBy(() -> conSegundos.registrar(solicitud))
                     .isInstanceOf(ReglaNegocioException.class);
         }
 
@@ -261,7 +270,8 @@ class PedidoServiceTest {
         void anticipacionConfigurable() {
             PedidoService conNoventa = servicioCon(RELOJ, 90);
 
-            assertThatThrownBy(() -> conNoventa.registrar(solicitud(HOY, LocalTime.of(11, 0))))
+            var solicitud = solicitud(HOY, LocalTime.of(11, 0));
+            assertThatThrownBy(() -> conNoventa.registrar(solicitud))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessage("La hora de entrega debe ser al menos 90 minutos después de la hora actual del "
                             + "servidor, 10:00");
@@ -277,7 +287,8 @@ class PedidoServiceTest {
             preparaGuardadoValido();
             PedidoService noche = servicioCon(relojA("2027-02-11T03:00:00Z"), ANTICIPACION_MINUTOS);
 
-            assertThatThrownBy(() -> noche.registrar(solicitud(HOY, LocalTime.of(22, 15))))
+            var solicitud = solicitud(HOY, LocalTime.of(22, 15));
+            assertThatThrownBy(() -> noche.registrar(solicitud))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessageContaining("hora actual del servidor, 22:00");
             assertThat(noche.registrar(solicitud(HOY, LocalTime.of(22, 30))).fechaEntrega()).isEqualTo(HOY);
@@ -331,7 +342,8 @@ class PedidoServiceTest {
         asignado.cambiarEstado(EstadoPedido.ASIGNADO);
         when(pedidoRepository.findById(7L)).thenReturn(Optional.of(asignado));
 
-        assertThatThrownBy(() -> servicio.editar(7L, solicitud(HOY.plusDays(1))))
+        var solicitud = solicitud(HOY.plusDays(1));
+        assertThatThrownBy(() -> servicio.editar(7L, solicitud))
                 .isInstanceOf(ConflictoException.class)
                 .hasMessageContaining("PENDIENTE");
 
@@ -387,7 +399,8 @@ class PedidoServiceTest {
         pedido.cambiarEstado(EstadoPedido.ASIGNADO);
         when(pedidoRepository.findById(7L)).thenReturn(Optional.of(pedido));
 
-        assertThatThrownBy(() -> servicio.cambiarEstado(7L, new EstadoPedidoRequest(EstadoPedido.ENTREGADO, null)))
+        var cambio = new EstadoPedidoRequest(EstadoPedido.ENTREGADO, null);
+        assertThatThrownBy(() -> servicio.cambiarEstado(7L, cambio))
                 .isInstanceOf(TransicionInvalidaException.class);
 
         assertThat(pedido.getEstado()).isEqualTo(EstadoPedido.ASIGNADO);
@@ -400,7 +413,8 @@ class PedidoServiceTest {
         Pedido pedido = Fabrica.pedido(7L, centro, HOY.plusDays(1));
         when(pedidoRepository.findById(7L)).thenReturn(Optional.of(pedido));
 
-        assertThatThrownBy(() -> servicio.cambiarEstado(7L, new EstadoPedidoRequest(EstadoPedido.ASIGNADO, null)))
+        var cambio = new EstadoPedidoRequest(EstadoPedido.ASIGNADO, null);
+        assertThatThrownBy(() -> servicio.cambiarEstado(7L, cambio))
                 .isInstanceOf(ReglaNegocioException.class);
 
         verifyNoInteractions(seguimientoService);
@@ -428,7 +442,8 @@ class PedidoServiceTest {
             Pedido pedido = asignadoA(2L);
             Sesiones.comoCourier(1L);
 
-            assertThatThrownBy(() -> servicio.cambiarEstado(7L, new EstadoPedidoRequest(EstadoPedido.RECOGIDO, null)))
+            var cambio = new EstadoPedidoRequest(EstadoPedido.RECOGIDO, null);
+            assertThatThrownBy(() -> servicio.cambiarEstado(7L, cambio))
                     .isInstanceOf(AccesoDenegadoException.class)
                     .satisfies(e -> assertThat(((AccesoDenegadoException) e).getStatus())
                             .isEqualTo(HttpStatus.FORBIDDEN));

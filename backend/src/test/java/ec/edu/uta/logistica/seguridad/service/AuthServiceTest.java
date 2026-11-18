@@ -91,7 +91,8 @@ class AuthServiceTest {
         when(usuarioRepository.buscarPorUsuario("staff"))
                 .thenReturn(Optional.of(usuario("staff", "staff123", Rol.STAFF, null)));
 
-        assertThatThrownBy(() -> servicio.login(new LoginRequest("staff", "otra")))
+        var credenciales = new LoginRequest("staff", "otra");
+        assertThatThrownBy(() -> servicio.login(credenciales))
                 .isInstanceOf(NoAutenticadoException.class)
                 .hasMessage("Usuario o clave incorrectos")
                 .satisfies(e -> {
@@ -105,7 +106,8 @@ class AuthServiceTest {
     void usuarioInexistente() {
         when(usuarioRepository.buscarPorUsuario(anyString())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> servicio.login(new LoginRequest("nadie", "staff123")))
+        var credenciales = new LoginRequest("nadie", "staff123");
+        assertThatThrownBy(() -> servicio.login(credenciales))
                 .isInstanceOf(NoAutenticadoException.class)
                 .hasMessage("Usuario o clave incorrectos");
     }
@@ -117,7 +119,8 @@ class AuthServiceTest {
         inactivo.setActivo(false);
         when(usuarioRepository.buscarPorUsuario("luis")).thenReturn(Optional.of(inactivo));
 
-        assertThatThrownBy(() -> servicio.login(new LoginRequest("luis", "repartidor123")))
+        var credenciales = new LoginRequest("luis", "repartidor123");
+        assertThatThrownBy(() -> servicio.login(credenciales))
                 .isInstanceOf(NoAutenticadoException.class);
     }
 

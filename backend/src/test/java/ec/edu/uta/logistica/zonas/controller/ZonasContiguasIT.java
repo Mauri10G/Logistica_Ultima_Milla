@@ -65,7 +65,7 @@ class ZonasContiguasIT extends IntegrationTestBase {
     @DisplayName("zonas que comparten borde o solo un vertice se aceptan")
     void compartirBordeOVerticeSeAcepta() throws Exception {
         crear(zona("IT-Cont-A", -60.00, 10.00, -59.90, 10.10));
-        // comparte todo el borde este de A
+        // comparte el borde este completo de A
         long b = crear(zona("IT-Cont-B", -59.90, 10.00, -59.80, 10.10));
         // toca a A solo en el vertice (-60.00, 10.10)
         crear(zona("IT-Cont-C", -60.10, 10.10, -60.00, 10.20));
