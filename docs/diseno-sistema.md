@@ -33,6 +33,7 @@ persona trabaja en su carpeta.
 | `rutas` | Armado de rutas | `Ruta` (`agregarPedido`), `ArmadoRutasService`, `RutaService` (último momento), `BloqueoZonaFecha`, `algoritmo/` |
 | `repartidores` | Gestión de repartidores | `Repartidor`, disponibilidad, `GET .../ruta-actual` |
 | `seguimiento` | Tiempo real e historial | `SeguimientoService` (historial + evento), `SeguimientoPublicador` (STOMP tras el commit) |
+| `seguridad` | Login y permisos | `Usuario`, `AuthService` (BCrypt), `TokenService` (JWT HS256), `SeguridadConfig` (reglas por rol, cabeceras), `ControlAcceso` (un COURIER solo lo suyo), `AutenticacionStompInterceptor` (CONNECT de `/ws`) |
 
 Dependencias entre módulos (solo hacia abajo): `rutas → pedidos, repartidores, zonas, seguimiento`;
 `pedidos → zonas, seguimiento`; `seguimiento → pedidos` (solo enums); `common` no depende de nadie.
@@ -47,6 +48,7 @@ ruta(id, fecha, zona_id, repartidor_id, estado, max_pedidos, version)
 pedido(id, cliente_id, direccion, ubicacion geometry(Point,4326), zona_id, fecha_entrega, hora_entrega,
        fecha_registro, prioridad, estado, registrado_por_personal, ruta_id?, orden_en_ruta?, version)
 historial_estado_pedido(id, pedido_id, estado_anterior?, estado_nuevo, fecha_cambio, origen WEB|MOVIL)
+usuario(id, usuario UNIQUE(lower), clave BCrypt, rol STAFF|COURIER, repartidor_id?, activo, creado_en)   -- V4
 ```
 
 Índices: GIST en `zona.area` y `pedido.ubicacion`; compuesto `pedido(fecha_entrega, zona_id, estado)`;
@@ -55,7 +57,9 @@ historial_estado_pedido(id, pedido_id, estado_anterior?, estado_nuevo, fecha_cam
 separados ~200 m entre sí, 6 repartidores, 10 clientes y 20 pedidos para mañana.
 `V3__zonas_contiguas.sql`: reemplaza el área de esas 5 zonas (por nombre; mismos ids y nombres) por polígonos pegados
 entre sí, sin huecos. Cada polígono contiene al rectángulo anterior, así que los 20 pedidos siguen en su misma zona.
-`V4` en adelante queda para las siguientes migraciones (la V4 es de la tabla de usuarios).
+`V4__usuarios.sql`: tabla `usuario` (clave con BCrypt; un COURIER siempre apunta a su repartidor y un STAFF nunca),
+un usuario `staff` y un usuario por cada repartidor de V2 (`carlos`, `luis`, `andrea`, `diego`, `paola`, `marco`).
+Credenciales y permisos en `docs/api-auth.md`.
 
 #### Zonas: contiguas, sin huecos y sin cruces
 
@@ -171,7 +175,8 @@ dos rutas.
 | Hora de entrega | La fecha y hora de entrega deben ser ≥ **ahora + `logistica.pedidos.anticipacion-minima-minutos`** (30 por defecto, `@Value` en `PedidoService`), al registrar y al editar; si no, **422** `HORA_ENTREGA_INVALIDA` con la hora del servidor en el mensaje. "Ahora" es el `Clock` del backend truncado a minutos (la hora del pedido es de precisión minuto); **no se confía en el reloj del computador del usuario**, que puede cambiarse. Una fecha anterior a hoy sigue dando `FECHA_ENTREGA_PASADA`. Mañana en adelante acepta cualquier hora |
 | Hora del servidor | `GET /api/servidor/hora` → `{fecha, hora, zonaHoraria, anticipacionMinimaMinutos, entregaMinimaFecha, entregaMinimaHora}`, sin datos sensibles. `entregaMinima*` es la primera entrega aceptada (ahora + anticipación; a las 23:50 ya es mañana 00:20). La web la pide cada vez que abre el modal de pedido y de ella saca la fecha por defecto y mínima, la hora mínima si la fecha es esa primera fecha y el aviso de hora inválida. Si no responde o llega incompleta, la web no valida fecha ni hora y el backend decide y explica el rechazo |
 | Tiempo real | Se publica `AFTER_COMMIT`: nunca se envía un cambio que luego se revierta |
-| Autenticación | Aún no; CORS en un solo lugar y sin Spring Security para agregarlo después |
+| Autenticación | Spring Security + `spring-boot-starter-oauth2-resource-server` con JWT firmados con HS256 (clave en `logistica.seguridad.jwt.secreto`, sin librerías extra). API sin estado: sin sesión HTTP ni cookies, por eso no aplica CSRF. Roles `STAFF` (web) y `COURIER` (móvil). Las reglas por rol están en `SeguridadConfig`; las de "solo lo suyo" (un COURIER y una ruta ajena → 403) en `ControlAcceso`. El origen del historial sale del rol, no del cuerpo. `logistica.seguridad.habilitada=false` deja todo abierto mientras la web y el móvil terminan. Contrato: `docs/api-auth.md` |
+| Cabeceras de seguridad | `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Content-Security-Policy` (estricta en la API, propia en Swagger UI), `Referrer-Policy: no-referrer`, `Permissions-Policy`, `Cache-Control: no-store`. CORS se aplica dentro de Spring Security para que los 401/403 también lleven sus cabeceras |
 | Paginación | `GET /api/pedidos` devuelve una lista y el total en `X-Total-Count` |
 
 ## 8. Casos de prueba cubiertos
@@ -186,6 +191,7 @@ dos rutas.
 | CP-11 | Seguimiento en tiempo real | Verificado a mano con un cliente STOMP real; pendiente automatizar con Playwright |
 | — | Transiciones de estado | `EstadoPedidoTest`, `ApiRestIT` |
 | — | Algoritmo de rutas | `ClusterPorZonaVecinoMasCercanoTest`, `ArmadoRutasServiceTest` |
+| — | Login, roles y permisos (401/403, COURIER contra ruta ajena, origen por rol, CONNECT de STOMP, cabeceras) | `AuthServiceTest`, `SeguridadConfigTest`, `ControlAccesoTest`, `AutenticacionStompInterceptorTest`, `PedidoServiceTest`, `SeguridadIT` |
 
 Los CP-01, CP-02 y CP-10 no se detallaron en el enunciado de esta base: quedan por mapear por el equipo.
 
@@ -193,7 +199,8 @@ Los CP-01, CP-02 y CP-10 no se detallaron en el enunciado de esta base: quedan p
 
 - Confirmar el algoritmo de armado y sus parámetros (ver sección 5).
 - Disparar la inserción de último momento automáticamente al registrar un pedido cuando ya hay rutas armadas.
-- Autenticación y roles; ventana de tiempo para el armado programado por zona.
+- Encender `logistica.seguridad.habilitada` cuando la web y el móvil manden el token; ventana de tiempo para el armado
+  programado por zona.
 - Automatizar CP-11 con Playwright (dos páginas: una hace el `PATCH`, la otra observa la tabla).
 - Pruebas de seguridad (Dependency-Check y ZAP) ejecutadas y archivadas en `tests/security/reports/` y `docs/evidencias/`.
 
