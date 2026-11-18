@@ -1,7 +1,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { manejadoresMapa } from 'react-leaflet'
-import { crearPedido, editarPedido, eliminarPedido, listarPedidos, obtenerHoraServidor } from '../api/pedidosApi'
+import {
+  crearPedido,
+  editarPedido,
+  eliminarPedido,
+  listarPedidos,
+  listarTodosLosPedidos,
+  obtenerHoraServidor,
+} from '../api/pedidosApi'
 import { obtenerHistorial } from '../api/seguimientoApi'
 import { listarZonas } from '../api/zonasApi'
 import { fechaIso } from '../hooks/fechas'
@@ -65,6 +72,15 @@ function errorHttp(status, codigo, mensaje) {
   return { response: { status, data: { codigo, mensaje } } }
 }
 
+// Simula el backend: listarPedidos devuelve solo la página pedida (con el total de todas) y listarTodosLosPedidos, todo el conjunto.
+function servir(pedidos) {
+  listarPedidos.mockImplementation(async ({ page = 0, size = 100 } = {}) => ({
+    pedidos: pedidos.slice(page * size, (page + 1) * size),
+    total: pedidos.length,
+  }))
+  listarTodosLosPedidos.mockResolvedValue({ pedidos, total: pedidos.length })
+}
+
 async function dibujar() {
   render(<PedidosPage />)
   await screen.findByText('Maria Torres')
@@ -80,7 +96,7 @@ async function llenarNuevoPedido(user) {
 
 beforeEach(() => {
   jest.resetAllMocks()
-  listarPedidos.mockResolvedValue({ pedidos: PEDIDOS, total: 2 })
+  servir(PEDIDOS)
   listarZonas.mockResolvedValue(ZONAS)
   obtenerHoraServidor.mockResolvedValue(HORA_SERVIDOR)
   crearPedido.mockResolvedValue({ id: 3 })
@@ -109,11 +125,16 @@ describe('PedidosPage: lista y filtros', () => {
     expect(screen.queryByRole('button', { name: 'Eliminar pedido 2' })).not.toBeInTheDocument()
   })
 
-  test('avisa cuántos se muestran si hay más que la página', async () => {
-    listarPedidos.mockResolvedValue({ pedidos: PEDIDOS, total: 350 })
-    await dibujar()
+  test('con más pedidos que una página pide solo la página y muestra el total del backend', async () => {
+    servir(Array.from({ length: 350 }, (_, i) => pedidoNumero(i + 1)))
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
 
-    expect(screen.getByText('350 pedido(s) (mostrando 2)')).toBeInTheDocument()
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 10 }))
+    expect(listarTodosLosPedidos).not.toHaveBeenCalled()
+    expect(screen.getByText('350 pedido(s)')).toBeInTheDocument()
+    expect(screen.getByText('Mostrando 1 a 10 de 350')).toBeInTheDocument()
+    expect(idsEnTabla()).toHaveLength(10)
   })
 
   test('mientras llegan los datos muestra filas de carga y no el mensaje de vacío', async () => {
@@ -133,7 +154,7 @@ describe('PedidosPage: lista y filtros', () => {
   })
 
   test('sin resultados lo dice', async () => {
-    listarPedidos.mockResolvedValue({ pedidos: [], total: 0 })
+    servir([])
     render(<PedidosPage />)
 
     expect(await screen.findByText('No hay pedidos con esos filtros.')).toBeInTheDocument()
@@ -557,10 +578,7 @@ describe('PedidosPage: modal del formulario', () => {
     await dibujar()
     await user.click(screen.getByRole('button', { name: 'Nuevo pedido' }))
     await llenarNuevoPedido(user)
-    listarPedidos.mockResolvedValue({
-      pedidos: [...PEDIDOS, { ...PEDIDOS[0], id: 3, clienteNombres: 'Ana Ruiz' }],
-      total: 3,
-    })
+    servir([...PEDIDOS, { ...PEDIDOS[0], id: 3, clienteNombres: 'Ana Ruiz' }])
 
     await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
 
@@ -572,7 +590,7 @@ describe('PedidosPage: modal del formulario', () => {
     const user = userEvent.setup()
     await dibujar()
     await user.click(screen.getByRole('button', { name: 'Editar pedido 1' }))
-    listarPedidos.mockResolvedValue({ pedidos: [{ ...PEDIDOS[0], direccion: 'Dirección nueva' }, PEDIDOS[1]], total: 2 })
+    servir([{ ...PEDIDOS[0], direccion: 'Dirección nueva' }, PEDIDOS[1]])
 
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
 
@@ -677,7 +695,7 @@ describe('PedidosPage: eliminar con confirmación y deshacer', () => {
 
     avanzar(5000)
     expect(eliminarPedido).not.toHaveBeenCalled()
-    listarPedidos.mockResolvedValue({ pedidos: [PEDIDOS[1]], total: 1 })
+    servir([PEDIDOS[1]])
     avanzar(1000)
 
     await waitFor(() => expect(eliminarPedido).toHaveBeenCalledWith(1, { alSalir: false }))
@@ -747,7 +765,7 @@ describe('PedidosPage: eliminar con confirmación y deshacer', () => {
 
   test('se pueden eliminar dos pedidos seguidos: cada uno con su aviso y su deshacer', async () => {
     const user = configurar()
-    listarPedidos.mockResolvedValue({ pedidos: [PEDIDOS[0], pedidoNumero(5)], total: 2 })
+    servir([PEDIDOS[0], pedidoNumero(5)])
     await dibujar()
     await pedirEliminar(user, 1)
     await user.click(screen.getByRole('button', { name: 'Eliminar pedido' }))
@@ -888,26 +906,23 @@ describe('PedidosPage: filtro de fecha rápido', () => {
 })
 
 describe('PedidosPage: orden, búsqueda y paginación', () => {
-  test('viene ordenada por # de menor a mayor, con la flecha marcada en #', async () => {
-    listarPedidos.mockResolvedValue({ pedidos: [pedidoNumero(3), pedidoNumero(1), pedidoNumero(2)], total: 3 })
+  test('al abrir viene en el orden del backend (entrega y #), sin ninguna flecha de orden', async () => {
+    servir([pedidoNumero(3), pedidoNumero(1), pedidoNumero(2)])
     render(<PedidosPage />)
     await screen.findByText('Cliente 01')
 
-    expect(idsEnTabla()).toEqual([1, 2, 3])
-    expect(screen.getByRole('columnheader', { name: '#' })).toHaveAttribute('aria-sort', 'ascending')
+    expect(idsEnTabla()).toEqual([3, 1, 2])
+    expect(screen.getByRole('columnheader', { name: '#' })).not.toHaveAttribute('aria-sort')
     expect(screen.getByRole('columnheader', { name: 'Entrega' })).not.toHaveAttribute('aria-sort')
   })
 
   test('el encabezado Entrega ordena por fecha y hora, y otro clic invierte', async () => {
     const user = userEvent.setup()
-    listarPedidos.mockResolvedValue({
-      pedidos: [
+    servir([
         pedidoNumero(1, { fechaEntrega: '2031-05-19', horaEntrega: '08:00:00' }),
         pedidoNumero(2, { fechaEntrega: '2031-05-18', horaEntrega: '15:00:00' }),
         pedidoNumero(3, { fechaEntrega: '2031-05-18', horaEntrega: '09:00:00' }),
-      ],
-      total: 3,
-    })
+      ])
     render(<PedidosPage />)
     await screen.findByText('Cliente 01')
 
@@ -921,10 +936,7 @@ describe('PedidosPage: orden, búsqueda y paginación', () => {
 
   test('el encabezado Estado ordena según el flujo del pedido, no alfabéticamente', async () => {
     const user = userEvent.setup()
-    listarPedidos.mockResolvedValue({
-      pedidos: [pedidoNumero(1, { estado: 'ENTREGADO' }), pedidoNumero(2, { estado: 'PENDIENTE' }), pedidoNumero(3, { estado: 'EN_CAMINO' })],
-      total: 3,
-    })
+    servir([pedidoNumero(1, { estado: 'ENTREGADO' }), pedidoNumero(2, { estado: 'PENDIENTE' }), pedidoNumero(3, { estado: 'EN_CAMINO' })])
     render(<PedidosPage />)
     await screen.findByText('Cliente 01')
 
@@ -935,13 +947,10 @@ describe('PedidosPage: orden, búsqueda y paginación', () => {
 
   test('el buscador filtra por cliente o por dirección, sin importar mayúsculas ni acentos', async () => {
     const user = userEvent.setup()
-    listarPedidos.mockResolvedValue({
-      pedidos: [
+    servir([
         pedidoNumero(1, { clienteNombres: 'María Torres', direccion: 'Bolívar y Mera' }),
         pedidoNumero(2, { clienteNombres: 'Luis Mora', direccion: 'Cevallos y Sucre' }),
-      ],
-      total: 2,
-    })
+      ])
     render(<PedidosPage />)
     await screen.findByText('María Torres')
 
@@ -957,19 +966,46 @@ describe('PedidosPage: orden, búsqueda y paginación', () => {
     expect(screen.getByText('No hay pedidos con esos filtros.')).toBeInTheDocument()
   })
 
-  test('buscar no vuelve a consultar al backend', async () => {
+  test('buscar trae todos los pedidos del filtro una sola vez y las letras siguientes no consultan más', async () => {
     const user = userEvent.setup()
     await dibujar()
-    const consultas = listarPedidos.mock.calls.length
+    expect(listarTodosLosPedidos).not.toHaveBeenCalled()
 
     await user.type(screen.getByRole('searchbox'), 'Luis')
 
-    expect(listarPedidos.mock.calls.length).toBe(consultas)
+    expect(listarTodosLosPedidos).toHaveBeenCalledTimes(1)
+    expect(listarTodosLosPedidos).toHaveBeenCalledWith(expect.objectContaining({ fecha: fechaIso(0) }))
+    expect(idsEnTabla()).toEqual([2])
   })
 
-  test('pagina de a 10: "Mostrando 1 a 10 de 24" y la página 3 trae las últimas 4', async () => {
+  test('buscar encuentra pedidos de cualquier página, no solo de la que se ve', async () => {
     const user = userEvent.setup()
-    listarPedidos.mockResolvedValue({ pedidos: Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)), total: 24 })
+    servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+
+    await user.type(screen.getByRole('searchbox'), 'Cliente 22')
+
+    expect(idsEnTabla()).toEqual([22])
+    expect(screen.getByText('1 pedido(s)')).toBeInTheDocument()
+  })
+
+  test('al borrar la búsqueda vuelve a pedir página por página al backend', async () => {
+    const user = userEvent.setup()
+    servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+
+    await user.type(screen.getByRole('searchbox'), 'Cliente 2')
+    await user.clear(screen.getByRole('searchbox'))
+
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 10 })))
+    expect(await screen.findByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
+  })
+
+  test('pagina de a 10 en el backend: cada página es una consulta y la 3 trae las últimas 4', async () => {
+    const user = userEvent.setup()
+    servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
     render(<PedidosPage />)
     await screen.findByText('Cliente 01')
 
@@ -977,25 +1013,68 @@ describe('PedidosPage: orden, búsqueda y paginación', () => {
     expect(idsEnTabla()).toHaveLength(10)
 
     await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 10 })))
+    expect(await screen.findByText('Mostrando 11 a 20 de 24')).toBeInTheDocument()
+
     await user.click(screen.getByRole('button', { name: 'Página 3' }))
-    expect(screen.getByText('Mostrando 21 a 24 de 24')).toBeInTheDocument()
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, size: 10 })))
+    expect(await screen.findByText('Mostrando 21 a 24 de 24')).toBeInTheDocument()
     expect(idsEnTabla()).toEqual([21, 22, 23, 24])
+    expect(listarTodosLosPedidos).not.toHaveBeenCalled()
   })
 
-  test('buscar o cambiar un filtro vuelve a la página 1', async () => {
+  test('cambiar las filas por página pide ese tamaño al backend desde la página 1', async () => {
     const user = userEvent.setup()
-    listarPedidos.mockResolvedValue({ pedidos: Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)), total: 24 })
+    servir(Array.from({ length: 60 }, (_, i) => pedidoNumero(i + 1)))
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+
+    await user.selectOptions(screen.getByLabelText('Filas por página'), '25')
+
+    await waitFor(() => expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 25 })))
+    expect(await screen.findByText('Mostrando 1 a 25 de 60')).toBeInTheDocument()
+    expect(idsEnTabla()).toHaveLength(25)
+  })
+
+  test('ordenar por una columna trae todos los pedidos y ordena en el navegador, página por página', async () => {
+    const user = userEvent.setup()
+    servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
+
+    await user.click(screen.getByRole('button', { name: '#' }))
+    await user.click(screen.getByRole('button', { name: '#' })) // descendente
+
+    expect(listarTodosLosPedidos).toHaveBeenCalled()
+    expect(await screen.findByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
+    expect(idsEnTabla()).toEqual([24, 23, 22, 21, 20, 19, 18, 17, 16, 15])
+  })
+
+  test('buscar vuelve a la página 1', async () => {
+    const user = userEvent.setup()
+    servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
     render(<PedidosPage />)
     await screen.findByText('Cliente 01')
 
     await user.click(screen.getByRole('button', { name: /Siguiente/ }))
-    expect(screen.getByText('Mostrando 11 a 20 de 24')).toBeInTheDocument()
+    expect(await screen.findByText('Mostrando 11 a 20 de 24')).toBeInTheDocument()
     await user.type(screen.getByRole('searchbox'), 'Cliente')
-    expect(screen.getByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
+
+    expect(await screen.findByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
+  })
+
+  test('cambiar un filtro vuelve a la página 1 y pide esa página al backend', async () => {
+    const user = userEvent.setup()
+    servir(Array.from({ length: 24 }, (_, i) => pedidoNumero(i + 1)))
+    render(<PedidosPage />)
+    await screen.findByText('Cliente 01')
 
     await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    expect(await screen.findByText('Mostrando 11 a 20 de 24')).toBeInTheDocument()
     await user.selectOptions(screen.getByLabelText('Estado'), 'PENDIENTE')
+
     expect(await screen.findByText('Mostrando 1 a 10 de 24')).toBeInTheDocument()
+    expect(listarPedidos).toHaveBeenLastCalledWith(expect.objectContaining({ estado: 'PENDIENTE', page: 0, size: 10 }))
   })
 })
 
@@ -1009,10 +1088,7 @@ describe('PedidosPage: Ver (detalle de solo lectura)', () => {
 
   test('abre un modal con los datos, la ruta asignada y el historial', async () => {
     const user = userEvent.setup()
-    listarPedidos.mockResolvedValue({
-      pedidos: [PEDIDOS[0], { ...PEDIDOS[1], rutaId: 7, ordenEnRuta: 2 }],
-      total: 2,
-    })
+    servir([PEDIDOS[0], { ...PEDIDOS[1], rutaId: 7, ordenEnRuta: 2 }])
     obtenerHistorial.mockResolvedValue([
       { id: 1, pedidoId: 2, estadoAnterior: null, estadoNuevo: 'PENDIENTE', fechaCambio: '2026-03-01T09:00:00', origen: 'WEB' },
       { id: 2, pedidoId: 2, estadoAnterior: 'PENDIENTE', estadoNuevo: 'ASIGNADO', fechaCambio: '2026-03-01T18:00:00', origen: 'WEB' },
@@ -1143,10 +1219,7 @@ describe('PedidosPage: Editar y Eliminar solo en PENDIENTE', () => {
   })
 
   test('el motivo nombra el estado real del pedido', async () => {
-    listarPedidos.mockResolvedValue({
-      pedidos: [pedidoNumero(5, { estado: 'EN_CAMINO' }), pedidoNumero(6, { estado: 'ENTREGADO' })],
-      total: 2,
-    })
+    servir([pedidoNumero(5, { estado: 'EN_CAMINO' }), pedidoNumero(6, { estado: 'ENTREGADO' })])
     render(<PedidosPage />)
     await screen.findByText('Cliente 05')
 

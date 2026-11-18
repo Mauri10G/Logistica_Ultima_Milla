@@ -1,6 +1,6 @@
 import { act, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { listarPedidos } from '../api/pedidosApi'
+import { listarTodosLosPedidos } from '../api/pedidosApi'
 import { listarRepartidores } from '../api/repartidoresApi'
 import { listarRutas } from '../api/rutasApi'
 import { fechaIso } from '../hooks/fechas'
@@ -50,7 +50,7 @@ beforeEach(() => {
     alRecibir[topic] = callback
     return mockConectado
   })
-  listarPedidos.mockResolvedValue({ pedidos: PEDIDOS, total: 4 })
+  listarTodosLosPedidos.mockResolvedValue({ pedidos: PEDIDOS, total: 4 })
   listarRutas.mockImplementation(async (fecha) => (fecha === fechaIso(0) ? RUTAS_HOY : RUTAS_MANANA))
   listarRepartidores.mockResolvedValue(REPARTIDORES)
 })
@@ -68,7 +68,7 @@ describe('InicioPage', () => {
     dibujar()
 
     await screen.findByText('2 pendientes de asignar a una ruta')
-    expect(listarPedidos).toHaveBeenCalledWith({ fecha: fechaIso(0), size: 1000 })
+    expect(listarTodosLosPedidos).toHaveBeenCalledWith({ fecha: fechaIso(0) })
     const tarjetas = screen.getByRole('list', { name: 'Pedidos de hoy por estado' })
     const esperado = { Pendiente: '2', Asignado: '0', Recogido: '0', 'En camino': '1', Entregado: '1' }
     for (const [etiqueta, cantidad] of Object.entries(esperado)) {
@@ -93,7 +93,7 @@ describe('InicioPage', () => {
   })
 
   test('mientras llegan los datos las tarjetas indican que están cargando', () => {
-    listarPedidos.mockReturnValue(new Promise(() => {}))
+    listarTodosLosPedidos.mockReturnValue(new Promise(() => {}))
     listarRutas.mockReturnValue(new Promise(() => {}))
     listarRepartidores.mockReturnValue(new Promise(() => {}))
     dibujar()
@@ -119,14 +119,14 @@ describe('InicioPage', () => {
   })
 
   test('un error al cargar los pedidos se avisa con un toast de error', async () => {
-    listarPedidos.mockRejectedValue({ response: { status: 500, data: { mensaje: 'Ocurrio un error interno' } } })
+    listarTodosLosPedidos.mockRejectedValue({ response: { status: 500, data: { mensaje: 'Ocurrio un error interno' } } })
     dibujar()
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Ocurrio un error interno')
   })
 
   test('si una consulta falla la tarjeta no queda cargando para siempre', async () => {
-    listarPedidos.mockRejectedValue({ response: { status: 500, data: { mensaje: 'Ocurrio un error interno' } } })
+    listarTodosLosPedidos.mockRejectedValue({ response: { status: 500, data: { mensaje: 'Ocurrio un error interno' } } })
     dibujar()
 
     await screen.findByRole('alert')
@@ -155,7 +155,7 @@ describe('InicioPage', () => {
     dibujar()
     await screen.findByText('2 pendientes de asignar a una ruta')
 
-    listarPedidos.mockResolvedValue({ pedidos: [...PEDIDOS, { id: 5, estado: 'PENDIENTE' }], total: 5 })
+    listarTodosLosPedidos.mockResolvedValue({ pedidos: [...PEDIDOS, { id: 5, estado: 'PENDIENTE' }], total: 5 })
     await act(async () => alRecibir[TOPIC_PEDIDOS]({ pedidoId: 5 }))
     expect(await screen.findByText('3 pendientes de asignar a una ruta')).toBeInTheDocument()
 
@@ -186,7 +186,7 @@ describe('InicioPage: avance del día y próximas entregas', () => {
   ]
 
   test('la barra de progreso muestra el porcentaje de pedidos entregados hoy', async () => {
-    listarPedidos.mockResolvedValue({ pedidos: HOY, total: 8 })
+    listarTodosLosPedidos.mockResolvedValue({ pedidos: HOY, total: 8 })
     dibujar()
 
     await screen.findByText('25 %')
@@ -200,18 +200,18 @@ describe('InicioPage: avance del día y próximas entregas', () => {
   })
 
   test('el porcentaje se redondea y con todos entregados llega a 100', async () => {
-    listarPedidos.mockResolvedValue({ pedidos: [{ id: 1, estado: 'ENTREGADO' }, { id: 2, estado: 'PENDIENTE' }, { id: 3, estado: 'PENDIENTE' }], total: 3 })
+    listarTodosLosPedidos.mockResolvedValue({ pedidos: [{ id: 1, estado: 'ENTREGADO' }, { id: 2, estado: 'PENDIENTE' }, { id: 3, estado: 'PENDIENTE' }], total: 3 })
     const { unmount } = dibujar()
     expect(await screen.findByText('33 %')).toBeInTheDocument()
     unmount()
 
-    listarPedidos.mockResolvedValue({ pedidos: [{ id: 1, estado: 'ENTREGADO' }], total: 1 })
+    listarTodosLosPedidos.mockResolvedValue({ pedidos: [{ id: 1, estado: 'ENTREGADO' }], total: 1 })
     dibujar()
     expect(await screen.findByText('100 %')).toBeInTheDocument()
   })
 
   test('sin pedidos hoy el avance es 0 % y lo explica', async () => {
-    listarPedidos.mockResolvedValue({ pedidos: [], total: 0 })
+    listarTodosLosPedidos.mockResolvedValue({ pedidos: [], total: 0 })
     dibujar()
 
     expect(await screen.findByText('No hay pedidos para entregar hoy')).toBeInTheDocument()
@@ -220,7 +220,7 @@ describe('InicioPage: avance del día y próximas entregas', () => {
   })
 
   test('Próximas entregas lista las 5 siguientes por hora, sin las ya entregadas', async () => {
-    listarPedidos.mockResolvedValue({ pedidos: HOY, total: 8 })
+    listarTodosLosPedidos.mockResolvedValue({ pedidos: HOY, total: 8 })
     dibujar()
 
     const lista = await screen.findByRole('list', { name: 'Próximas entregas' })
@@ -234,7 +234,7 @@ describe('InicioPage: avance del día y próximas entregas', () => {
   })
 
   test('con menos de 5 pendientes muestra solo esos', async () => {
-    listarPedidos.mockResolvedValue({ pedidos: HOY.slice(0, 3), total: 3 })
+    listarTodosLosPedidos.mockResolvedValue({ pedidos: HOY.slice(0, 3), total: 3 })
     dibujar()
 
     const lista = await screen.findByRole('list', { name: 'Próximas entregas' })
@@ -242,7 +242,7 @@ describe('InicioPage: avance del día y próximas entregas', () => {
   })
 
   test('los pedidos sin hora van al final', async () => {
-    listarPedidos.mockResolvedValue({
+    listarTodosLosPedidos.mockResolvedValue({
       pedidos: [
         { id: 1, estado: 'PENDIENTE', clienteNombres: 'SinHora', direccion: 'X' },
         { id: 2, estado: 'PENDIENTE', horaEntrega: '10:00:00', clienteNombres: 'ConHora', direccion: 'Y' },
@@ -258,11 +258,11 @@ describe('InicioPage: avance del día y próximas entregas', () => {
   })
 
   test('se actualiza con el tiempo real', async () => {
-    listarPedidos.mockResolvedValue({ pedidos: HOY, total: 8 })
+    listarTodosLosPedidos.mockResolvedValue({ pedidos: HOY, total: 8 })
     dibujar()
     await screen.findByText('25 %')
 
-    listarPedidos.mockResolvedValue({ pedidos: HOY.map((p) => ({ ...p, estado: 'ENTREGADO' })), total: 8 })
+    listarTodosLosPedidos.mockResolvedValue({ pedidos: HOY.map((p) => ({ ...p, estado: 'ENTREGADO' })), total: 8 })
     await act(async () => alRecibir[TOPIC_PEDIDOS]({ pedidoId: 3 }))
 
     expect(await screen.findByText('100 %')).toBeInTheDocument()
@@ -270,13 +270,13 @@ describe('InicioPage: avance del día y próximas entregas', () => {
   })
 
   test('mientras cargan y si falla la consulta lo indican', async () => {
-    listarPedidos.mockReturnValue(new Promise(() => {}))
+    listarTodosLosPedidos.mockReturnValue(new Promise(() => {}))
     const { unmount } = dibujar()
     expect(screen.getByText('Calculando avance…')).toBeInTheDocument()
     expect(screen.getByText('Cargando próximas entregas…')).toBeInTheDocument()
     unmount()
 
-    listarPedidos.mockRejectedValue({ response: { status: 500, data: { mensaje: 'Fallo' } } })
+    listarTodosLosPedidos.mockRejectedValue({ response: { status: 500, data: { mensaje: 'Fallo' } } })
     dibujar()
     expect(await screen.findByText('No se pudo calcular el avance')).toBeInTheDocument()
     expect(screen.getByText('No se pudieron cargar las entregas')).toBeInTheDocument()
