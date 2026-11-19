@@ -99,6 +99,11 @@ Usuarios de prueba (migración `V4__usuarios.sql`; el contrato completo está en
 | `staff` | `staff123` | STAFF | La **web** (personal del negocio): entra a todas las pantallas |
 | `carlos`, `luis`, `andrea`, `diego`, `paola`, `marco` | `repartidor123` | COURIER (repartidores 1 a 6) | La **app móvil**. Si uno entra a la web ve "Sin acceso" |
 
+Los repartidores nuevos se crean desde la web (**Repartidores → Nuevo repartidor**): además de nombres y teléfono se escribe su
+**usuario** (3 a 50 caracteres: minúsculas, números, punto o guion bajo) y su **contraseña** (mínimo 6). El sistema crea el
+repartidor y su usuario COURIER juntos, y con ellos ya puede iniciar sesión en la app móvil. Detalle en
+[docs/api-auth.md](docs/api-auth.md#usuarios-de-los-repartidores-nuevos).
+
 La sesión de la web dura 12 horas (`expiraEn` del login); al vencer, o si el backend responde 401, vuelve al login con el aviso
 "Tu sesión expiró, ingresa de nuevo". Si un usuario no tiene permiso para algo (403) ve un aviso y la sesión sigue abierta.
 
@@ -150,7 +155,7 @@ Documentación interactiva en **Swagger UI**. Todos los errores devuelven `{ tim
 | `GET/POST /api/pedidos` · `GET/PUT/DELETE /api/pedidos/{id}` | CRUD de pedidos. Filtros: `fecha`, `zonaId`, `estado`; búsqueda `q` (cliente o dirección, sin tildes); orden `sort` (`id`, `cliente`, `direccion`, `zona`, `fechaEntrega`, `fechaRegistro`, `estado`); `page`, `size` (total en `X-Total-Count`). Detalle en `docs/api-auth.md` |
 | `PATCH /api/pedidos/{id}/estado` | Lo usa la app móvil: `{"estado":"RECOGIDO","origen":"MOVIL"}` |
 | `GET/POST /api/zonas` · `PUT/DELETE /api/zonas/{id}` | Zonas con el polígono en GeoJSON. `?confirmarSuperposicion=true` permite superponer |
-| `GET/POST /api/repartidores` · `PUT/DELETE /api/repartidores/{id}` | CRUD de repartidores |
+| `GET/POST /api/repartidores` · `PUT/DELETE /api/repartidores/{id}` | CRUD de repartidores. El alta (`POST`) pide también `usuario` y `clave` y crea su usuario COURIER para la app móvil |
 | `PATCH /api/repartidores/{id}/disponibilidad` · `GET /api/repartidores/{id}/ruta-actual` | Disponibilidad y ruta del día |
 | `POST /api/rutas/armar?fecha=YYYY-MM-DD` · `GET /api/rutas?fecha=` | Armado manual y consulta |
 | `POST /api/rutas/ultimo-momento/{pedidoId}` | Inserta un pedido en una ruta con espacio o crea una ruta nueva |

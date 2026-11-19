@@ -59,6 +59,8 @@ separados ~200 m entre sí, 6 repartidores, 10 clientes y 20 pedidos para mañan
 entre sí, sin huecos. Cada polígono contiene al rectángulo anterior, así que los 20 pedidos siguen en su misma zona.
 `V4__usuarios.sql`: tabla `usuario` (clave con BCrypt; un COURIER siempre apunta a su repartidor y un STAFF nunca),
 un usuario `staff` y un usuario por cada repartidor de V2 (`carlos`, `luis`, `andrea`, `diego`, `paola`, `marco`).
+Los repartidores que se crean después (`POST /api/repartidores`) reciben su usuario COURIER en la misma transacción
+(`RepartidorService.crear`, ver `docs/api-auth.md`): no hace falta otra migración.
 Credenciales y permisos en `docs/api-auth.md`.
 
 #### Zonas: contiguas, sin huecos y sin cruces
