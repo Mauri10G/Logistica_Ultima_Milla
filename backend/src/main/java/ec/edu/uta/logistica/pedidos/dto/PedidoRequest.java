@@ -3,12 +3,14 @@ package ec.edu.uta.logistica.pedidos.dto;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
+import ec.edu.uta.logistica.common.validacion.Formatos;
 import ec.edu.uta.logistica.pedidos.entity.PrioridadPedido;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -18,8 +20,10 @@ import jakarta.validation.constraints.Size;
 public record PedidoRequest(
         Long clienteId,
         @Size(max = 150, message = "Los nombres admiten hasta 150 caracteres")
+        @Pattern(regexp = Formatos.NOMBRE, message = Formatos.MENSAJE_NOMBRE)
         String clienteNombres,
         @Size(max = 30, message = "El telefono admite hasta 30 caracteres")
+        @Pattern(regexp = Formatos.TELEFONO, message = Formatos.MENSAJE_TELEFONO)
         String clienteTelefono,
         @Email(message = "El email no es valido")
         @Size(max = 150, message = "El email admite hasta 150 caracteres")
