@@ -49,8 +49,12 @@ export function aleatorio(min, max) {
   return min + Math.random() * (max - min);
 }
 
-export function puntoAleatorio() {
-  const zona = ZONAS[Math.floor(Math.random() * ZONAS.length)];
+/** Punto al azar dentro de la zona indicada por nombre, o de una zona al azar si no se indica. */
+export function puntoAleatorio(nombreZona) {
+  const zona = nombreZona
+    ? ZONAS.find((z) => z.nombre === nombreZona)
+    : ZONAS[Math.floor(Math.random() * ZONAS.length)];
+  if (!zona) throw new Error(`Zona desconocida en comun.js: ${nombreZona}`);
   const [minLng, minLat, maxLng, maxLat] = zona.caja;
   return { latitud: aleatorio(minLat, maxLat), longitud: aleatorio(minLng, maxLng) };
 }
@@ -61,13 +65,16 @@ export function fechaIso(dias) {
   return fecha.toISOString().slice(0, 10);
 }
 
-export function cuerpoPedido(fechaEntrega) {
-  const { latitud, longitud } = puntoAleatorio();
+/** Cuerpo de POST /api/pedidos. `nombreZona` (opcional) concentra el pedido en una zona. */
+export function cuerpoPedido(fechaEntrega, nombreZona) {
+  const { latitud, longitud } = puntoAleatorio(nombreZona);
   const hora = String(Math.floor(aleatorio(8, 21))).padStart(2, '0');
+  // En setup() no existen __VU ni __ITER.
+  const id = typeof __ITER === 'undefined' ? `setup-${Date.now() % 100000}` : `${__VU}-${__ITER}`;
   return JSON.stringify({
-    clienteNombres: `Cliente k6 ${__VU}-${__ITER}`,
+    clienteNombres: `Cliente k6 ${id}`,
     clienteTelefono: '0990000000',
-    direccion: `Direccion k6 ${__VU}-${__ITER}`,
+    direccion: `Direccion k6 ${id}`,
     latitud,
     longitud,
     fechaEntrega,
