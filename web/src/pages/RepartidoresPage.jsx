@@ -12,6 +12,7 @@ import Tabla from '../components/Tabla'
 import { fechaIso } from '../hooks/fechas'
 import { useConfirmacion } from '../hooks/useConfirmacion'
 import { coincide } from '../utils/busqueda'
+import { errorDeNombres, errorDeTelefono, LIMITES } from '../utils/camposFormulario'
 import { errorDeClave, errorDeUsuario } from '../utils/credencialesRepartidor'
 import { codigoDeError, estadoHttp, mensajeDeError } from '../utils/errores'
 
@@ -100,10 +101,10 @@ export default function RepartidoresPage() {
     setErroresCampo({})
   }
 
-  /** Cambia el usuario o la contraseña y quita el error de ese campo (ya no aplica al nuevo valor). */
-  function cambiarCredencial(campo, valor) {
-    if (campo === 'usuario') setUsuario(valor)
-    else setClave(valor)
+  /** Cambia un campo del formulario y quita su error (ya no aplica al nuevo valor). */
+  function cambiarCampo(campo, valor) {
+    const asignar = { nombres: setNombres, telefono: setTelefono, usuario: setUsuario, clave: setClave }[campo]
+    asignar(valor)
     setErroresCampo((previos) => ({ ...previos, [campo]: undefined }))
   }
 
@@ -127,16 +128,29 @@ export default function RepartidoresPage() {
     evento.preventDefault()
     setErrorForm(null)
     const nombreUsuario = usuario.trim()
-    const errores = { usuario: errorDeUsuario(nombreUsuario), clave: errorDeClave(clave) }
+    const nombresLimpios = nombres.trim()
+    const telefonoLimpio = telefono.trim()
+    const errores = {
+      nombres: errorDeNombres(nombresLimpios),
+      telefono: errorDeTelefono(telefonoLimpio),
+      usuario: errorDeUsuario(nombreUsuario),
+      clave: errorDeClave(clave),
+    }
     setErroresCampo(errores)
-    if (errores.usuario || errores.clave) {
-      document.getElementById(errores.usuario ? 'repUsuario' : 'repClave')?.focus()
+    const primero = [
+      ['nombres', 'repNombres'],
+      ['telefono', 'repTelefono'],
+      ['usuario', 'repUsuario'],
+      ['clave', 'repClave'],
+    ].find(([campo]) => errores[campo])
+    if (primero) {
+      document.getElementById(primero[1])?.focus()
       return
     }
     setEnviando(true)
     try {
-      await crearRepartidor({ nombres, telefono, usuario: nombreUsuario, clave })
-      setMensaje(`Repartidor ${nombres} agregado.`)
+      await crearRepartidor({ nombres: nombresLimpios, telefono: telefonoLimpio, usuario: nombreUsuario, clave })
+      setMensaje(`Repartidor ${nombresLimpios} agregado.`)
       cerrarForm()
       await cargar()
     } catch (e) {
@@ -271,33 +285,48 @@ export default function RepartidoresPage() {
               <input
                 id="repNombres"
                 value={nombres}
-                onChange={(e) => setNombres(e.target.value)}
-                aria-describedby="ayudaRepNombres"
+                onChange={(e) => cambiarCampo('nombres', e.target.value)}
+                maxLength={LIMITES.repartidorNombres}
+                aria-invalid={Boolean(erroresCampo.nombres)}
+                aria-describedby={erroresCampo.nombres ? 'ayudaRepNombres errorRepNombres' : 'ayudaRepNombres'}
                 required
               />
               <p id="ayudaRepNombres" className="ayuda">
                 Nombre completo, como aparecerá en las rutas.
               </p>
+              {erroresCampo.nombres && (
+                <span id="errorRepNombres" className="error-campo" role="alert">
+                  {erroresCampo.nombres}
+                </span>
+              )}
             </div>
             <div className="campo">
               <label htmlFor="repTelefono">Teléfono</label>
               <input
                 id="repTelefono"
+                type="tel"
                 value={telefono}
-                onChange={(e) => setTelefono(e.target.value)}
-                aria-describedby="ayudaRepTelefono"
+                onChange={(e) => cambiarCampo('telefono', e.target.value)}
+                maxLength={LIMITES.repartidorTelefono}
+                aria-invalid={Boolean(erroresCampo.telefono)}
+                aria-describedby={erroresCampo.telefono ? 'ayudaRepTelefono errorRepTelefono' : 'ayudaRepTelefono'}
                 required
               />
               <p id="ayudaRepTelefono" className="ayuda">
-                Número de contacto del repartidor.
+                Número de contacto del repartidor (7 a 15 dígitos).
               </p>
+              {erroresCampo.telefono && (
+                <span id="errorRepTelefono" className="error-campo" role="alert">
+                  {erroresCampo.telefono}
+                </span>
+              )}
             </div>
             <div className="campo">
               <label htmlFor="repUsuario">Usuario</label>
               <input
                 id="repUsuario"
                 value={usuario}
-                onChange={(e) => cambiarCredencial('usuario', e.target.value)}
+                onChange={(e) => cambiarCampo('usuario', e.target.value)}
                 autoComplete="off"
                 autoCapitalize="none"
                 spellCheck={false}
@@ -320,14 +349,14 @@ export default function RepartidoresPage() {
                 id="repClave"
                 type="password"
                 value={clave}
-                onChange={(e) => cambiarCredencial('clave', e.target.value)}
+                onChange={(e) => cambiarCampo('clave', e.target.value)}
                 autoComplete="new-password"
                 aria-invalid={Boolean(erroresCampo.clave)}
                 aria-describedby={erroresCampo.clave ? 'ayudaRepClave errorRepClave' : 'ayudaRepClave'}
                 required
               />
               <p id="ayudaRepClave" className="ayuda">
-                Mínimo 6 caracteres. Entréguesela al repartidor.
+                Mínimo 6 caracteres, máximo 72 bytes. Entréguesela al repartidor.
               </p>
               {erroresCampo.clave && (
                 <span id="errorRepClave" className="error-campo" role="alert">
