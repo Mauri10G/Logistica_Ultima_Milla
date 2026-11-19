@@ -229,11 +229,19 @@ void main() {
         await tester.pump();
         expect(mapsUriLanzado?.queryParameters['query'], '-1.2412,-78.6197');
 
-        // 4. Avanzar estado ASIGNADO -> RECOGIDO -> EN_CAMINO -> ENTREGADO (cancelando una vez y confirmando luego)
+        // 4. Avanzar estado ASIGNADO -> RECOGIDO -> EN_CAMINO -> ENTREGADO (con confirmación de 2 pasos en cada estado)
         await tester.tap(find.text('Marcar como recogido').first);
         await tester.pumpAndSettle();
+        expect(find.text('Confirmar recogida'), findsOneWidget);
+        await tester.tap(find.text('Confirmar'));
+        await tester.pumpAndSettle();
+
         await tester.tap(find.text('Marcar en camino').first);
         await tester.pumpAndSettle();
+        expect(find.text('Confirmar en camino'), findsOneWidget);
+        await tester.tap(find.text('Confirmar'));
+        await tester.pumpAndSettle();
+
         await tester.tap(find.text('Marcar como entregado').first);
         await tester.pumpAndSettle();
 
@@ -267,6 +275,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Tu ruta fue actualizada'), findsOneWidget);
+        await tester.scrollUntilVisible(find.text('Av. Atahualpa 890'), 100);
         expect(find.text('Av. Atahualpa 890'), findsOneWidget);
 
         // 6. Cerrar sesion vuelve a LoginScreen y desconecta STOMP
@@ -318,8 +327,16 @@ void main() {
         for (var paso = 0; paso < 4; paso++) {
           if (find.text('Marcar como recogido').evaluate().isNotEmpty) {
             await tester.tap(find.text('Marcar como recogido').first);
+            await tester.pumpAndSettle();
+            if (find.text('Confirmar').evaluate().isNotEmpty) {
+              await tester.tap(find.text('Confirmar'));
+            }
           } else if (find.text('Marcar en camino').evaluate().isNotEmpty) {
             await tester.tap(find.text('Marcar en camino').first);
+            await tester.pumpAndSettle();
+            if (find.text('Confirmar').evaluate().isNotEmpty) {
+              await tester.tap(find.text('Confirmar'));
+            }
           } else if (find.text('Marcar como entregado').evaluate().isNotEmpty) {
             await tester.tap(find.text('Marcar como entregado').first);
             await tester.pumpAndSettle();

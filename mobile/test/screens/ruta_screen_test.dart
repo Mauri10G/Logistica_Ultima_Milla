@@ -232,6 +232,64 @@ void main() {
     expect(find.text('Entregado'), findsOneWidget);
   });
 
+  testWidgets('pide confirmacion en dos pasos para recogido y en camino respetando cancelar o confirmar', (tester) async {
+    var patches = 0;
+    var estadoActual = 'ASIGNADO';
+    final stomp = FakeStompService();
+    final api = ApiService(
+      urlBase: 'http://servidor',
+      cliente: MockClient((req) async {
+        if (req.method == 'PATCH') {
+          patches++;
+          final body = jsonDecode(req.body) as Map<String, dynamic>;
+          estadoActual = body['estado'] as String;
+          return _json(_pedido(id: 1, orden: 1, direccion: 'Bolivar y Mera', estado: estadoActual), 200);
+        }
+        return _json(
+          _rutaJson([_pedido(id: 1, orden: 1, direccion: 'Bolivar y Mera', estado: estadoActual)]),
+          200,
+        );
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: RutaScreen(repartidorId: 1, api: api, stomp: stomp)),
+    );
+    await tester.pumpAndSettle();
+
+    // 1. Recogida: cancelar y luego confirmar
+    await tester.tap(find.text('Marcar como recogido'));
+    await tester.pumpAndSettle();
+    expect(find.text('Confirmar recogida'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(patches, 0);
+    expect(find.text('Marcar como recogido'), findsOneWidget);
+
+    await tester.tap(find.text('Marcar como recogido'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmar'));
+    await tester.pumpAndSettle();
+    expect(patches, 1);
+    expect(find.text('Marcar en camino'), findsOneWidget);
+
+    // 2. En camino: cancelar y luego confirmar
+    await tester.tap(find.text('Marcar en camino'));
+    await tester.pumpAndSettle();
+    expect(find.text('Confirmar en camino'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(patches, 1);
+    expect(find.text('Marcar en camino'), findsOneWidget);
+
+    await tester.tap(find.text('Marcar en camino'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmar'));
+    await tester.pumpAndSettle();
+    expect(patches, 2);
+    expect(find.text('Marcar como entregado'), findsOneWidget);
+  });
+
   testWidgets('muestra mensajes claros para 403, 409 y sin conexion', (tester) async {
     final stomp = FakeStompService();
     var modoError = 'CONEXION';
@@ -272,15 +330,21 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Marcar como recogido'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmar'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('No tienes permiso'), findsOneWidget);
 
     modoError = '409_PATCH';
     await tester.tap(find.text('Marcar como recogido'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmar'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('Transición no válida'), findsOneWidget);
 
     modoError = 'CONEXION_PATCH';
     await tester.tap(find.text('Marcar como recogido'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmar'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Sin conexión a internet'), findsOneWidget);
   });

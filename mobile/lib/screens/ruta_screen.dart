@@ -114,28 +114,48 @@ class _RutaScreenState extends State<RutaScreen> {
   }
 
   Future<void> _cambiarEstado(Pedido pedido, String nuevoEstado) async {
-    if (nuevoEstado == 'ENTREGADO') {
-      final confirmado = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Confirmar entrega'),
-          content: Text(
-            '¿Confirmas que el pedido de ${pedido.clienteNombres} (${pedido.direccion}) fue entregado?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Confirmar'),
-            ),
-          ],
+    final (String titulo, String mensajeAccion, IconData icono) = switch (nuevoEstado) {
+      'RECOGIDO' => (
+          'Confirmar recogida',
+          '¿Confirmas que recogiste el pedido de ${pedido.clienteNombres} (${pedido.direccion})?',
+          Icons.inventory_2_outlined,
         ),
-      );
-      if (confirmado != true || !mounted) return;
-    }
+      'EN_CAMINO' => (
+          'Confirmar en camino',
+          '¿Confirmas que vas en camino a entregar el pedido a ${pedido.clienteNombres} (${pedido.direccion})?',
+          Icons.local_shipping_outlined,
+        ),
+      'ENTREGADO' => (
+          'Confirmar entrega',
+          '¿Confirmas que el pedido de ${pedido.clienteNombres} (${pedido.direccion}) fue entregado?',
+          Icons.check_circle_outline,
+        ),
+      _ => (
+          'Confirmar cambio de estado',
+          '¿Confirmas cambiar el estado del pedido a $nuevoEstado?',
+          Icons.help_outline,
+        ),
+    };
+
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: Icon(icono, size: 36, color: Theme.of(context).colorScheme.primary),
+        title: Text(titulo),
+        content: Text(mensajeAccion),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
 
     setState(() => _pedidoProcesandoId = pedido.id);
     try {
@@ -259,13 +279,7 @@ class _RutaScreenState extends State<RutaScreen> {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Text(
-            'Ruta ${ruta.id} · ${ruta.zonaNombre} · ${ruta.fecha} · ${ruta.estado} (${ruta.pedidos.length} paradas)',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-        ),
+        _TarjetaResumenRuta(ruta: ruta),
         for (final pedido in ruta.pedidos)
           PedidoTile(
             pedido: pedido,
@@ -274,6 +288,156 @@ class _RutaScreenState extends State<RutaScreen> {
             alCambiarEstado: (nuevo) => _cambiarEstado(pedido, nuevo),
           ),
       ],
+    );
+  }
+}
+
+/// Tarjeta moderna de resumen de la ruta asignada al repartidor.
+class _TarjetaResumenRuta extends StatelessWidget {
+  final Ruta ruta;
+
+  const _TarjetaResumenRuta({required this.ruta});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final entregados = ruta.pedidos.where((p) => p.estado == 'ENTREGADO').length;
+    final total = ruta.pedidos.length;
+    final progreso = total > 0 ? (entregados / total) : 0.0;
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.7)),
+      ),
+      color: theme.colorScheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.route,
+                    color: theme.colorScheme.primary,
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ruta ${ruta.id} · ${ruta.zonaNombre}',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            ruta.fecha,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                _ChipEstadoRuta(estado: ruta.estado),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Progreso de entregas',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF334155),
+                  ),
+                ),
+                Text(
+                  '$entregados de $total paradas',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: progreso,
+                minHeight: 8,
+                backgroundColor: const Color(0xFFE2E8F0),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  progreso == 1.0 ? const Color(0xFF16A34A) : theme.colorScheme.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChipEstadoRuta extends StatelessWidget {
+  final String estado;
+
+  const _ChipEstadoRuta({required this.estado});
+
+  @override
+  Widget build(BuildContext context) {
+    final (Color bg, Color fg) = switch (estado) {
+      'ARMADA' => (const Color(0xFFDBEAFE), const Color(0xFF1E40AF)),
+      'EN_CURSO' => (const Color(0xFFFEF3C7), const Color(0xFFB45309)),
+      'COMPLETADA' => (const Color(0xFFDCFCE7), const Color(0xFF15803D)),
+      _ => (const Color(0xFFF1F5F9), const Color(0xFF475569)),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        estado,
+        style: TextStyle(
+          color: fg,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+        ),
+      ),
     );
   }
 }
