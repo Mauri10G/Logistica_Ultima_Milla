@@ -3,7 +3,7 @@
 //   k6 run tests/performance/estres.js
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL, CABECERAS_JSON, cuerpoPedido, fechaIso } from './comun.js';
+import { BASE_URL, conToken, cuerpoPedido, fechaIso, iniciarSesion } from './comun.js';
 
 export const options = {
   stages: [
@@ -19,8 +19,12 @@ export const options = {
   },
 };
 
-export default function () {
-  const respuesta = http.post(`${BASE_URL}/api/pedidos`, cuerpoPedido(fechaIso(31)), CABECERAS_JSON);
+export function setup() {
+  return { token: iniciarSesion() };
+}
+
+export default function ({ token }) {
+  const respuesta = http.post(`${BASE_URL}/api/pedidos`, cuerpoPedido(fechaIso(31)), conToken(token));
   check(respuesta, { 'pedido creado (201)': (r) => r.status === 201 });
   sleep(0.2);
 }

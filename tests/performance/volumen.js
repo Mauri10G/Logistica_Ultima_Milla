@@ -4,7 +4,7 @@
 //   Con -e ARMAR=1 se ejecuta una sola vez el armado de rutas de la fecha (operacion pesada).
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL } from './comun.js';
+import { BASE_URL, conToken, iniciarSesion } from './comun.js';
 
 const FECHA = __ENV.FECHA || '2027-02-14';
 
@@ -36,26 +36,31 @@ export const options = {
   },
 };
 
-export function consultas() {
+export function setup() {
+  return { token: iniciarSesion() };
+}
+
+export function consultas({ token }) {
   const pagina = Math.floor(Math.random() * 5);
-  const pedidos = http.get(`${BASE_URL}/api/pedidos?fecha=${FECHA}&size=1000&page=${pagina}`, {
-    tags: { name: 'listar_pedidos' },
-  });
+  const pedidos = http.get(`${BASE_URL}/api/pedidos?fecha=${FECHA}&size=1000&page=${pagina}`,
+    conToken(token, { tags: { name: 'listar_pedidos' } }),
+  );
   check(pedidos, {
     'listado 200': (r) => r.status === 200,
     'trae X-Total-Count': (r) => r.headers['X-Total-Count'] !== undefined,
   });
 
-  const rutas = http.get(`${BASE_URL}/api/rutas?fecha=${FECHA}`, { tags: { name: 'listar_rutas' } });
+  const rutas = http.get(`${BASE_URL}/api/rutas?fecha=${FECHA}`, conToken(token, { tags: { name: 'listar_rutas' } }));
   check(rutas, { 'rutas 200': (r) => r.status === 200 });
   sleep(1);
 }
 
-export function armado() {
-  const respuesta = http.post(`${BASE_URL}/api/rutas/armar?fecha=${FECHA}`, null, {
-    tags: { name: 'armar_rutas' },
-    timeout: '10m',
-  });
+export function armado({ token }) {
+  const respuesta = http.post(
+    `${BASE_URL}/api/rutas/armar?fecha=${FECHA}`,
+    null,
+    conToken(token, { tags: { name: 'armar_rutas' }, timeout: '10m' }),
+  );
   check(respuesta, { 'armado 200': (r) => r.status === 200 });
   console.log(`Armado de ${FECHA}: ${respuesta.json().length} rutas en ${respuesta.timings.duration} ms`);
 }
