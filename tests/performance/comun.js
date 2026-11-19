@@ -9,9 +9,12 @@ const API_USUARIO = __ENV.API_USUARIO || 'staff';
 const API_CLAVE = __ENV.API_CLAVE || 'staff123';
 
 /**
- * Hace login en POST /api/auth/login y devuelve el token. Se llama una sola vez, desde setup() de cada script.
- * Si el login falla se corta la prueba con un mensaje claro, para no medir miles de 401.
- * Con la seguridad apagada el login igual responde y el token simplemente se ignora.
+ * Hace login en POST /api/auth/login y devuelve el token. Si el login falla se corta con un mensaje claro, para no
+ * medir miles de 401. Con la seguridad apagada el login igual responde y el token simplemente se ignora.
+ *
+ * IMPORTANTE: el token NUNCA se devuelve desde setup(). Lo que devuelve setup() queda escrito en el resumen de
+ * --summary-export (setup_data) y esos reportes se suben al repositorio. Cada script llama a iniciarSesion() en
+ * setup() solo para comprobar el login, y cada usuario virtual obtiene su propio token con tokenDelUsuario().
  */
 export function iniciarSesion() {
   const respuesta = http.post(
@@ -25,6 +28,14 @@ export function iniciarSesion() {
   const token = respuesta.json('token');
   if (!token) fail('El login no devolvio un token');
   return token;
+}
+
+let tokenDeEsteUsuario = null;
+
+/** Token de este usuario virtual: hace login la primera vez y despues lo reutiliza (vale 12 horas). */
+export function tokenDelUsuario() {
+  if (!tokenDeEsteUsuario) tokenDeEsteUsuario = iniciarSesion();
+  return tokenDeEsteUsuario;
 }
 
 /** Parametros de una peticion con el token y JSON. `extra` permite agregar tags u otras opciones de k6. */

@@ -10,7 +10,7 @@
 import http from 'k6/http';
 import { check } from 'k6';
 import { Counter } from 'k6/metrics';
-import { BASE_URL, conToken, cuerpoPedido, fechaIso, iniciarSesion } from './comun.js';
+import { BASE_URL, conToken, cuerpoPedido, fechaIso, iniciarSesion, tokenDelUsuario } from './comun.js';
 
 const ZONA = __ENV.ZONA || 'Centro'; // todos los pedidos en la misma zona: es donde chocan
 const PEDIDOS = Number(__ENV.PEDIDOS || 200); // pedidos de ultimo momento
@@ -64,11 +64,12 @@ export function setup() {
   const armado = http.post(`${BASE_URL}/api/rutas/armar?fecha=${FECHA}`, null, conToken(token, { tags: { name: 'armado_inicial' } }));
   if (armado.status !== 200) throw new Error(`No se pudo armar la fecha ${FECHA}: HTTP ${armado.status} ${armado.body}`);
   console.log(`Rutas armadas antes de la rafaga: ${armado.json().length}`);
-  return { token, fecha: FECHA };
+  return { fecha: FECHA }; // el token no se devuelve: quedaria escrito en el resumen exportado (ver comun.js)
 }
 
 /** Un pedido nuevo para una fecha que ya tiene rutas: el backend lo inserta solo (ultimo momento automatico). */
-export function registrarUltimoMomento({ token, fecha }) {
+export function registrarUltimoMomento({ fecha }) {
+  const token = tokenDelUsuario();
   const r = http.post(
     `${BASE_URL}/api/pedidos`,
     cuerpoPedido(fecha, ZONA),
@@ -88,13 +89,15 @@ export function registrarUltimoMomento({ token, fecha }) {
 }
 
 /** Otro usuario vuelve a armar la misma fecha mientras entran los pedidos (compite por los mismos bloqueos). */
-export function rearmar({ token, fecha }) {
+export function rearmar({ fecha }) {
+  const token = tokenDelUsuario();
   const r = http.post(`${BASE_URL}/api/rutas/armar?fecha=${fecha}`, null, conToken(token, { tags: { name: 'rearmado' } }));
   check(r, { 'rearmado sin error (200)': (x) => x.status === 200 });
 }
 
 /** Verificacion final con lo que quedo en el sistema. */
-export function teardown({ token, fecha: FECHA }) {
+export function teardown({ fecha: FECHA }) {
+  const token = tokenDelUsuario();
   const rutas = http.get(`${BASE_URL}/api/rutas?fecha=${FECHA}`, conToken(token, { tags: { name: 'verificar_rutas' } })).json();
   // El listado devuelve hasta 1000 por pagina: se recorren todas.
   const pedidos = [];

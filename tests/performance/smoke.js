@@ -3,7 +3,7 @@
 //   k6 run -e API_USUARIO=staff -e API_CLAVE=staff123 tests/performance/smoke.js
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL, conToken, iniciarSesion } from './comun.js';
+import { BASE_URL, conToken, iniciarSesion, tokenDelUsuario } from './comun.js';
 
 export const options = {
   vus: 1,
@@ -16,10 +16,11 @@ export const options = {
 };
 
 export function setup() {
-  return { token: iniciarSesion() };
+  iniciarSesion(); // comprueba el login antes de empezar (el token no se devuelve: ver comun.js)
 }
 
-export default function ({ token }) {
+export default function () {
+  const token = tokenDelUsuario();
   const salud = http.get(`${BASE_URL}/actuator/health`);
   check(salud, {
     'health responde 200': (r) => r.status === 200,

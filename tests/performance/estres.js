@@ -8,7 +8,7 @@
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { check, sleep } from 'k6';
-import { BASE_URL, conToken, cuerpoPedido, fechaIso, iniciarSesion } from './comun.js';
+import { BASE_URL, conToken, cuerpoPedido, fechaIso, iniciarSesion, tokenDelUsuario } from './comun.js';
 
 const NIVELES = (__ENV.NIVELES || '50,100,200,400,600').split(',').map(Number); // usuarios de cada nivel
 const DURACION = __ENV.DURACION || '1m'; // cuanto dura cada nivel (s o m)
@@ -57,10 +57,11 @@ export const options = {
 };
 
 export function setup() {
-  return { token: iniciarSesion() };
+  iniciarSesion(); // comprueba el login antes de empezar (el token no se devuelve: ver comun.js)
 }
 
-export default function ({ token }) {
+export default function () {
+  const token = tokenDelUsuario();
   const tags = { name: 'crear_pedido', fase: fase() };
   const respuesta = http.post(`${BASE_URL}/api/pedidos`, cuerpoPedido(fechaIso(31)), conToken(token, { tags }));
   check(respuesta, { 'pedido creado (201)': (r) => r.status === 201 }, tags);

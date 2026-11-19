@@ -4,7 +4,7 @@
 //   k6 run -e BASE_URL=http://servidor:8080 tests/performance/carga.js
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL, conToken, cuerpoPedido, fechaIso, iniciarSesion } from './comun.js';
+import { BASE_URL, conToken, cuerpoPedido, fechaIso, iniciarSesion, tokenDelUsuario } from './comun.js';
 
 export const options = {
   stages: [
@@ -22,13 +22,13 @@ export const options = {
   },
 };
 
-// Login una sola vez: el token se comparte con todos los usuarios virtuales.
 export function setup() {
-  return { token: iniciarSesion() };
+  iniciarSesion(); // comprueba el login antes de empezar (el token no se devuelve: ver comun.js)
 }
 
 /** Cada iteracion es una accion de una persona: 60 % registra un pedido, 25 % mira pedidos, 15 % mira rutas. */
-export default function ({ token }) {
+export default function () {
+  const token = tokenDelUsuario();
   const azar = Math.random();
   if (azar < 0.6) {
     const respuesta = http.post(
