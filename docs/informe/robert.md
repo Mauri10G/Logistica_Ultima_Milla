@@ -16,14 +16,15 @@ con Issues etiquetados `seguridad` o `rendimiento` y asignados al dueño de cada
 | Rama | PR | Qué entrega |
 |---|---|---|
 | `feature/tests-datos-san-valentin` | #4 | Generador con tres escenarios (normal 500, alta 5 000, San Valentín 20 000), repartidores antes de los pedidos, login opcional; `volumen.sql` con 100 000 pedidos históricos y su limpieza |
-| `feature/tests-k6-escenarios` | #30 | Token en los scripts de k6; prueba de concurrencia de último momento con verificación por API y SQL; carga con consultas de rutas; estrés por niveles con recuperación; resultados e informe de volumen, carga y estrés |
+| `feature/tests-k6-escenarios` | #30 y #46 | Token en los scripts de k6; prueba de concurrencia de último momento con verificación por API y SQL; carga con consultas de rutas; estrés por niveles con recuperación; resultados e informe de volumen, carga y estrés |
 | `feature/tests-seguridad` | #39 | Script de ZAP con dos pasadas pasivas y token; npm audit; reporte de seguridad |
 | `feature/infra-ci` | #41 | Job de la app móvil en el CI (`flutter analyze` y `flutter test`) |
+| `feature/tests-datos-limpieza` | #44 | `limpiar-pruebas.sql`: borra los datos de las pruebas por origen y fecha, con modo de simulación |
 | `feature/docs-informe-robert` | #42 | Sección 11 de `docs/diseno-sistema.md` y este informe |
 
 Issues abiertos para el equipo: #31 (listar rutas lento, Joseph), #32 (validaciones del backend, Joseph), #33
 (validaciones de la web, Mauricio), #40 (dependencias de prueba de la web, Mauricio), #43 (Swagger UI con
-DOMPurify vulnerable, Joseph) y #34 (seguimiento de mis pendientes).
+DOMPurify vulnerable, Joseph), #45 (índice que falta, Joseph) y #34 (seguimiento de mis pendientes).
 
 ## 3. Cómo se pobló el sistema
 
@@ -51,11 +52,12 @@ Base con **859 761 pedidos** al final de las pruebas: 100 000 históricos cargad
 
 | Hallazgo | Cómo se detectó | Estado |
 |---|---|---|
-| Listar las rutas de una fecha tarda 6,96 s con 5 003 rutas: cada respuesta trae todas las rutas con todos sus pedidos | Prueba de volumen, San Valentín | #31 (Joseph) |
-| El teléfono y el nombre aceptan cualquier texto (`"abc"`, `"12345"`) y la fecha de entrega no tiene máximo | 63 casos de validación contra la API | #32 (Joseph) |
-| Los formularios web no limitan la longitud de los campos ni validan el teléfono | Revisión de los formularios | #33 (Mauricio) |
+| Listar las rutas de una fecha tarda 6,96 s con 5 003 rutas: cada respuesta trae todas las rutas con todos sus pedidos | Prueba de volumen, San Valentín | #31, corregido por Joseph en #36 (una sola consulta y respuestas comprimidas) |
+| El teléfono y el nombre aceptan cualquier texto (`"abc"`, `"12345"`) y la fecha de entrega no tiene máximo | 63 casos de validación contra la API | #32, corregido por Joseph en #35 |
+| Los formularios web no limitan la longitud de los campos ni validan el teléfono | Revisión de los formularios | #33, corregido por Mauricio en #37 |
 | 18 vulnerabilidades moderadas en `glob` y `minimatch` (cadena de Jest) | npm audit | #40 (Mauricio) |
 | DOMPurify 3.4.16 dentro de Swagger UI 5.34.0, con una vulnerabilidad crítica y una alta (Swagger UI está apagado en producción) | Dependency-Check | #43 (Joseph) |
+| `pedido.cliente_id` no tiene índice: borrar clientes revisa toda la tabla de pedidos | Script de limpieza de datos | #45 (Joseph) |
 | Las inserciones de último momento en una misma zona y fecha se atienden una a la vez (unas 7 por segundo): con 150 usuarios a la vez el p95 llega a 8–23 s | Prueba de concurrencia | Propuesta de mejora en el informe de rendimiento |
 | El armado de San Valentín tarda 83 s; si se dispara a mano, el usuario espera ese tiempo | Prueba de volumen | Propuesta de mejora en el informe de rendimiento |
 | Una ronda de concurrencia tuvo 229 rechazos de 1 000, sin rastro en el log, que no se repitieron | Prueba de concurrencia | Anotado; sin causa confirmada |
@@ -87,5 +89,5 @@ Base con **859 761 pedidos** al final de las pruebas: 100 000 históricos cargad
 
 ## 7. Pendiente
 
-- Repetir ZAP y Dependency-Check después de las correcciones de #32, #33, #40 y #43 y agregar la comparación al reporte
-  de seguridad.
+- Repetir ZAP, Dependency-Check, la validación de campos y la prueba de volumen ahora que #31, #32 y #33 están corregidos
+  (y cuando se corrijan #40 y #43), y agregar la comparación a los reportes.
