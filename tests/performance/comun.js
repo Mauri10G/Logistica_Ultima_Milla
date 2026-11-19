@@ -1,5 +1,39 @@
 // Utilidades compartidas por los scripts k6.
+import http from 'k6/http';
+import { fail } from 'k6';
+
 export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
+
+// Usuario con el que se hace login (ver docs/api-auth.md). Por defecto el personal del negocio (STAFF).
+const API_USUARIO = __ENV.API_USUARIO || 'staff';
+const API_CLAVE = __ENV.API_CLAVE || 'staff123';
+
+/**
+ * Hace login en POST /api/auth/login y devuelve el token. Se llama una sola vez, desde setup() de cada script.
+ * Si el login falla se corta la prueba con un mensaje claro, para no medir miles de 401.
+ * Con la seguridad apagada el login igual responde y el token simplemente se ignora.
+ */
+export function iniciarSesion() {
+  const respuesta = http.post(
+    `${BASE_URL}/api/auth/login`,
+    JSON.stringify({ usuario: API_USUARIO, clave: API_CLAVE }),
+    { headers: { 'Content-Type': 'application/json' }, tags: { name: 'login' } },
+  );
+  if (respuesta.status !== 200) {
+    fail(`Login fallido para ${API_USUARIO}: HTTP ${respuesta.status} ${String(respuesta.body).slice(0, 120)}`);
+  }
+  const token = respuesta.json('token');
+  if (!token) fail('El login no devolvio un token');
+  return token;
+}
+
+/** Parametros de una peticion con el token y JSON. `extra` permite agregar tags u otras opciones de k6. */
+export function conToken(token, extra = {}) {
+  return {
+    ...extra,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(extra.headers || {}) },
+  };
+}
 
 // Rectangulos (minLng, minLat, maxLng, maxLat) dentro de cada zona de los datos base (V2__datos_base.sql).
 // Si cambian las zonas, hay que ajustarlos.
@@ -41,5 +75,3 @@ export function cuerpoPedido(fechaEntrega) {
     prioridad: Math.random() < 0.2 ? 'ALTA' : 'NORMAL',
   });
 }
-
-export const CABECERAS_JSON = { headers: { 'Content-Type': 'application/json' } };

@@ -3,9 +3,22 @@
 Requiere [k6](https://k6.io/docs/get-started/installation/) y el backend corriendo (`http://localhost:8080`).
 Cambiar el destino con `-e BASE_URL=http://servidor:8080`.
 
+## Login (token)
+
+Cada script hace login **una sola vez** al empezar (`setup()`), en `POST /api/auth/login`, y manda el token
+`Authorization: Bearer ...` en todas sus peticiones (ver `docs/api-auth.md`). Por defecto entra como `staff` / `staff123`;
+para usar otro usuario:
+
+```bash
+k6 run -e API_USUARIO=staff -e API_CLAVE=staff123 tests/performance/carga.js
+```
+
+Si el login falla, la prueba se corta al inicio con el mensaje del backend (por ejemplo `HTTP 401 CREDENCIALES_INVALIDAS`)
+en lugar de medir miles de respuestas 401. Funciona igual con la seguridad encendida (`SEGURIDAD_HABILITADA=true`) o apagada.
+
 | Script | Tipo | Qué hace | Umbrales (thresholds) |
 |---|---|---|---|
-| `smoke.js` | Humo | 1 usuario, 10 s, `GET /actuator/health` | errores < 1 %, p95 < 500 ms |
+| `smoke.js` | Humo | 1 usuario, 10 s, `GET /actuator/health` y `GET /api/zonas` con token | errores < 1 %, p95 < 500 ms |
 | `carga.js` | Carga | 20 usuarios 1 min 45 s, `POST /api/pedidos` | errores < 1 %, p95 < 800 ms, p99 < 1,5 s |
 | `estres.js` | Estrés | sube de 50 a 300 usuarios, `POST /api/pedidos` | errores < 10 %, p95 < 3 s |
 | `volumen.js` | Volumen | con la base poblada: lista pedidos y rutas de una fecha; opcionalmente arma rutas | listados p95 < 1,5–2 s |

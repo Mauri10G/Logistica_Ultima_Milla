@@ -3,7 +3,7 @@
 //   k6 run -e BASE_URL=http://servidor:8080 tests/performance/carga.js
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL, CABECERAS_JSON, cuerpoPedido, fechaIso } from './comun.js';
+import { BASE_URL, conToken, cuerpoPedido, fechaIso, iniciarSesion } from './comun.js';
 
 export const options = {
   stages: [
@@ -19,11 +19,17 @@ export const options = {
   },
 };
 
-export default function () {
-  const respuesta = http.post(`${BASE_URL}/api/pedidos`, cuerpoPedido(fechaIso(30)), {
-    ...CABECERAS_JSON,
-    tags: { name: 'crear_pedido' },
-  });
+// Login una sola vez: el token se comparte con todos los usuarios virtuales.
+export function setup() {
+  return { token: iniciarSesion() };
+}
+
+export default function ({ token }) {
+  const respuesta = http.post(
+    `${BASE_URL}/api/pedidos`,
+    cuerpoPedido(fechaIso(30)),
+    conToken(token, { tags: { name: 'crear_pedido' } }),
+  );
   check(respuesta, {
     'pedido creado (201)': (r) => r.status === 201,
     'queda PENDIENTE': (r) => r.status === 201 && r.json('estado') === 'PENDIENTE',
