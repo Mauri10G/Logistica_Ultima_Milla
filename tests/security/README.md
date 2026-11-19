@@ -56,4 +56,4 @@ npm audit --json > ../tests/security/reports/npm-audit-web.json
 
 Ver el reporte en [`docs/evidencias/seguridad/`](../../docs/evidencias/seguridad/). Resumen al 19 de noviembre:
 ZAP sin hallazgos altos ni medios, 0 vulnerabilidades en las dependencias de producción de la web, 18 moderadas solo en
-herramientas de prueba, y Dependency-Check del backend pendiente de la API key de NVD.
+herramientas de prueba, y en el backend una sola dependencia vulnerable: DOMPurify dentro de Swagger UI (#43).

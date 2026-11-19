@@ -12,7 +12,7 @@ OWASP ZAP y validación de entradas. Cómo repetirlas: [`tests/security/README.m
 | `npm audit` de la web, dependencias de producción | 2026-11-19 | 0 vulnerabilidades | 0 | 0 |
 | `npm audit` de la web, incluidas las de desarrollo | 2026-11-19 | 18 moderadas, todas en la cadena de Jest | 0 | 18 (solo desarrollo) |
 | Validación de campos contra la API (63 casos) | 2026-11-19 | 58 responden como se espera | 0 | 1 |
-| OWASP Dependency-Check del backend | pendiente | necesita la API key de NVD | — | — |
+| OWASP Dependency-Check del backend (74 dependencias) | 2026-11-19 | 1 dependencia con vulnerabilidades: DOMPurify dentro de Swagger UI | 1 crítica, 1 alta | 0 |
 
 Contexto de las pruebas: backend en `http://localhost:8080` con `SEGURIDAD_HABILITADA=true` (login con JWT y cabeceras de
 seguridad ya agregadas por Joseph), PostGIS 16 en Docker, OWASP ZAP `stable` en Docker.
@@ -77,8 +77,24 @@ Reportes: [`npm-audit-web-2026-11-19.json`](npm-audit-web-2026-11-19.json) y
 
 ### Backend (OWASP Dependency-Check)
 
-Pendiente: necesita la API key de NVD de Robert. Sin ella, la primera descarga de la base de vulnerabilidades tarda horas.
-El build falla si alguna dependencia tiene CVSS de 7 o más (`failBuildOnCVSS` en el `pom.xml`).
+Dependency-Check 13.0.0 con la base de NVD al día (428 931 registros). De las **74 dependencias** del backend, solo **una**
+tiene vulnerabilidades: **DOMPurify 3.4.16**, la librería JavaScript que viene dentro de **Swagger UI 5.34.0**
+(`org.webjars:swagger-ui`, traída por `springdoc-openapi-starter-webmvc-ui` 3.2.0). Spring Boot, Spring Security,
+Hibernate, el driver de PostgreSQL y las demás dependencias Java no tienen vulnerabilidades conocidas.
+
+| CVE | Severidad | Qué permite |
+|---|---|---|
+| CVE-2026-116804 | Crítica | Saltarse `SAFE_FOR_TEMPLATES` con expresiones de plantilla partidas en un shadow root |
+| CVE-2026-116803 | Alta | Con `IN_PLACE`, un hook que quita un nodo deja activos los manejadores de eventos del subárbol |
+| CVE-2026-116802 | Baja | El filtro de `attributeName=href` en SMIL se salta con `application/xhtml+xml` |
+
+**Riesgo real: bajo.** En producción Swagger UI y `/v3/api-docs` están apagados (`application-prod.yml`), y para
+explotarlo habría que inyectar contenido en la documentación de la API, que la escribe el equipo. **Corrección:** DOMPurify
+3.4.17, que ya viene en Swagger UI 5.35.0; se propone fijar `org.webjars:swagger-ui` 5.35.1 en el `pom.xml` hasta que
+springdoc la incluya. Reportado a Joseph en [#43](https://github.com/Mauri10G/Logistica_Ultima_Milla/issues/43).
+
+El build de Dependency-Check falla mientras tanto, porque el `pom.xml` corta en CVSS 7 (`failBuildOnCVSS`).
+Reporte: [`dependency-check-backend-2026-11-19.html`](dependency-check-backend-2026-11-19.html).
 
 ## 3. Validación de entradas
 
@@ -92,6 +108,5 @@ geometrías de zona, transiciones de estado, 401 y 403). 58 respondieron como se
 
 ## 4. Pendiente
 
-- Dependency-Check del backend con la API key de NVD.
-- Repetir ZAP y Dependency-Check después de las correcciones de #32 y #33 (`bash tests/security/zap.sh despues`) y
-  agregar la comparación a este reporte.
+- Repetir ZAP y Dependency-Check después de las correcciones de #32, #33, #40 y #43 (`bash tests/security/zap.sh despues`)
+  y agregar la comparación a este reporte. Meta del equipo: sin hallazgos altos.
