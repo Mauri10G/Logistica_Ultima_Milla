@@ -1,0 +1,13 @@
+# Caddy pide y renueva solo el certificado de Let's Encrypt para el dominio, y redirige HTTP a HTTPS.
+{$DOMINIO} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	# La web en Nginx sirve React y reenvia /api y /ws al backend. Caddy pasa el WebSocket sin configurar nada mas.
+	reverse_proxy web:80
+}

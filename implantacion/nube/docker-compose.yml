@@ -1,0 +1,68 @@
+# Implantacion en la nube: maquina virtual Ubuntu 24.04 en Azure.
+#   docker compose --env-file .env up -d
+# Caddy recibe todo el trafico en 80 y 443, saca el certificado HTTPS solo y lo pasa a la web.
+# La web, el backend y la base no publican puertos: solo se alcanzan por la red interna de Docker.
+name: logistica-nube
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: logistica
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    # Ajustes para una VM de 1 GB de RAM
+    command: postgres -c shared_buffers=64MB -c max_connections=30 -c work_mem=4MB
+    volumes:
+      - datos_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d logistica"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    image: logistica-backend:nube
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://db:5432/logistica
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 5
+      # Login con JWT encendido. La clave va solo en el .env de la VM
+      SEGURIDAD_HABILITADA: "true"
+      JWT_SECRETO: ${JWT_SECRETO}
+      # El WebSocket solo acepta conexiones de la web publicada en el dominio
+      LOGISTICA_CORS_ORIGENESPERMITIDOS_0: https://${DOMINIO}
+      JAVA_OPTS: -Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -XX:+UseSerialGC
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: logistica-web:nube
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_datos:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  datos_db:
+  caddy_datos:
+  caddy_config:

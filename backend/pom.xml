@@ -13,11 +13,14 @@
     <groupId>ec.edu.uta</groupId>
     <artifactId>logistica</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <!-- jar por defecto. Con -Ptomcat se genera logistica.war para un Tomcat 11 externo -->
+    <packaging>${empaquetado}</packaging>
     <name>logistica</name>
     <description>Sistema de Gestión de Entregas y Rutas - Logística de Última Milla (GPIS, UTA FISEI)</description>
 
     <properties>
         <java.version>21</java.version>
+        <empaquetado>jar</empaquetado>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Versiones fuera del BOM de Spring Boot -->
@@ -253,4 +256,28 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+          Implantacion en un Apache Tomcat 11 externo (APE 6):  ./mvnw -Ptomcat -DskipTests package
+          Genera target/logistica.war. El Tomcat embebido queda como provided para no chocar con el del servidor,
+          y el WAR se publica en el contexto /logistica. Spring Boot 4 necesita Servlet 6.1, es decir Tomcat 11.
+        -->
+        <profile>
+            <id>tomcat</id>
+            <properties>
+                <empaquetado>war</empaquetado>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-tomcat</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <finalName>logistica</finalName>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -95,7 +95,43 @@ class _LogisticaAppState extends State<LogisticaApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Repartidor - Logística',
-      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF1E3A8A),
+          brightness: Brightness.light,
+          surface: Colors.white,
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          centerTitle: false,
+          elevation: 0,
+          scrolledUnderElevation: 1,
+          backgroundColor: Colors.white,
+          foregroundColor: Color(0xFF0F172A),
+        ),
+        cardTheme: CardThemeData(
+          elevation: 1.5,
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+          color: Colors.white,
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          ),
+        ),
+      ),
       home: _construirInicio(),
     );
   }
