@@ -78,6 +78,30 @@ docker exec -i logistica-postgis psql -U logistica -d logistica < tests/data/vol
 Para empezar con la base vacía: `docker compose down -v && docker compose up -d` y volver a levantar el backend.
 Ojo: `down -v` borra todos los volúmenes del proyecto, también los de SonarQube si lo tienes levantado.
 
+## Limpiar los datos de las pruebas
+
+`limpiar-pruebas.sql` borra los pedidos que crearon las pruebas, con sus rutas, su historial y sus clientes, para dejar la
+base lista antes de una ronda sin borrar todo con `docker compose down -v`. **Nunca** toca los datos base ni los
+históricos de `volumen.sql`.
+
+```bash
+# Primero ver qué borraría (no borra nada)
+docker exec -i logistica-postgis psql -U logistica -d logistica -v simular=1 < tests/data/limpiar-pruebas.sql
+
+docker exec -i logistica-postgis psql -U logistica -d logistica < tests/data/limpiar-pruebas.sql            # todo
+docker exec -i logistica-postgis psql -U logistica -d logistica -v origen=k6 < tests/data/limpiar-pruebas.sql
+docker exec -i logistica-postgis psql -U logistica -d logistica -v origen=generador -v desde=2028-02-12 -v hasta=2028-02-14 < tests/data/limpiar-pruebas.sql
+```
+
+| Variable | Valores | Por defecto |
+|---|---|---|
+| `origen` | `k6` (pedidos de `tests/performance`), `generador` (de `generar-pedidos.js`) o `todo` | `todo` |
+| `desde` / `hasta` | Rango de fechas de entrega `AAAA-MM-DD` | sin límite |
+| `simular` | `1` muestra lo que borraría y deshace todo | `0` |
+
+Reconoce cada origen por la dirección que deja: k6 usa `Direccion k6 ...` y el generador `Calle N y Av. M (zona)`.
+Con cerca de 760 000 pedidos de prueba tarda unos 20 segundos.
+
 ## Receta para las pruebas de volumen
 
 ```bash
