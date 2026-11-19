@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" role="img" aria-labelledby="titulo desc">
+<title id="titulo">Estrés: peticiones atendidas por segundo</title><desc id="desc">50 usuarios: 205 por segundo; 100 usuarios: 422 por segundo; 200 usuarios: 629 por segundo; 400 usuarios: 605 por segundo; 600 usuarios: 725 por segundo; 900 usuarios: 900 por segundo; 1200 usuarios: 955 por segundo; 1600 usuarios: 769 por segundo</desc>
+<style>
+  .fondo { fill: #fcfcfb } .t1 { fill: #0b0b0b } .t2 { fill: #52514e } .t3 { fill: #898781 }
+  .grilla { stroke: #e1e0d9 } .eje { stroke: #c3c2b7 } .umbral { stroke: #52514e }
+  .s1 { fill: #2a78d6 } .s1l { stroke: #2a78d6 } .s2 { fill: #eb6834 } .anillo { stroke: #fcfcfb }
+  .halo { paint-order: stroke; stroke: #fcfcfb; stroke-width: 4px; stroke-linejoin: round }
+  @media (prefers-color-scheme: dark) {
+    .fondo { fill: #1a1a19 } .t1 { fill: #f0efec } .t2 { fill: #c3c2b7 } .t3 { fill: #898781 }
+    .grilla { stroke: #2c2c2a } .eje { stroke: #383835 } .umbral { stroke: #c3c2b7 }
+    .s1 { fill: #3987e5 } .s1l { stroke: #3987e5 } .s2 { fill: #d95926 } .anillo { stroke: #1a1a19 }
+    .halo { stroke: #1a1a19 }
+  }
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif }
+  .num { font-variant-numeric: tabular-nums }</style>
+<rect class="fondo" width="760" height="380" rx="8"/>
+<text class="t1" x="64" y="30" font-size="16" font-weight="600">Estrés: peticiones atendidas por segundo</text>
+<text class="t2" x="64" y="50" font-size="12.5">Máximo de 955/s con 1.200 usuarios; con más usuarios el ritmo baja (saturación)</text>
+<line class="eje" x1="64" x2="736" y1="328" y2="328" stroke-width="1"/>
+<text class="t3 num" x="56" y="332" font-size="11" text-anchor="end">0</text>
+<line class="grilla" x1="64" x2="736" y1="278" y2="278" stroke-width="1"/>
+<text class="t3 num" x="56" y="282" font-size="11" text-anchor="end">250</text>
+<line class="grilla" x1="64" x2="736" y1="228" y2="228" stroke-width="1"/>
+<text class="t3 num" x="56" y="232" font-size="11" text-anchor="end">500</text>
+<line class="grilla" x1="64" x2="736" y1="178" y2="178" stroke-width="1"/>
+<text class="t3 num" x="56" y="182" font-size="11" text-anchor="end">750</text>
+<line class="grilla" x1="64" x2="736" y1="128" y2="128" stroke-width="1"/>
+<text class="t3 num" x="56" y="132" font-size="11" text-anchor="end">1.000</text>
+<line class="grilla" x1="64" x2="736" y1="78" y2="78" stroke-width="1"/>
+<text class="t3 num" x="56" y="82" font-size="11" text-anchor="end">1.250</text>
+<path class="s1" d="M94,328 V291.0966666666667 Q94,287.0966666666667 98,287.0966666666667 H114 Q118,287.0966666666667 118,291.0966666666667 V328 Z"><title>50 usuarios: 205 peticiones por segundo</title></path>
+
+<text class="t3 num" x="106" y="346" font-size="11" text-anchor="middle">50</text>
+<path class="s1" d="M178,328 V247.57333333333332 Q178,243.57333333333332 182,243.57333333333332 H198 Q202,243.57333333333332 202,247.57333333333332 V328 Z"><title>100 usuarios: 422 peticiones por segundo</title></path>
+
+<text class="t3 num" x="190" y="346" font-size="11" text-anchor="middle">100</text>
+<path class="s1" d="M262,328 V206.1466666666667 Q262,202.1466666666667 266,202.1466666666667 H282 Q286,202.1466666666667 286,206.1466666666667 V328 Z"><title>200 usuarios: 629 peticiones por segundo</title></path>
+
+<text class="t3 num" x="274" y="346" font-size="11" text-anchor="middle">200</text>
+<path class="s1" d="M346,328 V211.08333333333331 Q346,207.08333333333331 350,207.08333333333331 H366 Q370,207.08333333333331 370,211.08333333333331 V328 Z"><title>400 usuarios: 605 peticiones por segundo</title></path>
+
+<text class="t3 num" x="358" y="346" font-size="11" text-anchor="middle">400</text>
+<path class="s1" d="M430,328 V187.02333333333334 Q430,183.02333333333334 434,183.02333333333334 H450 Q454,183.02333333333334 454,187.02333333333334 V328 Z"><title>600 usuarios: 725 peticiones por segundo</title></path>
+
+<text class="t3 num" x="442" y="346" font-size="11" text-anchor="middle">600</text>
+<path class="s1" d="M514,328 V151.95000000000002 Q514,147.95000000000002 518,147.95000000000002 H534 Q538,147.95000000000002 538,151.95000000000002 V328 Z"><title>900 usuarios: 900 peticiones por segundo</title></path>
+
+<text class="t3 num" x="526" y="346" font-size="11" text-anchor="middle">900</text>
+<path class="s1" d="M598,328 V141.0533333333333 Q598,137.0533333333333 602,137.0533333333333 H618 Q622,137.0533333333333 622,141.0533333333333 V328 Z"><title>1.200 usuarios: 955 peticiones por segundo</title></path>
+<text class="t1 num halo" x="610" y="129.0533333333333" font-size="11.5" font-weight="600" text-anchor="middle">955/s</text>
+<text class="t3 num" x="610" y="346" font-size="11" text-anchor="middle">1.200</text>
+<path class="s1" d="M682,328 V178.13666666666666 Q682,174.13666666666666 686,174.13666666666666 H702 Q706,174.13666666666666 706,178.13666666666666 V328 Z"><title>1.600 usuarios: 769 peticiones por segundo</title></path>
+<text class="t1 num halo" x="694" y="166.13666666666666" font-size="11.5" font-weight="600" text-anchor="middle">769/s</text>
+<text class="t3 num" x="694" y="346" font-size="11" text-anchor="middle">1.600</text>
+<text class="t3" x="412" y="370" font-size="11" text-anchor="middle">Usuarios registrando pedidos a la vez · promedio de cada nivel de 1 minuto</text>
+</svg>

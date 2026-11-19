@@ -9,9 +9,12 @@ const API_USUARIO = __ENV.API_USUARIO || 'staff';
 const API_CLAVE = __ENV.API_CLAVE || 'staff123';
 
 /**
- * Hace login en POST /api/auth/login y devuelve el token. Se llama una sola vez, desde setup() de cada script.
- * Si el login falla se corta la prueba con un mensaje claro, para no medir miles de 401.
- * Con la seguridad apagada el login igual responde y el token simplemente se ignora.
+ * Hace login en POST /api/auth/login y devuelve el token. Si el login falla se corta con un mensaje claro, para no
+ * medir miles de 401. Con la seguridad apagada el login igual responde y el token simplemente se ignora.
+ *
+ * IMPORTANTE: el token NUNCA se devuelve desde setup(). Lo que devuelve setup() queda escrito en el resumen de
+ * --summary-export (setup_data) y esos reportes se suben al repositorio. Cada script llama a iniciarSesion() en
+ * setup() solo para comprobar el login, y cada usuario virtual obtiene su propio token con tokenDelUsuario().
  */
 export function iniciarSesion() {
   const respuesta = http.post(
@@ -25,6 +28,14 @@ export function iniciarSesion() {
   const token = respuesta.json('token');
   if (!token) fail('El login no devolvio un token');
   return token;
+}
+
+let tokenDeEsteUsuario = null;
+
+/** Token de este usuario virtual: hace login la primera vez y despues lo reutiliza (vale 12 horas). */
+export function tokenDelUsuario() {
+  if (!tokenDeEsteUsuario) tokenDeEsteUsuario = iniciarSesion();
+  return tokenDeEsteUsuario;
 }
 
 /** Parametros de una peticion con el token y JSON. `extra` permite agregar tags u otras opciones de k6. */
@@ -49,8 +60,12 @@ export function aleatorio(min, max) {
   return min + Math.random() * (max - min);
 }
 
-export function puntoAleatorio() {
-  const zona = ZONAS[Math.floor(Math.random() * ZONAS.length)];
+/** Punto al azar dentro de la zona indicada por nombre, o de una zona al azar si no se indica. */
+export function puntoAleatorio(nombreZona) {
+  const zona = nombreZona
+    ? ZONAS.find((z) => z.nombre === nombreZona)
+    : ZONAS[Math.floor(Math.random() * ZONAS.length)];
+  if (!zona) throw new Error(`Zona desconocida en comun.js: ${nombreZona}`);
   const [minLng, minLat, maxLng, maxLat] = zona.caja;
   return { latitud: aleatorio(minLat, maxLat), longitud: aleatorio(minLng, maxLng) };
 }
@@ -61,13 +76,16 @@ export function fechaIso(dias) {
   return fecha.toISOString().slice(0, 10);
 }
 
-export function cuerpoPedido(fechaEntrega) {
-  const { latitud, longitud } = puntoAleatorio();
+/** Cuerpo de POST /api/pedidos. `nombreZona` (opcional) concentra el pedido en una zona. */
+export function cuerpoPedido(fechaEntrega, nombreZona) {
+  const { latitud, longitud } = puntoAleatorio(nombreZona);
   const hora = String(Math.floor(aleatorio(8, 21))).padStart(2, '0');
+  // En setup() no existen __VU ni __ITER.
+  const id = typeof __ITER === 'undefined' ? `setup-${Date.now() % 100000}` : `${__VU}-${__ITER}`;
   return JSON.stringify({
-    clienteNombres: `Cliente k6 ${__VU}-${__ITER}`,
+    clienteNombres: `Cliente k6 ${id}`,
     clienteTelefono: '0990000000',
-    direccion: `Direccion k6 ${__VU}-${__ITER}`,
+    direccion: `Direccion k6 ${id}`,
     latitud,
     longitud,
     fechaEntrega,

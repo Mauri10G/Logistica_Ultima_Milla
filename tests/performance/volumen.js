@@ -4,7 +4,7 @@
 //   Con -e ARMAR=1 se ejecuta una sola vez el armado de rutas de la fecha (operacion pesada).
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL, conToken, iniciarSesion } from './comun.js';
+import { BASE_URL, conToken, iniciarSesion, tokenDelUsuario } from './comun.js';
 
 const FECHA = __ENV.FECHA || '2027-02-14';
 
@@ -37,10 +37,11 @@ export const options = {
 };
 
 export function setup() {
-  return { token: iniciarSesion() };
+  iniciarSesion(); // comprueba el login antes de empezar (el token no se devuelve: ver comun.js)
 }
 
-export function consultas({ token }) {
+export function consultas() {
+  const token = tokenDelUsuario();
   const pagina = Math.floor(Math.random() * 5);
   const pedidos = http.get(`${BASE_URL}/api/pedidos?fecha=${FECHA}&size=1000&page=${pagina}`,
     conToken(token, { tags: { name: 'listar_pedidos' } }),
@@ -55,7 +56,8 @@ export function consultas({ token }) {
   sleep(1);
 }
 
-export function armado({ token }) {
+export function armado() {
+  const token = tokenDelUsuario();
   const respuesta = http.post(
     `${BASE_URL}/api/rutas/armar?fecha=${FECHA}`,
     null,

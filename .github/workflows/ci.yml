@@ -140,3 +140,73 @@ jobs:
             ${{ steps.nombres.outputs.web }}:${{ steps.nombres.outputs.sha }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
+
+  # Rendimiento: levanta PostGIS y el backend con la seguridad encendida y corre la prueba de humo y una ronda corta de
+  # concurrencia de k6. Falla si una ruta supera su maximo de pedidos o un pedido queda en dos rutas (requisito critico).
+  rendimiento:
+    name: Rendimiento (k6 smoke + concurrencia)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: logistica
+          POSTGRES_USER: logistica
+          POSTGRES_PASSWORD: logistica
+        ports:
+          - 5433:5432 # el mismo puerto que docker-compose y el perfil dev
+        options: >-
+          --health-cmd "pg_isready -U logistica -d logistica"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Caché del wrapper de Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ runner.os }}-${{ hashFiles('backend/.mvn/wrapper/maven-wrapper.properties') }}
+      - name: Compilar el backend (con reintentos)
+        working-directory: backend
+        run: |
+          for intento in 1 2 3; do
+            if ./mvnw -B -q -DskipTests package; then exit 0; fi
+            echo "No se pudo compilar (intento $intento de 3), reintento en $((intento * 15)) s"
+            sleep $((intento * 15))
+          done
+          exit 1
+      - name: Levantar el backend con la seguridad encendida
+        working-directory: backend
+        env:
+          SEGURIDAD_HABILITADA: 'true'
+        run: |
+          JAR=$(ls target/*.jar | grep -v plain | head -1)
+          nohup java -jar "$JAR" > "$GITHUB_WORKSPACE/backend.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/actuator/health > /dev/null; then echo "Backend arriba"; exit 0; fi
+            sleep 2
+          done
+          echo "El backend no arranco en 2 minutos"; tail -50 "$GITHUB_WORKSPACE/backend.log"; exit 1
+      - uses: grafana/setup-k6-action@c47136d33d365efbeb9ae7266908b5dcf98cdece # v1.3.0
+      - name: Prueba de humo (login y API)
+        run: k6 run tests/performance/smoke.js
+      # El runner es mas lento que un equipo de desarrollo: aqui se exige la regla, no la velocidad (P95_MAX_MS)
+      - name: Concurrencia de pedidos de último momento
+        run: >-
+          k6 run -e PEDIDOS=150 -e USUARIOS=40 -e P95_MAX_MS=60000
+          --summary-export=concurrencia-ci.json tests/performance/concurrencia.js
+      - name: Resumen de k6 y log del backend
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendimiento-reportes
+          path: |
+            concurrencia-ci.json
+            backend.log

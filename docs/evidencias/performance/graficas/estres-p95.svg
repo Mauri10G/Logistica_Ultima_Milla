@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" role="img" aria-labelledby="titulo desc">
+<title id="titulo">Estrés: tiempo de respuesta por nivel de usuarios</title><desc id="desc">50 usuarios: 24 ms; 100 usuarios: 49 ms; 200 usuarios: 233 ms; 400 usuarios: 694 ms; 600 usuarios: 1,12 s; 900 usuarios: 883 ms; 1200 usuarios: 1,14 s; 1600 usuarios: 2,56 s. Recuperación con 20 usuarios: 29 ms y 19 ms.</desc>
+<style>
+  .fondo { fill: #fcfcfb } .t1 { fill: #0b0b0b } .t2 { fill: #52514e } .t3 { fill: #898781 }
+  .grilla { stroke: #e1e0d9 } .eje { stroke: #c3c2b7 } .umbral { stroke: #52514e }
+  .s1 { fill: #2a78d6 } .s1l { stroke: #2a78d6 } .s2 { fill: #eb6834 } .anillo { stroke: #fcfcfb }
+  .halo { paint-order: stroke; stroke: #fcfcfb; stroke-width: 4px; stroke-linejoin: round }
+  @media (prefers-color-scheme: dark) {
+    .fondo { fill: #1a1a19 } .t1 { fill: #f0efec } .t2 { fill: #c3c2b7 } .t3 { fill: #898781 }
+    .grilla { stroke: #2c2c2a } .eje { stroke: #383835 } .umbral { stroke: #c3c2b7 }
+    .s1 { fill: #3987e5 } .s1l { stroke: #3987e5 } .s2 { fill: #d95926 } .anillo { stroke: #1a1a19 }
+    .halo { stroke: #1a1a19 }
+  }
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif }
+  .num { font-variant-numeric: tabular-nums }</style>
+<rect class="fondo" width="760" height="380" rx="8"/>
+<text class="t1" x="64" y="30" font-size="16" font-weight="600">Estrés: tiempo de respuesta por nivel de usuarios</text>
+<text class="t2" x="64" y="50" font-size="12.5">p95 al registrar pedidos · recuperación con 20 usuarios: 29 ms y 19 ms</text>
+<line class="eje" x1="64" x2="736" y1="328" y2="328" stroke-width="1"/>
+<text class="t3 num" x="56" y="332" font-size="11" text-anchor="end">0 ms</text>
+<line class="grilla" x1="64" x2="736" y1="244.66666666666669" y2="244.66666666666669" stroke-width="1"/>
+<text class="t3 num" x="56" y="248.66666666666669" font-size="11" text-anchor="end">1 s</text>
+<line class="grilla" x1="64" x2="736" y1="161.33333333333334" y2="161.33333333333334" stroke-width="1"/>
+<text class="t3 num" x="56" y="165.33333333333334" font-size="11" text-anchor="end">2 s</text>
+<line class="grilla" x1="64" x2="736" y1="78" y2="78" stroke-width="1"/>
+<text class="t3 num" x="56" y="82" font-size="11" text-anchor="end">3 s</text>
+<line class="umbral" x1="64" x2="736" y1="261.3333333333333" y2="261.3333333333333" stroke-width="1" stroke-dasharray="4 4"/>
+<text class="t2" x="70" y="276.3333333333333" font-size="11" text-anchor="start">Umbral de un día normal: p95 &lt; 800 ms</text>
+<path class="s1l" d="M106,326.02045833333335 L190,323.8872283333333 L274,308.615775 L358,270.1738916666667 L442,234.35163333333333 L526,254.44571333333334 L610,232.65157541666667 L694,114.55617500000002" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle class="s1 anillo" cx="106" cy="326.02045833333335" r="5" stroke-width="2"><title>50 usuarios: p95 24 ms, 0.00 % de errores</title></circle>
+<circle class="s1 anillo" cx="190" cy="323.8872283333333" r="5" stroke-width="2"><title>100 usuarios: p95 49 ms, 0.00 % de errores</title></circle>
+<circle class="s1 anillo" cx="274" cy="308.615775" r="5" stroke-width="2"><title>200 usuarios: p95 233 ms, 0.00 % de errores</title></circle>
+<circle class="s1 anillo" cx="358" cy="270.1738916666667" r="5" stroke-width="2"><title>400 usuarios: p95 694 ms, 0.00 % de errores</title></circle>
+<circle class="s1 anillo" cx="442" cy="234.35163333333333" r="5" stroke-width="2"><title>600 usuarios: p95 1,12 s, 0.00 % de errores</title></circle>
+<circle class="s1 anillo" cx="526" cy="254.44571333333334" r="5" stroke-width="2"><title>900 usuarios: p95 883 ms, 0.00 % de errores</title></circle>
+<circle class="s1 anillo" cx="610" cy="232.65157541666667" r="5" stroke-width="2"><title>1.200 usuarios: p95 1,14 s, 0.00 % de errores</title></circle>
+<circle class="s1 anillo" cx="694" cy="114.55617500000002" r="5" stroke-width="2"><title>1.600 usuarios: p95 2,56 s, 0.00 % de errores</title></circle>
+<text class="t1 num halo" x="106" y="314.02045833333335" font-size="11.5" font-weight="600" text-anchor="middle">24 ms</text>
+<text class="t1 num halo" x="442" y="222.35163333333333" font-size="11.5" font-weight="600" text-anchor="middle">1,12 s</text>
+<text class="t1 num halo" x="694" y="102.55617500000002" font-size="11.5" font-weight="600" text-anchor="middle">2,56 s</text>
+<line class="umbral" x1="442" x2="442" y1="84" y2="208.35163333333333" stroke-width="1" stroke-dasharray="2 3"/>
+<text class="t2" x="442" y="78" font-size="11" text-anchor="middle">Punto de quiebre: 600 usuarios</text>
+<text class="t3 num" x="106" y="346" font-size="11" text-anchor="middle">50</text>
+<text class="t3 num" x="190" y="346" font-size="11" text-anchor="middle">100</text>
+<text class="t3 num" x="274" y="346" font-size="11" text-anchor="middle">200</text>
+<text class="t3 num" x="358" y="346" font-size="11" text-anchor="middle">400</text>
+<text class="t3 num" x="442" y="346" font-size="11" text-anchor="middle">600</text>
+<text class="t3 num" x="526" y="346" font-size="11" text-anchor="middle">900</text>
+<text class="t3 num" x="610" y="346" font-size="11" text-anchor="middle">1.200</text>
+<text class="t3 num" x="694" y="346" font-size="11" text-anchor="middle">1.600</text>
+<text class="t3" x="412" y="370" font-size="11" text-anchor="middle">Usuarios registrando pedidos a la vez · 0 % de errores en todos los niveles</text>
+</svg>
