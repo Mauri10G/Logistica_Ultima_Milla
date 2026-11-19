@@ -77,6 +77,9 @@ k6 run --summary-export=tests/performance/reports/concurrencia.json tests/perfor
 k6 run -e FECHA=2027-02-14 -e ARMAR=1 --summary-export=tests/performance/reports/volumen.json tests/performance/volumen.js
 ```
 
+Para regenerar las gráficas del informe (`docs/evidencias/performance/graficas/`) desde esos resúmenes:
+`node tests/performance/graficas.js`. Usa `estres.json`, `estres-alto.json` y los `volumen-*.json`.
+
 Los scripts de carga y estrés **escriben pedidos reales** en la base apuntada: usarlos contra desarrollo, no contra
 datos que importen. Para empezar de cero: `docker compose down -v && docker compose up -d`.
 `comun.js` tiene las cajas geográficas de las 5 zonas de los datos base; ajustarlas si cambian las zonas.

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" role="img" aria-labelledby="titulo desc">
+<title id="titulo">Volumen: tiempo de armado de rutas de una fecha</title><desc id="desc">Normal: 867 ms; Alta demanda: 10,67 s; San Valentín: 83,07 s</desc>
+<style>
+  .fondo { fill: #fcfcfb } .t1 { fill: #0b0b0b } .t2 { fill: #52514e } .t3 { fill: #898781 }
+  .grilla { stroke: #e1e0d9 } .eje { stroke: #c3c2b7 } .umbral { stroke: #52514e }
+  .s1 { fill: #2a78d6 } .s1l { stroke: #2a78d6 } .s2 { fill: #eb6834 } .anillo { stroke: #fcfcfb }
+  .halo { paint-order: stroke; stroke: #fcfcfb; stroke-width: 4px; stroke-linejoin: round }
+  @media (prefers-color-scheme: dark) {
+    .fondo { fill: #1a1a19 } .t1 { fill: #f0efec } .t2 { fill: #c3c2b7 } .t3 { fill: #898781 }
+    .grilla { stroke: #2c2c2a } .eje { stroke: #383835 } .umbral { stroke: #c3c2b7 }
+    .s1 { fill: #3987e5 } .s1l { stroke: #3987e5 } .s2 { fill: #d95926 } .anillo { stroke: #1a1a19 }
+    .halo { stroke: #1a1a19 }
+  }
+  text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif }
+  .num { font-variant-numeric: tabular-nums }</style>
+<rect class="fondo" width="760" height="380" rx="8"/>
+<text class="t1" x="64" y="30" font-size="16" font-weight="600">Volumen: tiempo de armado de rutas de una fecha</text>
+<text class="t2" x="64" y="50" font-size="12.5">POST /api/rutas/armar con la base llena · ninguna ruta supera 4 pedidos</text>
+<line class="eje" x1="64" x2="736" y1="328" y2="328" stroke-width="1"/>
+<text class="t3 num" x="56" y="332" font-size="11" text-anchor="end">0 s</text>
+<line class="grilla" x1="64" x2="736" y1="278" y2="278" stroke-width="1"/>
+<text class="t3 num" x="56" y="282" font-size="11" text-anchor="end">20 s</text>
+<line class="grilla" x1="64" x2="736" y1="228" y2="228" stroke-width="1"/>
+<text class="t3 num" x="56" y="232" font-size="11" text-anchor="end">40 s</text>
+<line class="grilla" x1="64" x2="736" y1="178" y2="178" stroke-width="1"/>
+<text class="t3 num" x="56" y="182" font-size="11" text-anchor="end">60 s</text>
+<line class="grilla" x1="64" x2="736" y1="128" y2="128" stroke-width="1"/>
+<text class="t3 num" x="56" y="132" font-size="11" text-anchor="end">80 s</text>
+<line class="grilla" x1="64" x2="736" y1="78" y2="78" stroke-width="1"/>
+<text class="t3 num" x="56" y="82" font-size="11" text-anchor="end">100 s</text>
+<path class="s1" d="M164,328 V326.9165565 Q164,325.833113 165.0834435,325.833113 H186.9165565 Q188,325.833113 188,326.9165565 V328 Z"><title>Normal: 500 pedidos en 127 rutas, 867 ms</title></path>
+<text class="t1 num halo" x="176" y="317.833113" font-size="11.5" font-weight="600" text-anchor="middle">867 ms</text>
+<text class="t3" x="176" y="346" font-size="11" text-anchor="middle">Normal</text>
+<text class="t3 num" x="176" y="360" font-size="10.5" text-anchor="middle">500 pedidos → 127 rutas</text>
+<path class="s1" d="M388,328 V305.33748275 Q388,301.33748275 392,301.33748275 H408 Q412,301.33748275 412,305.33748275 V328 Z"><title>Alta demanda: 5.000 pedidos en 1.251 rutas, 10,67 s</title></path>
+<text class="t1 num halo" x="400" y="293.33748275" font-size="11.5" font-weight="600" text-anchor="middle">10,67 s</text>
+<text class="t3" x="400" y="346" font-size="11" text-anchor="middle">Alta demanda</text>
+<text class="t3 num" x="400" y="360" font-size="10.5" text-anchor="middle">5.000 pedidos → 1.251 rutas</text>
+<path class="s1" d="M612,328 V124.33038175000002 Q612,120.33038175000002 616,120.33038175000002 H632 Q636,120.33038175000002 636,124.33038175000002 V328 Z"><title>San Valentín: 20.000 pedidos en 5.003 rutas, 83,07 s</title></path>
+<text class="t1 num halo" x="624" y="112.33038175000002" font-size="11.5" font-weight="600" text-anchor="middle">83,07 s</text>
+<text class="t3" x="624" y="346" font-size="11" text-anchor="middle">San Valentín</text>
+<text class="t3 num" x="624" y="360" font-size="10.5" text-anchor="middle">20.000 pedidos → 5.003 rutas</text>
+</svg>

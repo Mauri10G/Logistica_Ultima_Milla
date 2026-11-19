@@ -5,6 +5,7 @@ Responsable: Robert Paredes. Ejecución: 19 de noviembre de 2026.
 
 Scripts y cómo repetir cada prueba: [`tests/performance/README.md`](../../../tests/performance/README.md).
 Resúmenes de k6 de cada ejecución (`--summary-export`): [`tests/performance/reports/`](../../../tests/performance/reports/).
+Las gráficas se generan desde esos resúmenes con `node tests/performance/graficas.js` (carpeta [`graficas/`](graficas/)).
 
 ## 1. Resumen
 
@@ -84,6 +85,10 @@ y errores < 1 %). Al final se vuelve a 20 usuarios para ver si el sistema se rec
 | Recuperación (20), primera ronda | 6 005 | — | 16 ms | 29 ms | 82 ms | 0 % |
 | Recuperación (20), segunda ronda | 6 114 | — | 13 ms | 19 ms | 54 ms | 0 % |
 
+![Estrés: p95 por nivel de usuarios, con el umbral de 800 ms y el punto de quiebre en 600 usuarios](graficas/estres-p95.svg)
+
+![Estrés: peticiones por segundo por nivel, con el máximo en 1 200 usuarios y la caída con 1 600](graficas/estres-peticiones.svg)
+
 **Punto de quiebre:**
 
 - **Por tiempo de respuesta, en 600 usuarios a la vez:** es el primer nivel cuyo p95 supera los 800 ms de un día normal.
@@ -110,11 +115,15 @@ la vez) y el armado de rutas de toda la fecha. Reportes: `reports/volumen-*.json
 | Alta demanda | 5 000 | 1 251 | 1 250 | 4 | 10,7 s |
 | San Valentín | 20 000 | 5 003 | 5 000 | 4 | **83,1 s** |
 
+![Volumen: tiempo de armado de rutas por escenario](graficas/volumen-armado.svg)
+
 El algoritmo deja casi la cantidad mínima de rutas: sobra como mucho una ruta incompleta por zona. Ninguna ruta pasa de
 4 pedidos. El armado de San Valentín tarda 1 min 23 s; corre a las 18:00 del día anterior (armado programado), así que no
 afecta a los usuarios, pero si se dispara a mano desde la web el usuario espera ese tiempo.
 
 ### Consultas (con las rutas ya armadas)
+
+![Volumen: p95 de listar pedidos y listar rutas por escenario, con el umbral de 2 s](graficas/volumen-consultas.svg)
 
 | Escenario | Listar pedidos de la fecha (p95) | Listar rutas de la fecha (p95) | Umbral rutas |
 |---|---|---|---|
