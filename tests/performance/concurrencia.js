@@ -4,6 +4,7 @@
 //
 //   k6 run tests/performance/concurrencia.js
 //   k6 run -e FECHA=2027-03-01 -e PEDIDOS=500 -e USUARIOS=100 tests/performance/concurrencia.js
+//   k6 run -e P95_MAX_MS=30000 tests/performance/concurrencia.js       (umbral de tiempo mas laxo, como en el CI)
 //
 // Cada ejecucion usa una fecha propia (al azar, a mas de 60 dias) para no mezclarse con otros datos; se muestra al
 // inicio y sirve para la verificacion en SQL: tests/performance/verificar-concurrencia.sql.
@@ -15,6 +16,7 @@ import { BASE_URL, conToken, cuerpoPedido, fechaIso, iniciarSesion, tokenDelUsua
 const ZONA = __ENV.ZONA || 'Centro'; // todos los pedidos en la misma zona: es donde chocan
 const PEDIDOS = Number(__ENV.PEDIDOS || 200); // pedidos de ultimo momento
 const USUARIOS = Number(__ENV.USUARIOS || 50); // usuarios registrando a la vez
+const P95_MAX_MS = Number(__ENV.P95_MAX_MS || 2000); // en el CI se sube: alli importa la regla, no la velocidad
 const INICIALES = 6; // pedidos que se registran y arman antes de la rafaga (4 + 2: deja una ruta con espacio)
 
 const violaciones = new Counter('violaciones_concurrencia');
@@ -39,15 +41,15 @@ export const options = {
     },
   },
   thresholds: {
-    violaciones_concurrencia: ['count==0'],
+    violaciones_concurrencia: ['count==0'], // la regla critica: si hay una sola, la prueba falla
     // Solo para que el resumen muestre cuantos rechazos hubo de cada tipo (no hacen fallar la prueba).
     'pedidos_rechazados{status:0}': ['count>=0'],
     'pedidos_rechazados{status:409}': ['count>=0'],
     'pedidos_rechazados{status:500}': ['count>=0'],
-    'pedidos_rechazados{status:503}': ['count>=0'], // la regla critica: si hay una sola, la prueba falla
+    'pedidos_rechazados{status:503}': ['count>=0'],
     'checks{escenario:insercion}': ['rate>0.99'],
     'http_req_failed{escenario:insercion}': ['rate<0.01'],
-    'http_req_duration{escenario:insercion}': ['p(95)<2000'],
+    'http_req_duration{escenario:insercion}': [`p(95)<${P95_MAX_MS}`],
   },
 };
 
