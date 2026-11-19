@@ -4,6 +4,9 @@ module.exports = {
   transform: { '^.+\\.[jt]sx?$': 'babel-jest' },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testMatch: ['<rootDir>/src/**/*.test.{js,jsx}'],
+    // En Jenkins Docker ve 32 CPUs: limitar los procesos y dar más tiempo por prueba
+  maxWorkers: 4,
+  testTimeout: 20000,
   moduleNameMapper: {
     // import.meta.env solo existe en Vite: en Jest se reemplaza entorno.js por un mock.
     '^(\\.{1,2}/)+entorno(\\.js)?$': '<rootDir>/src/__mocks__/entorno.js',
