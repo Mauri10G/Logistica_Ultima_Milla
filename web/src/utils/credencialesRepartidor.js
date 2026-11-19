@@ -1,3 +1,5 @@
+import { bytesUtf8 } from './camposFormulario'
+
 /**
  * Reglas del usuario y la contraseña de un repartidor nuevo. Son las mismas del backend
  * (RepartidorAltaRequest): si cambian allá, cambian aquí.
@@ -5,7 +7,7 @@
 export const USUARIO_MIN = 3
 export const USUARIO_MAX = 50
 export const CLAVE_MIN = 6
-export const CLAVE_MAX = 72
+export const CLAVE_MAX_BYTES = 72
 
 const FORMATO_USUARIO = /^[a-z0-9._]+$/
 
@@ -25,6 +27,9 @@ export function errorDeUsuario(usuario) {
 export function errorDeClave(clave) {
   if (!clave) return 'La contraseña es obligatoria.'
   if (clave.length < CLAVE_MIN) return `La contraseña debe tener al menos ${CLAVE_MIN} caracteres.`
-  if (clave.length > CLAVE_MAX) return `La contraseña admite hasta ${CLAVE_MAX} caracteres.`
+  // El límite del backend es de bytes UTF-8 (bcrypt), no de caracteres: una tilde ocupa 2 bytes.
+  if (bytesUtf8(clave) > CLAVE_MAX_BYTES) {
+    return `La contraseña admite hasta ${CLAVE_MAX_BYTES} bytes (los acentos y la ñ ocupan 2).`
+  }
   return null
 }
