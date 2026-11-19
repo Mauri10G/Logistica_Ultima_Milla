@@ -135,6 +135,18 @@ Listar pedidos escala bien porque está paginado. **Listar rutas crece en propor
 respuesta trae todas las rutas de la fecha con todos sus pedidos completos. Reportado a backend en
 [#31](https://github.com/Mauri10G/Logistica_Ultima_Milla/issues/31).
 
+**Después de la corrección de Joseph** (#36: el listado se arma en una sola consulta y las respuestas van comprimidas),
+medido el mismo día con la misma base (reportes `volumen-*-consultas-despues.json`):
+
+| Escenario | Listar rutas p95, antes | Listar rutas p95, después | Listar pedidos p95, después |
+|---|---|---|---|
+| Alta demanda (1 251 rutas) | 1,59 s | **0,70 s** ✅ | 230 ms |
+| San Valentín (5 003 rutas) | 6,96 s | **2,80 s** ❌ | 278 ms |
+
+La consulta es 2,5 veces más rápida y alta demanda ya cumple el umbral. San Valentín sigue por encima de 2 s porque la
+respuesta todavía trae las 5 003 rutas con sus 20 000 pedidos: para bajar de ahí hace falta paginar el listado o devolver
+un resumen por ruta.
+
 ## 7. Concurrencia: pedidos de último momento a la vez
 
 Requisito crítico del enunciado: con muchas solicitudes simultáneas, una ruta nunca supera el máximo y un pedido nunca
@@ -165,8 +177,8 @@ verifica por la API y por SQL (`verificar-concurrencia.sql`).
    usuarios registrando pedidos sin pausa, aunque más lento. El punto de quiebre por tiempo de respuesta está en unos 600
    usuarios a la vez y la capacidad máxima medida es de unas 955 peticiones por segundo, en un portátil.
 2. **La garantía de concurrencia funciona:** en ninguna prueba hubo rutas con más de 4 pedidos ni pedidos en dos rutas.
-3. **Mejora prioritaria: listar rutas** (6,96 s con 5 003 rutas). Paginar `GET /api/rutas` o devolver un resumen sin los
-   pedidos completos, y revisar consultas N+1 ([#31](https://github.com/Mauri10G/Logistica_Ultima_Milla/issues/31)).
+3. **Mejora prioritaria: listar rutas.** Con la corrección del #36 bajó de 6,96 s a 2,80 s con 5 003 rutas, pero sigue sobre
+   el umbral: falta paginar `GET /api/rutas` o devolver un resumen sin los pedidos completos.
 4. **El armado de San Valentín tarda 83 s.** Está bien como proceso programado, pero si se dispara a mano conviene
    ejecutarlo en segundo plano y avisar por WebSocket (`/topic/rutas`) cuando termine, en lugar de esperar la respuesta HTTP.
 5. **Inserciones de último momento en una misma zona y fecha:** se atienden una a la vez (unas 7 por segundo). Si en una
