@@ -19,7 +19,7 @@ con Issues etiquetados `seguridad` o `rendimiento` y asignados al dueño de cada
 | `feature/tests-k6-escenarios` | #30 | Token en los scripts de k6; prueba de concurrencia de último momento con verificación por API y SQL; carga con consultas de rutas; estrés por niveles con recuperación; resultados e informe de volumen, carga y estrés |
 | `feature/tests-seguridad` | #39 | Script de ZAP con dos pasadas pasivas y token; npm audit; reporte de seguridad |
 | `feature/infra-ci` | #41 | Job de la app móvil en el CI (`flutter analyze` y `flutter test`) |
-| `feature/docs-informe-robert` | este PR | Sección 11 de `docs/diseno-sistema.md` y este informe |
+| `feature/docs-informe-robert` | #42 | Sección 11 de `docs/diseno-sistema.md` y este informe |
 
 Issues abiertos para el equipo: #31 (listar rutas lento, Joseph), #32 (validaciones del backend, Joseph), #33
 (validaciones de la web, Mauricio), #40 (dependencias de prueba de la web, Mauricio) y #34 (seguimiento de mis pendientes).
