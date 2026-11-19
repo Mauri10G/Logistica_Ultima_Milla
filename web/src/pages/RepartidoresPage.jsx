@@ -12,12 +12,14 @@ import Tabla from '../components/Tabla'
 import { fechaIso } from '../hooks/fechas'
 import { useConfirmacion } from '../hooks/useConfirmacion'
 import { coincide } from '../utils/busqueda'
-import { mensajeDeError } from '../utils/errores'
+import { errorDeClave, errorDeUsuario } from '../utils/credencialesRepartidor'
+import { codigoDeError, estadoHttp, mensajeDeError } from '../utils/errores'
 
 const COLUMNAS = [
   { clave: 'id', titulo: '#' },
   { clave: 'nombres', titulo: 'Nombres' },
   { clave: 'telefono', titulo: 'Teléfono' },
+  { clave: 'usuario', titulo: 'Usuario' },
   { clave: 'capacidad', titulo: 'Capacidad' },
   { clave: 'ruta', titulo: 'Ruta de hoy' },
   { clave: 'disponible', titulo: 'Disponible' },
@@ -46,8 +48,11 @@ export default function RepartidoresPage() {
   const [busqueda, setBusqueda] = useState('')
   const [nombres, setNombres] = useState('')
   const [telefono, setTelefono] = useState('')
+  const [usuario, setUsuario] = useState('')
+  const [clave, setClave] = useState('')
   const [error, setError] = useState(null)
   const [errorForm, setErrorForm] = useState(null)
+  const [erroresCampo, setErroresCampo] = useState({})
   const [mensaje, setMensaje] = useState(null)
   const [enviando, setEnviando] = useState(false)
   const [cargando, setCargando] = useState(true)
@@ -81,7 +86,10 @@ export default function RepartidoresPage() {
   function abrirForm() {
     setNombres('')
     setTelefono('')
+    setUsuario('')
+    setClave('')
     setErrorForm(null)
+    setErroresCampo({})
     setMensaje(null)
     setMostrarForm(true)
   }
@@ -89,12 +97,20 @@ export default function RepartidoresPage() {
   function cerrarForm() {
     setMostrarForm(false)
     setErrorForm(null)
+    setErroresCampo({})
+  }
+
+  /** Cambia el usuario o la contraseña y quita el error de ese campo (ya no aplica al nuevo valor). */
+  function cambiarCredencial(campo, valor) {
+    if (campo === 'usuario') setUsuario(valor)
+    else setClave(valor)
+    setErroresCampo((previos) => ({ ...previos, [campo]: undefined }))
   }
 
   /** Cerrar el formulario (Cancelar o Esc): si hay datos escritos sin guardar, primero se pregunta. */
   function pedirCierreForm() {
     if (enviando) return
-    if (!nombres.trim() && !telefono.trim()) {
+    if (!nombres.trim() && !telefono.trim() && !usuario.trim() && !clave) {
       cerrarForm()
       return
     }
@@ -110,14 +126,26 @@ export default function RepartidoresPage() {
   async function crear(evento) {
     evento.preventDefault()
     setErrorForm(null)
+    const nombreUsuario = usuario.trim()
+    const errores = { usuario: errorDeUsuario(nombreUsuario), clave: errorDeClave(clave) }
+    setErroresCampo(errores)
+    if (errores.usuario || errores.clave) {
+      document.getElementById(errores.usuario ? 'repUsuario' : 'repClave')?.focus()
+      return
+    }
     setEnviando(true)
     try {
-      await crearRepartidor({ nombres, telefono })
+      await crearRepartidor({ nombres, telefono, usuario: nombreUsuario, clave })
       setMensaje(`Repartidor ${nombres} agregado.`)
       cerrarForm()
       await cargar()
     } catch (e) {
-      setErrorForm(mensajeDeError(e))
+      if (estadoHttp(e) === 409 && codigoDeError(e) === 'USUARIO_DUPLICADO') {
+        setErroresCampo({ usuario: mensajeDeError(e) })
+        document.getElementById('repUsuario')?.focus()
+      } else {
+        setErrorForm(mensajeDeError(e))
+      }
     } finally {
       setEnviando(false)
     }
@@ -161,6 +189,7 @@ export default function RepartidoresPage() {
       id: (repartidor) => repartidor.id,
       nombres: (repartidor) => repartidor.nombres,
       telefono: (repartidor) => repartidor.telefono,
+      usuario: (repartidor) => repartidor.usuario ?? '',
       capacidad: (repartidor) => repartidor.capacidadMaxima,
       ruta: (repartidor) => rutasHoy?.[repartidor.id]?.id ?? null,
       disponible: (repartidor) => (repartidor.disponible ? 0 : 1), // ascendente: primero los disponibles
@@ -218,6 +247,7 @@ export default function RepartidoresPage() {
               <td>{repartidor.id}</td>
               <td>{repartidor.nombres}</td>
               <td>{repartidor.telefono}</td>
+              <td>{repartidor.usuario ?? '—'}</td>
               <td>{repartidor.capacidadMaxima}</td>
               <td>{ruta ? textoRuta(ruta) : '—'}</td>
               <td>
@@ -261,6 +291,49 @@ export default function RepartidoresPage() {
               <p id="ayudaRepTelefono" className="ayuda">
                 Número de contacto del repartidor.
               </p>
+            </div>
+            <div className="campo">
+              <label htmlFor="repUsuario">Usuario</label>
+              <input
+                id="repUsuario"
+                value={usuario}
+                onChange={(e) => cambiarCredencial('usuario', e.target.value)}
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                aria-invalid={Boolean(erroresCampo.usuario)}
+                aria-describedby={erroresCampo.usuario ? 'ayudaRepUsuario errorRepUsuario' : 'ayudaRepUsuario'}
+                required
+              />
+              <p id="ayudaRepUsuario" className="ayuda">
+                Con él entra a la app móvil: minúsculas, números, punto o guion bajo (3 a 50).
+              </p>
+              {erroresCampo.usuario && (
+                <span id="errorRepUsuario" className="error-campo" role="alert">
+                  {erroresCampo.usuario}
+                </span>
+              )}
+            </div>
+            <div className="campo">
+              <label htmlFor="repClave">Contraseña</label>
+              <input
+                id="repClave"
+                type="password"
+                value={clave}
+                onChange={(e) => cambiarCredencial('clave', e.target.value)}
+                autoComplete="new-password"
+                aria-invalid={Boolean(erroresCampo.clave)}
+                aria-describedby={erroresCampo.clave ? 'ayudaRepClave errorRepClave' : 'ayudaRepClave'}
+                required
+              />
+              <p id="ayudaRepClave" className="ayuda">
+                Mínimo 6 caracteres. Entréguesela al repartidor.
+              </p>
+              {erroresCampo.clave && (
+                <span id="errorRepClave" className="error-campo" role="alert">
+                  {erroresCampo.clave}
+                </span>
+              )}
             </div>
             {errorForm && (
               <p className="mensaje-error ancho-completo" role="alert">
