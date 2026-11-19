@@ -31,6 +31,12 @@ const ZONA = {
 }
 
 describe('ZonaForm (zona nueva)', () => {
+  test('el nombre admite hasta 100 caracteres, como el backend', () => {
+    render(<ZonaForm onGuardar={jest.fn()} />)
+
+    expect(screen.getByLabelText('Nombre de la zona')).toHaveAttribute('maxlength', '100')
+  })
+
   test('los controles tienen label y los botones del mapa empiezan deshabilitados', () => {
     render(<ZonaForm onGuardar={jest.fn()} />)
 

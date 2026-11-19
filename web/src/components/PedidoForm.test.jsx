@@ -60,6 +60,102 @@ describe('PedidoForm', () => {
     }
   })
 
+  test('los campos de texto tienen el límite de longitud del backend y el teléfono es de tipo tel', () => {
+    render(<PedidoForm onSubmit={jest.fn()} />)
+
+    expect(screen.getByLabelText('Nombres del cliente')).toHaveAttribute('maxlength', '150')
+    expect(screen.getByLabelText('Teléfono')).toHaveAttribute('maxlength', '30')
+    expect(screen.getByLabelText('Teléfono')).toHaveAttribute('type', 'tel')
+    expect(screen.getByLabelText('Email (opcional)')).toHaveAttribute('maxlength', '150')
+    expect(screen.getByLabelText('Dirección de entrega')).toHaveAttribute('maxlength', '255')
+  })
+
+  test.each([
+    ['con letras', 'abc'],
+    ['de menos de 7 dígitos', '123456'],
+    ['de más de 15 dígitos', '1234567890123456'],
+    ['con símbolos fuera de lugar', '-0991234567'],
+  ])('un teléfono %s se rechaza junto al campo y no se envía', async (_caso, telefono) => {
+    const user = userEvent.setup()
+    const onSubmit = jest.fn()
+    render(<PedidoForm onSubmit={onSubmit} />)
+    await llenarFormulario(user)
+    await user.clear(screen.getByLabelText('Teléfono'))
+    await user.type(screen.getByLabelText('Teléfono'), telefono)
+    clicEnMapa(-1.2412, -78.6197)
+
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+    const campo = screen.getByLabelText('Teléfono')
+    expect(screen.getByText(/solo admite dígitos, espacios, guiones y un \+ inicial/)).toBeInTheDocument()
+    expect(campo).toHaveAttribute('aria-invalid', 'true')
+    expect(campo).toHaveAccessibleDescription(/7 a 15 dígitos/)
+    expect(campo).toHaveFocus()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  test.each(['0991234567', '+593 99 123 4567', '03-282-1234'])('el teléfono %s se acepta', async (telefono) => {
+    const user = userEvent.setup()
+    const onSubmit = jest.fn()
+    render(<PedidoForm onSubmit={onSubmit} />)
+    await llenarFormulario(user)
+    await user.clear(screen.getByLabelText('Teléfono'))
+    await user.type(screen.getByLabelText('Teléfono'), telefono)
+    clicEnMapa(-1.2412, -78.6197)
+
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ clienteTelefono: telefono }))
+  })
+
+  test('unos nombres sin ninguna letra se rechazan junto al campo y no se envían', async () => {
+    const user = userEvent.setup()
+    const onSubmit = jest.fn()
+    render(<PedidoForm onSubmit={onSubmit} />)
+    await llenarFormulario(user)
+    await user.clear(screen.getByLabelText('Nombres del cliente'))
+    await user.type(screen.getByLabelText('Nombres del cliente'), '12345')
+    clicEnMapa(-1.2412, -78.6197)
+
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+    const campo = screen.getByLabelText('Nombres del cliente')
+    expect(screen.getByText('El nombre debe contener al menos una letra.')).toBeInTheDocument()
+    expect(campo).toHaveAttribute('aria-invalid', 'true')
+    expect(campo).toHaveFocus()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  test('los nombres con tildes y ñ se aceptan', async () => {
+    const user = userEvent.setup()
+    const onSubmit = jest.fn()
+    render(<PedidoForm onSubmit={onSubmit} />)
+    await llenarFormulario(user)
+    await user.clear(screen.getByLabelText('Nombres del cliente'))
+    await user.type(screen.getByLabelText('Nombres del cliente'), 'Ángela Núñez')
+    clicEnMapa(-1.2412, -78.6197)
+
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ clienteNombres: 'Ángela Núñez' }))
+  })
+
+  test('al corregir el teléfono se quita su error', async () => {
+    const user = userEvent.setup()
+    render(<PedidoForm onSubmit={jest.fn()} />)
+    await llenarFormulario(user)
+    await user.clear(screen.getByLabelText('Teléfono'))
+    await user.type(screen.getByLabelText('Teléfono'), 'abc')
+    clicEnMapa(-1.2412, -78.6197)
+    await user.click(screen.getByRole('button', { name: 'Registrar pedido' }))
+    expect(screen.getByLabelText('Teléfono')).toHaveAttribute('aria-invalid', 'true')
+
+    await user.type(screen.getByLabelText('Teléfono'), '1')
+
+    expect(screen.getByLabelText('Teléfono')).toHaveAttribute('aria-invalid', 'false')
+    expect(screen.queryByText(/solo admite dígitos/)).not.toBeInTheDocument()
+  })
+
   test('latitud y longitud son de solo lectura y se llenan con un clic en el mapa', () => {
     render(<PedidoForm onSubmit={jest.fn()} />)
     expect(screen.getByLabelText('Latitud')).toHaveAttribute('readonly')
@@ -358,6 +454,29 @@ describe('PedidoForm', () => {
       const datos = onSubmit.mock.calls[0][0]
       expect(datos).not.toHaveProperty('clienteId')
       expect(datos).toEqual(expect.objectContaining({ clienteNombres: 'Luis Mora', clienteTelefono: '0990000000' }))
+    })
+
+    test('si el cliente no cambió, un teléfono antiguo con otro formato no bloquea la edición', async () => {
+      const user = userEvent.setup()
+      const onSubmit = jest.fn()
+      render(<PedidoForm pedido={{ ...PEDIDO_EXISTENTE, clienteTelefono: '099-abc' }} onSubmit={onSubmit} />)
+
+      await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ clienteId: 3 }))
+    })
+
+    test('si el cliente cambió, el teléfono nuevo también se valida', async () => {
+      const user = userEvent.setup()
+      const onSubmit = jest.fn()
+      render(<PedidoForm pedido={PEDIDO_EXISTENTE} onSubmit={onSubmit} />)
+
+      await user.clear(screen.getByLabelText('Teléfono'))
+      await user.type(screen.getByLabelText('Teléfono'), 'abc')
+      await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+      expect(screen.getByLabelText('Teléfono')).toHaveAttribute('aria-invalid', 'true')
+      expect(onSubmit).not.toHaveBeenCalled()
     })
 
     test('el botón Cancelar avisa a quien lo usa', async () => {

@@ -306,11 +306,146 @@ describe('RepartidoresPage', () => {
     await dibujar()
     await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
 
-    await llenarFormulario(user, { telefono: '1' })
+    await llenarFormulario(user)
     await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('telefono: muy largo')
     expect(screen.getByRole('dialog', { name: 'Nuevo repartidor' })).toBeInTheDocument()
+  })
+
+  test('los campos tienen el límite de longitud del backend y el teléfono es de tipo tel', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    expect(screen.getByLabelText('Nombres')).toHaveAttribute('maxlength', '150')
+    const telefono = screen.getByLabelText('Teléfono', { selector: '#repTelefono' })
+    expect(telefono).toHaveAttribute('maxlength', '30')
+    expect(telefono).toHaveAttribute('type', 'tel')
+  })
+
+  test.each([
+    ['con letras', 'abc'],
+    ['de menos de 7 dígitos', '123456'],
+    ['de más de 15 dígitos', '1234567890123456'],
+    ['con un + fuera de lugar', '09912+34567'],
+    ['con texto al final', '0991234567 ext 2'],
+  ])('un teléfono %s se rechaza junto al campo y no se envía', async (_caso, telefono) => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await llenarFormulario(user, { telefono })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    const campo = screen.getByLabelText('Teléfono', { selector: '#repTelefono' })
+    expect(await screen.findByText(/solo admite dígitos, espacios, guiones y un \+ inicial/)).toBeInTheDocument()
+    expect(campo).toHaveAttribute('aria-invalid', 'true')
+    expect(campo).toHaveAccessibleDescription(/7 a 15 dígitos/)
+    expect(campo).toHaveFocus()
+    expect(crearRepartidor).not.toHaveBeenCalled()
+  })
+
+  test.each(['0983333333', '+593 99 333 3333', '03-282-1234'])('el teléfono %s se acepta', async (telefono) => {
+    const user = userEvent.setup()
+    crearRepartidor.mockResolvedValue({})
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await llenarFormulario(user, { telefono })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    await waitFor(() => expect(crearRepartidor).toHaveBeenCalledWith(expect.objectContaining({ telefono })))
+  })
+
+  test('el teléfono se envía sin espacios sobrantes', async () => {
+    const user = userEvent.setup()
+    crearRepartidor.mockResolvedValue({})
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await llenarFormulario(user, { telefono: '  0983333333  ' })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    await waitFor(() =>
+      expect(crearRepartidor).toHaveBeenCalledWith(expect.objectContaining({ telefono: '0983333333' })),
+    )
+  })
+
+  test('unos nombres sin ninguna letra se rechazan junto al campo y no se envían', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await user.type(screen.getByLabelText('Nombres'), '12345')
+    await user.type(screen.getByLabelText('Teléfono', { selector: '#repTelefono' }), '0983333333')
+    await user.type(screen.getByLabelText('Usuario'), 'carlos.vera')
+    await user.type(screen.getByLabelText('Contraseña'), 'secreto1')
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    const campo = screen.getByLabelText('Nombres')
+    expect(await screen.findByText('El nombre debe contener al menos una letra.')).toBeInTheDocument()
+    expect(campo).toHaveAttribute('aria-invalid', 'true')
+    expect(campo).toHaveFocus()
+    expect(crearRepartidor).not.toHaveBeenCalled()
+  })
+
+  test('los nombres con tildes y ñ se aceptan', async () => {
+    const user = userEvent.setup()
+    crearRepartidor.mockResolvedValue({})
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await user.type(screen.getByLabelText('Nombres'), 'Ángela Núñez')
+    await user.type(screen.getByLabelText('Teléfono', { selector: '#repTelefono' }), '0983333333')
+    await user.type(screen.getByLabelText('Usuario'), 'angela')
+    await user.type(screen.getByLabelText('Contraseña'), 'secreto1')
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    await waitFor(() =>
+      expect(crearRepartidor).toHaveBeenCalledWith(expect.objectContaining({ nombres: 'Ángela Núñez' })),
+    )
+  })
+
+  test('al corregir el teléfono se quita su error', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+    await llenarFormulario(user, { telefono: 'abc' })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Teléfono', { selector: '#repTelefono' }), '1')
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Teléfono', { selector: '#repTelefono' })).toHaveAttribute('aria-invalid', 'false')
+  })
+
+  test('la contraseña se mide en bytes UTF-8: 36 "é" son 72 bytes y se aceptan', async () => {
+    const user = userEvent.setup()
+    crearRepartidor.mockResolvedValue({})
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    const enElLimite = 'é'.repeat(36)
+    await llenarFormulario(user, { clave: enElLimite })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    await waitFor(() => expect(crearRepartidor).toHaveBeenCalledWith(expect.objectContaining({ clave: enElLimite })))
+  })
+
+  test('una contraseña de 37 caracteres pero 73 bytes se rechaza junto al campo', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await llenarFormulario(user, { clave: `${'é'.repeat(36)}a` })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    expect(await screen.findByText(/admite hasta 72 bytes/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Contraseña')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Contraseña')).toHaveFocus()
+    expect(crearRepartidor).not.toHaveBeenCalled()
   })
 
   test('CP-10: cambia la disponibilidad', async () => {
