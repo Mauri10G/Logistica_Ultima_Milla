@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../config.dart';
 import '../models/sesion.dart';
 import '../services/api_service.dart';
 import '../services/sesion_service.dart';
 import '../services/stomp_service.dart';
 import 'ruta_screen.dart';
-import 'seleccion_repartidor_screen.dart';
 
 /// Pantalla de autenticacion del repartidor contra POST /api/auth/login.
 class LoginScreen extends StatefulWidget {
@@ -14,7 +12,6 @@ class LoginScreen extends StatefulWidget {
   final SesionService? sesionService;
   final StompService? stomp;
   final Future<void> Function(Sesion sesion)? alIniciarSesion;
-  final bool permitirAccesoPorId;
   final String? mensajeInicial;
 
   const LoginScreen({
@@ -23,7 +20,6 @@ class LoginScreen extends StatefulWidget {
     this.sesionService,
     this.stomp,
     this.alIniciarSesion,
-    this.permitirAccesoPorId = permitirIdTemporal,
     this.mensajeInicial,
   });
 
@@ -110,14 +106,6 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _enviando = false);
       }
     }
-  }
-
-  void _abrirAccesoPorId() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SeleccionRepartidorScreen(api: _api, stomp: widget.stomp),
-      ),
-    );
   }
 
   @override
@@ -224,13 +212,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           )
                         : const Text('Ingresar'),
                   ),
-                  if (widget.permitirAccesoPorId) ...[
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: _enviando ? null : _abrirAccesoPorId,
-                      child: const Text('Ingresar por ID (temporal)'),
-                    ),
-                  ],
                 ],
               ),
             ),

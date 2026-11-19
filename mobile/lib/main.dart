@@ -22,7 +22,6 @@ class LogisticaApp extends StatefulWidget {
   final StompService? stomp;
   final Future<bool> Function(Uri uri)? lanzarUrl;
   final bool habilitaAuth;
-  final bool permiteIdTemporal;
 
   const LogisticaApp({
     super.key,
@@ -33,7 +32,6 @@ class LogisticaApp extends StatefulWidget {
     this.stomp,
     this.lanzarUrl,
     this.habilitaAuth = authHabilitada,
-    this.permiteIdTemporal = permitirIdTemporal,
   });
 
   @override
@@ -160,7 +158,6 @@ class _LogisticaAppState extends State<LogisticaApp> {
       sesionService: _sesionService,
       stomp: widget.stomp,
       alIniciarSesion: _iniciarSesion,
-      permitirAccesoPorId: widget.permiteIdTemporal,
       mensajeInicial: _mensajeLogin,
     );
   }
