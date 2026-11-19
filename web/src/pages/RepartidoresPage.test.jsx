@@ -9,9 +9,17 @@ jest.mock('../api/repartidoresApi')
 jest.mock('../api/rutasApi')
 
 const REPARTIDORES = [
-  { id: 1, nombres: 'Ana Pérez', telefono: '0981111111', capacidadMaxima: 4, disponible: true },
-  { id: 2, nombres: 'Luis Mora', telefono: '0982222222', capacidadMaxima: 4, disponible: false },
+  { id: 1, nombres: 'Ana Pérez', telefono: '0981111111', usuario: 'ana', capacidadMaxima: 4, disponible: true },
+  { id: 2, nombres: 'Luis Mora', telefono: '0982222222', usuario: 'luis', capacidadMaxima: 4, disponible: false },
 ]
+
+/** Llena el modal con datos válidos; pasar un valor vacío en `usuario` o `clave` deja ese campo sin escribir. */
+async function llenarFormulario(user, { usuario = 'carlos.vera', clave = 'secreto1', telefono = '0983333333' } = {}) {
+  await user.type(screen.getByLabelText('Nombres'), 'Carlos Vera')
+  await user.type(screen.getByLabelText('Teléfono', { selector: '#repTelefono' }), telefono)
+  if (usuario) await user.type(screen.getByLabelText('Usuario'), usuario)
+  if (clave) await user.type(screen.getByLabelText('Contraseña'), clave)
+}
 
 async function dibujar() {
   render(<RepartidoresPage />)
@@ -93,17 +101,178 @@ describe('RepartidoresPage', () => {
     await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
     listarRepartidores.mockResolvedValue([
       ...REPARTIDORES,
-      { id: 3, nombres: 'Carlos Vera', telefono: '0983333333', capacidadMaxima: 4, disponible: true },
+      { id: 3, nombres: 'Carlos Vera', telefono: '0983333333', usuario: 'carlos.vera', capacidadMaxima: 4, disponible: true },
     ])
 
-    await user.type(screen.getByLabelText('Nombres'), 'Carlos Vera')
-    await user.type(screen.getByLabelText('Teléfono', { selector: '#repTelefono' }), '0983333333')
+    await llenarFormulario(user)
     await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
 
-    await waitFor(() => expect(crearRepartidor).toHaveBeenCalledWith({ nombres: 'Carlos Vera', telefono: '0983333333' }))
+    await waitFor(() =>
+      expect(crearRepartidor).toHaveBeenCalledWith({
+        nombres: 'Carlos Vera',
+        telefono: '0983333333',
+        usuario: 'carlos.vera',
+        clave: 'secreto1',
+      }),
+    )
     expect(await screen.findByText('Repartidor Carlos Vera agregado.')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByText('0983333333')).toBeInTheDocument()
+    expect(screen.getByText('carlos.vera')).toBeInTheDocument()
+  })
+
+  test('el modal pide Usuario y Contraseña con su ayuda, y la contraseña no se ve al escribirla', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    const usuario = screen.getByLabelText('Usuario')
+    const clave = screen.getByLabelText('Contraseña')
+    expect(usuario).toBeRequired()
+    expect(usuario).toHaveAccessibleDescription(/app móvil.*3 a 50/)
+    expect(clave).toBeRequired()
+    expect(clave).toHaveAttribute('type', 'password')
+    expect(clave).toHaveAccessibleDescription(/Mínimo 6 caracteres/)
+  })
+
+  test('el usuario se envía sin espacios sobrantes', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await llenarFormulario(user, { usuario: '  carlos.vera  ' })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    await waitFor(() => expect(crearRepartidor).toHaveBeenCalledWith(expect.objectContaining({ usuario: 'carlos.vera' })))
+  })
+
+  test.each([
+    ['con mayúsculas', 'Carlos', 'El usuario solo admite letras minúsculas, números, punto o guion bajo.'],
+    ['con espacios en medio', 'carlos vera', 'El usuario solo admite letras minúsculas, números, punto o guion bajo.'],
+    ['con guion medio', 'carlos-vera', 'El usuario solo admite letras minúsculas, números, punto o guion bajo.'],
+    ['con tilde', 'carlós', 'El usuario solo admite letras minúsculas, números, punto o guion bajo.'],
+    ['de menos de 3 caracteres', 'ab', 'El usuario debe tener entre 3 y 50 caracteres.'],
+    ['de más de 50 caracteres', 'a'.repeat(51), 'El usuario debe tener entre 3 y 50 caracteres.'],
+  ])('un usuario %s se rechaza junto al campo y no se envía', async (_caso, usuarioInvalido, mensaje) => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await llenarFormulario(user, { usuario: usuarioInvalido })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    const campo = screen.getByLabelText('Usuario')
+    expect(await screen.findByText(mensaje)).toBeInTheDocument()
+    expect(campo).toHaveAttribute('aria-invalid', 'true')
+    expect(campo).toHaveAccessibleDescription(new RegExp(mensaje.slice(0, 20)))
+    expect(campo).toHaveFocus()
+    expect(crearRepartidor).not.toHaveBeenCalled()
+  })
+
+  test('una contraseña de menos de 6 caracteres se rechaza junto al campo y no se envía', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await llenarFormulario(user, { clave: '12345' })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    expect(await screen.findByText('La contraseña debe tener al menos 6 caracteres.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Contraseña')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Contraseña')).toHaveFocus()
+    expect(screen.getByLabelText('Usuario')).toHaveAttribute('aria-invalid', 'false')
+    expect(crearRepartidor).not.toHaveBeenCalled()
+  })
+
+  test('una contraseña de exactamente 6 caracteres y un usuario de 3 se aceptan', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await llenarFormulario(user, { usuario: 'a_1', clave: '123456' })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    await waitFor(() =>
+      expect(crearRepartidor).toHaveBeenCalledWith(expect.objectContaining({ usuario: 'a_1', clave: '123456' })),
+    )
+  })
+
+  test('al corregir el campo se quita su error', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+    await llenarFormulario(user, { usuario: 'AB' })
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Usuario'), 'c')
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Usuario')).toHaveAttribute('aria-invalid', 'false')
+  })
+
+  test('usuario repetido (409): el error sale junto al campo Usuario, el modal sigue abierto y se puede corregir', async () => {
+    const user = userEvent.setup()
+    crearRepartidor.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          codigo: 'USUARIO_DUPLICADO',
+          mensaje: "El usuario 'carlos.vera' ya existe. Elija otro nombre de usuario.",
+        },
+      },
+    })
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await llenarFormulario(user)
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    const mensaje = "El usuario 'carlos.vera' ya existe. Elija otro nombre de usuario."
+    expect(await screen.findByText(mensaje)).toHaveClass('error-campo')
+    const campo = screen.getByLabelText('Usuario')
+    expect(campo).toHaveAttribute('aria-invalid', 'true')
+    expect(campo).toHaveAccessibleDescription(/ya existe/)
+    expect(campo).toHaveFocus()
+    expect(screen.getByRole('dialog', { name: 'Nuevo repartidor' })).toBeInTheDocument()
+    expect(screen.queryByText('Repartidor Carlos Vera agregado.')).not.toBeInTheDocument()
+    // los demás datos se conservan para corregir solo el usuario
+    expect(screen.getByLabelText('Nombres')).toHaveValue('Carlos Vera')
+    expect(screen.getByLabelText('Contraseña')).toHaveValue('secreto1')
+
+    await user.clear(campo)
+    await user.type(campo, 'carlos.vera2')
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    await waitFor(() => expect(crearRepartidor).toHaveBeenCalledTimes(2))
+    expect(crearRepartidor).toHaveBeenLastCalledWith(expect.objectContaining({ usuario: 'carlos.vera2' }))
+    expect(await screen.findByText('Repartidor Carlos Vera agregado.')).toBeInTheDocument()
+  })
+
+  test('un 409 que no es de usuario repetido se muestra como error general del modal', async () => {
+    const user = userEvent.setup()
+    crearRepartidor.mockRejectedValue({
+      response: { status: 409, data: { codigo: 'VIOLACION_INTEGRIDAD', mensaje: 'La operacion viola una restriccion' } },
+    })
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+
+    await llenarFormulario(user)
+    await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('La operacion viola una restriccion')
+    expect(screen.getByLabelText('Usuario')).toHaveAttribute('aria-invalid', 'false')
+  })
+
+  test('la tabla muestra el usuario de cada repartidor y — si no tiene', async () => {
+    listarRepartidores.mockResolvedValue([REPARTIDORES[0], { ...REPARTIDORES[1], usuario: null }])
+    await dibujar()
+
+    expect(screen.getByRole('columnheader', { name: 'Usuario' })).toBeInTheDocument()
+    const celdaUsuario = (nombre) => within(screen.getByText(nombre).closest('tr')).getAllByRole('cell')[3]
+    expect(celdaUsuario('Ana Pérez')).toHaveTextContent('ana')
+    expect(celdaUsuario('Luis Mora')).toHaveTextContent('—')
   })
 
   test('al volver a abrir el modal el formulario está vacío', async () => {
@@ -137,8 +306,7 @@ describe('RepartidoresPage', () => {
     await dibujar()
     await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
 
-    await user.type(screen.getByLabelText('Nombres'), 'Carlos Vera')
-    await user.type(screen.getByLabelText('Teléfono', { selector: '#repTelefono' }), '1')
+    await llenarFormulario(user, { telefono: '1' })
     await user.click(screen.getByRole('button', { name: 'Agregar repartidor' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('telefono: muy largo')
@@ -270,6 +438,17 @@ describe('RepartidoresPage: confirmaciones', () => {
     await user.click(screen.getByRole('button', { name: 'Descartar cambios' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(crearRepartidor).not.toHaveBeenCalled()
+  })
+
+  test('escribir solo el usuario o la contraseña también cuenta como datos sin guardar', async () => {
+    const user = userEvent.setup()
+    await dibujar()
+    await user.click(screen.getByRole('button', { name: 'Nuevo repartidor' }))
+    await user.type(screen.getByLabelText('Contraseña'), 'abc')
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.getByRole('alertdialog', { name: '¿Descartar los cambios?' })).toBeInTheDocument()
   })
 
   test('cerrar el modal vacío no pregunta', async () => {

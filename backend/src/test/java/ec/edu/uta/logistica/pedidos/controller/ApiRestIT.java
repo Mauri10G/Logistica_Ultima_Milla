@@ -403,9 +403,11 @@ class ApiRestIT extends IntegrationTestBase {
     @Test
     @DisplayName("repartidores: alta, cambio de disponibilidad y ruta-actual sin ruta -> 404")
     void repartidores() throws Exception {
+        String usuario = "it" + Long.toString(System.nanoTime(), 36);
         String creado = postJson("/api/repartidores", """
-                {"nombres": "Repartidor IT", "telefono": "0993334445"}
-                """).andExpect(status().isCreated())
+                {"nombres": "Repartidor IT", "telefono": "0993334445", "usuario": "%s", "clave": "clave123"}
+                """.formatted(usuario)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.usuario").value(usuario))
                 .andExpect(jsonPath("$.capacidadMaxima").value(4))
                 .andExpect(jsonPath("$.disponible").value(true))
                 .andReturn().getResponse().getContentAsString();

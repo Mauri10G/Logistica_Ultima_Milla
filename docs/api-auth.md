@@ -48,6 +48,48 @@ El usuario no distingue mayúsculas (`Staff` = `staff`). La clave sí.
 
 Las claves se guardan con BCrypt. Son datos de desarrollo y pruebas: en un despliegue real se cambian.
 
+## Usuarios de los repartidores nuevos
+
+Un repartidor creado desde la web (**Repartidores → Nuevo repartidor**) recibe su usuario COURIER en el mismo momento, para que
+pueda iniciar sesión en la app móvil sin tocar la base de datos. `POST /api/repartidores` (solo STAFF) exige, además de los
+datos del repartidor, `usuario` y `clave`:
+
+```
+POST /api/repartidores
+Authorization: Bearer <token de STAFF>
+Content-Type: application/json
+
+{ "nombres": "Ana Ruiz", "telefono": "0991234567", "usuario": "ana.ruiz", "clave": "secreto1" }
+```
+
+Respuesta `201 Created` (nunca incluye la clave ni su hash):
+
+```json
+{ "id": 7, "nombres": "Ana Ruiz", "telefono": "0991234567", "disponible": true, "capacidadMaxima": 4, "activo": true, "usuario": "ana.ruiz" }
+```
+
+| Campo | Regla |
+|---|---|
+| `usuario` | Obligatorio. 3 a 50 caracteres: solo letras **minúsculas**, números, punto o guion bajo (`[a-z0-9._]`) |
+| `clave` | Obligatoria. 6 a 72 caracteres (BCrypt solo usa 72 bytes; con tildes u otros caracteres de más de un byte el límite real es de 72 bytes) |
+
+- El repartidor y su usuario (`rol` COURIER, `repartidor_id` del nuevo repartidor, clave con BCrypt) se crean en **una sola
+  transacción**: si algo falla no queda un repartidor sin usuario.
+- Con ese usuario y clave, `POST /api/auth/login` devuelve un token con `rol: "COURIER"` y el `repartidorId` del nuevo repartidor.
+- El usuario no distingue mayúsculas al comparar con los existentes (`Carlos` = `carlos`, índice único sobre `lower(usuario)`).
+- `GET /api/repartidores`, `GET /api/repartidores/{id}` y `PUT` devuelven el `usuario` (o `null` si el repartidor no tiene cuenta, por
+  ejemplo uno creado antes de este cambio); **nunca** la clave. `PUT /api/repartidores/{id}` sigue sin pedir usuario ni clave: editar un
+  repartidor no cambia sus credenciales.
+
+| Caso | HTTP | `codigo` | Detalle |
+|---|---|---|---|
+| Usuario o clave ausentes o con formato inválido | 400 | `VALIDACION` | `errores.usuario` / `errores.clave` con el mensaje de cada campo |
+| Clave de más de 72 bytes | 400 | `SOLICITUD_INVALIDA` | `La clave admite hasta 72 bytes` |
+| El usuario ya existe (sin importar mayúsculas) | 409 | `USUARIO_DUPLICADO` | `El usuario 'ana.ruiz' ya existe. Elija otro nombre de usuario.` |
+| Un COURIER intenta crear repartidores | 403 | `ACCESO_DENEGADO` | |
+
+La web valida usuario y contraseña con las mismas reglas antes de enviar y muestra el 409 junto al campo Usuario.
+
 ## Cada petición
 
 ```

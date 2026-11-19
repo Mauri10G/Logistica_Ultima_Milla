@@ -33,6 +33,9 @@ test('repartidorDePrueba cumple el contrato de la API y es determinista', () => 
   assert.deepEqual(uno, repartidorDePrueba(7))
   assert.match(uno.nombres, /\(R007\)$/)
   assert.match(uno.telefono, /^09\d{8}$/)
+  assert.match(uno.usuario, /^[a-z0-9._]{3,50}$/) // mismas reglas que el backend
+  assert.ok(uno.clave.length >= 6)
+  assert.notEqual(repartidorDePrueba(8).usuario, uno.usuario)
   assert.equal(uno.capacidadMaxima, 4)
   assert.equal(uno.disponible, true)
   assert.notEqual(repartidorDePrueba(8).telefono, uno.telefono)
@@ -47,6 +50,25 @@ test('crea solo los que faltan para llegar al total', async () => {
     assert.equal(altas.length, 2)
     assert.deepEqual(altas[0].cuerpo, repartidorDePrueba(4))
     assert.deepEqual(altas[1].cuerpo, repartidorDePrueba(5))
+  } finally {
+    await servidor.cerrar()
+  }
+})
+
+test('si el usuario de un indice ya existe (409) salta al siguiente en vez de fallar', async () => {
+  const usados = new Set([repartidorDePrueba(1).usuario])
+  const servidor = await iniciarServidor((peticion) => {
+    if (peticion.metodo === 'GET') return { estado: 200, cuerpo: [] }
+    if (usados.has(peticion.cuerpo.usuario)) return { estado: 409, cuerpo: { codigo: 'USUARIO_DUPLICADO' } }
+    return { estado: 201, cuerpo: { id: 1, ...peticion.cuerpo } }
+  })
+  try {
+    assert.deepEqual(await asegurarRepartidores(servidor.url, 1, CABECERAS), { existentes: 0, creados: 1 })
+    const altas = servidor.peticiones.filter((p) => p.metodo === 'POST')
+    assert.deepEqual(
+      altas.map((p) => p.cuerpo.usuario),
+      [repartidorDePrueba(1).usuario, repartidorDePrueba(2).usuario],
+    )
   } finally {
     await servidor.cerrar()
   }

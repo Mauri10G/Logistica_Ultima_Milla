@@ -12,12 +12,14 @@ Característica: Gestión de repartidores
     Cuando pulsa el botón "Nuevo repartidor"
     Y escribe el nombre del repartidor de la prueba
     Y escribe "0998877665" en el teléfono del repartidor
+    Y escribe el usuario y la contraseña del repartidor de la prueba
     Y pulsa el botón "Agregar repartidor"
     Entonces ve el aviso de que el repartidor de la prueba fue agregado
     Cuando busca al repartidor de la prueba
     Entonces ve al repartidor de la prueba en la tabla con teléfono "0998877665"
     Y el interruptor de disponibilidad del repartidor de la prueba está "encendido"
     Y el sistema guardó al repartidor de la prueba como disponible "sí"
+    Y el repartidor de la prueba puede iniciar sesión en la app con su usuario
     Cuando apaga la disponibilidad del repartidor de la prueba
     Entonces el interruptor de disponibilidad del repartidor de la prueba está "apagado"
     Y el sistema guardó al repartidor de la prueba como disponible "no"

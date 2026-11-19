@@ -21,6 +21,8 @@ Before(async function () {
   this.cliente = `Cliente ${this.etiqueta}`
   this.zona = `Zona ${this.etiqueta}`
   this.repartidor = `Repartidor ${this.etiqueta}`
+  this.usuarioRepartidor = this.etiqueta.toLowerCase() // el usuario solo admite minúsculas, números, punto y guion bajo
+  this.claveRepartidor = 'clave-de-prueba'
 
   // El backend corre con la seguridad encendida: las llamadas directas a la API (preparar datos, comprobar resultados)
   // llevan el token del personal. Usuario y clave de desarrollo: docs/api-auth.md (se pueden cambiar por variables de entorno).
@@ -63,6 +65,7 @@ After(async function (escenario) {
     `DELETE FROM cliente WHERE nombres LIKE '%${etiqueta}%'`,
     `DELETE FROM ruta r WHERE r.fecha = '${this.fechaLejana}' AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.ruta_id = r.id)`,
     `DELETE FROM zona z WHERE z.nombre LIKE '%${etiqueta}%' AND NOT EXISTS (SELECT 1 FROM pedido p WHERE p.zona_id = z.id) AND NOT EXISTS (SELECT 1 FROM ruta r WHERE r.zona_id = z.id)`,
+    `DELETE FROM usuario u WHERE u.repartidor_id IN (SELECT d.id FROM repartidor d WHERE d.nombres LIKE '%${etiqueta}%' AND NOT EXISTS (SELECT 1 FROM ruta r WHERE r.repartidor_id = d.id))`,
     `DELETE FROM repartidor d WHERE d.nombres LIKE '%${etiqueta}%' AND NOT EXISTS (SELECT 1 FROM ruta r WHERE r.repartidor_id = d.id)`,
   ].join('; ')
   try {

@@ -66,14 +66,16 @@ Resultado obtenido de la ejecución del 2026-11-18 (`./mvnw verify`: 163 unitari
 | CF0037 | zonas + BD (PostGIS) | Zonas contiguas, tolerancia de 500 m² | `POST /api/zonas` | bordes y vértices compartidos, franjas, contención | Compartir borde se acepta; cruce, contención e invasión > 500 m² se rechazan | Según lo esperado | `ZonasContiguasIT`, `ZonaRepositoryIT` | Aprobado |
 | CF0038 | repartidores + rutas | Alta, disponibilidad y ruta actual | `POST/PATCH/GET/DELETE /api/repartidores` | repartidor nuevo | 201 con capacidad 4; disponibilidad cambia; `ruta-actual` sin ruta → 404 | Según lo esperado | `ApiRestIT.repartidores` | Aprobado |
 | CF0039 | BD (Flyway) | Migraciones y salud | contexto completo | — | V1–V5 aplicadas, PostGIS activo, índices espaciales, `/actuator/health` UP, OpenAPI | Según lo esperado | `LogisticaApplicationIT`, `PedidoRepositoryIT` | Aprobado |
+| CF0040 | repartidores + seguridad + BD | Alta de repartidor con su usuario y login inmediato | `POST /api/repartidores` + `POST /api/auth/login` | `usuario` y `clave` nuevos | 201 con `usuario` y sin clave ni hash; el login devuelve token COURIER con el `repartidorId` nuevo; `PUT` no pide credenciales | Según lo esperado | `RepartidorControllerIT` | Aprobado |
+| CF0041 | repartidores + seguridad + BD | Usuario repetido o inválido al dar de alta | `POST /api/repartidores` | `carlos`, mayúsculas distintas, usuario corto o con símbolos, clave de menos de 6 | 409 `USUARIO_DUPLICADO` sin dejar un repartidor sin usuario; 400 `VALIDACION` por campo; un COURIER recibe 403 | Según lo esperado | `RepartidorControllerIT` | Aprobado |
 
 ## 4. Resumen de resultados
 
 | Indicador | Valor |
 |---|---|
-| Casos de integración diseñados | 39 (CF0001–CF0039) |
-| Aprobados / fallidos | 39 / 0 |
-| Pruebas `*IT` ejecutadas | 66, todas en verde |
+| Casos de integración diseñados | 41 (CF0001–CF0041) |
+| Aprobados / fallidos | 41 / 0 |
+| Pruebas `*IT` ejecutadas | 83, todas en verde |
 | Pruebas unitarias | 163, todas en verde |
 | Cobertura JaCoCo (unitarias + integración) | 98,1 % instrucciones · 98,5 % líneas · 88,8 % ramas |
 | Defectos encontrados durante la integración | Ver `docs/informe/joseph.md`, sección 3 |
