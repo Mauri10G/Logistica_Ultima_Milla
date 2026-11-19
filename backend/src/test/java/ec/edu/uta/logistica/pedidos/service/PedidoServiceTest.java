@@ -59,6 +59,7 @@ class PedidoServiceTest {
     private static final Clock RELOJ = Clock.fixed(Instant.parse("2027-02-10T15:00:00Z"), GUAYAQUIL);
     private static final LocalDate HOY = LocalDate.of(2027, 2, 10);
     private static final int ANTICIPACION_MINUTOS = 30;
+    private static final int DIAS_MAXIMOS = 365;
 
     @Mock
     private PedidoRepository pedidoRepository;
@@ -81,7 +82,7 @@ class PedidoServiceTest {
 
     private PedidoService servicioCon(Clock reloj, int anticipacionMinutos) {
         return new PedidoService(pedidoRepository, clienteRepository, zonaRepository, seguimientoService,
-                new ControlAcceso(), publicador, reloj, anticipacionMinutos);
+                new ControlAcceso(), publicador, reloj, anticipacionMinutos, DIAS_MAXIMOS);
     }
 
     private static Clock relojA(String instanteUtc) {
@@ -293,6 +294,43 @@ class PedidoServiceTest {
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessageContaining("hora actual del servidor, 22:00");
             assertThat(noche.registrar(solicitud(HOY, LocalTime.of(22, 30))).fechaEntrega()).isEqualTo(HOY);
+        }
+    }
+
+    @Nested
+    @DisplayName("Fecha de entrega maxima: hoy + logistica.pedidos.dias-maximos-adelante (issue #32)")
+    class FechaMaxima {
+
+        @Test
+        @DisplayName("mas alla de 365 dias se rechaza con 422 FECHA_ENTREGA_LEJANA, al registrar y al editar")
+        void fechaLejana() {
+            var lejana = solicitud(HOY.plusDays(366));
+            assertThatThrownBy(() -> servicio.registrar(lejana))
+                    .isInstanceOf(ReglaNegocioException.class)
+                    .hasMessage("La fecha de entrega no puede ser posterior al 2028-02-10 (365 dias desde hoy)")
+                    .satisfies(e -> assertThat(((ApiException) e).getCodigo()).isEqualTo("FECHA_ENTREGA_LEJANA"));
+
+            when(pedidoRepository.findById(7L)).thenReturn(Optional.of(Fabrica.pedido(7L, centro, HOY.plusDays(1))));
+            assertThatThrownBy(() -> servicio.editar(7L, lejana)).isInstanceOf(ReglaNegocioException.class);
+            verifyNoInteractions(zonaRepository);
+        }
+
+        @Test
+        @DisplayName("justo en el limite (hoy + 365) se acepta")
+        void enElLimite() {
+            preparaGuardadoValido();
+
+            assertThat(servicio.registrar(solicitud(HOY.plusDays(365))).fechaEntrega()).isEqualTo(HOY.plusDays(365));
+        }
+
+        @Test
+        @DisplayName("con dias-maximos-adelante = 0 no hay limite")
+        void sinLimite() {
+            preparaGuardadoValido();
+            PedidoService sinMaximo = new PedidoService(pedidoRepository, clienteRepository, zonaRepository,
+                    seguimientoService, new ControlAcceso(), publicador, RELOJ, ANTICIPACION_MINUTOS, 0);
+
+            assertThat(sinMaximo.registrar(solicitud(HOY.plusYears(5))).fechaEntrega()).isEqualTo(HOY.plusYears(5));
         }
     }
 
