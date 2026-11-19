@@ -26,7 +26,7 @@ export default function Layout() {
           <Logo />
           <span className="marca-texto">
             <span className="marca-nombre">Entregas y Rutas</span>
-            <span className="marca-lema">Logística de última milla · Ambato</span>
+            <span className="marca-lema">Logística de última milla</span>
           </span>
         </div>
         <ul className="menu-lista">
