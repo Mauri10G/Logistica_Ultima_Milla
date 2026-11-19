@@ -7,6 +7,3 @@ String get wsUrl => '${apiUrl.replaceFirst(RegExp(r'^http'), 'ws')}/ws';
 
 /// Exige login al abrir la app (true por defecto). Con false usa la seleccion temporal por id.
 const bool authHabilitada = bool.fromEnvironment('AUTH_HABILITADA', defaultValue: true);
-
-/// Permite navegar temporalmente a la seleccion por id desde LoginScreen mientras el backend publica /api/auth/login.
-const bool permitirIdTemporal = bool.fromEnvironment('PERMITIR_ID_TEMPORAL', defaultValue: true);

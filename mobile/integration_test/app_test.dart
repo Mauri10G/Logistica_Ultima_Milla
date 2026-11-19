@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:logistica_repartidor/config.dart';
 import 'package:logistica_repartidor/main.dart' as app;
 import 'package:logistica_repartidor/models/sesion.dart';
 import 'package:logistica_repartidor/screens/login_screen.dart';
@@ -27,7 +26,6 @@ import 'package:logistica_repartidor/widgets/pedido_tile.dart';
 ///     --dart-define=USUARIO_TEST=repartidor1 \
 ///     --dart-define=CLAVE_TEST=repartidor123
 const bool _ejecutarE2E = bool.fromEnvironment('EJECUTAR_E2E', defaultValue: false);
-const bool _e2eConAuth = bool.fromEnvironment('E2E_CON_AUTH', defaultValue: authHabilitada);
 const String _usuarioE2E = String.fromEnvironment('USUARIO_TEST', defaultValue: 'repartidor1');
 const String _claveE2E = String.fromEnvironment('CLAVE_TEST', defaultValue: 'repartidor123');
 const String _repartidorIdE2E = String.fromEnvironment('REPARTIDOR_ID_TEST', defaultValue: '1');
@@ -294,18 +292,11 @@ void main() {
         app.main();
         await tester.pumpAndSettle(const Duration(seconds: 1));
 
-        // 1. Autenticar segun configuracion del backend
+        // 1. Autenticar con credenciales de repartidor
         if (find.byType(LoginScreen).evaluate().isNotEmpty) {
-          if (_e2eConAuth) {
-            await tester.enterText(find.byKey(const Key('campoUsuario')), _usuarioE2E);
-            await tester.enterText(find.byKey(const Key('campoClave')), _claveE2E);
-            await tester.tap(find.byKey(const Key('botonIngresar')));
-          } else {
-            await tester.tap(find.text('Ingresar por ID (temporal)'));
-            await tester.pumpAndSettle();
-            await tester.enterText(find.byType(TextField).first, _repartidorIdE2E);
-            await tester.tap(find.text('Ver mi ruta'));
-          }
+          await tester.enterText(find.byKey(const Key('campoUsuario')), _usuarioE2E);
+          await tester.enterText(find.byKey(const Key('campoClave')), _claveE2E);
+          await tester.tap(find.byKey(const Key('botonIngresar')));
         } else if (find.byType(SeleccionRepartidorScreen).evaluate().isNotEmpty) {
           await tester.enterText(find.byType(TextField).first, _repartidorIdE2E);
           await tester.tap(find.text('Ver mi ruta'));

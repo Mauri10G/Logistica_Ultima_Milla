@@ -227,13 +227,11 @@ void main() {
     expect(await sesionService.obtenerSesion(), isNull);
   });
 
-  testWidgets('acceso temporal por ID navega a SeleccionRepartidorScreen', (tester) async {
+  testWidgets('no muestra boton de acceso por ID temporal y exige credenciales formales', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
 
-    await tester.tap(find.text('Ingresar por ID (temporal)'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(SeleccionRepartidorScreen), findsOneWidget);
+    expect(find.text('Ingresar por ID (temporal)'), findsNothing);
+    expect(find.text('Ingresar'), findsOneWidget);
   });
 
   testWidgets('ignora sesion previa con rol STAFF al iniciar LogisticaApp', (tester) async {
