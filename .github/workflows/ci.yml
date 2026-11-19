@@ -71,6 +71,24 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  mobile:
+    name: Móvil (flutter analyze + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      # Misma versión de Flutter que usa el equipo (pubspec.yaml pide Dart ^3.13.3)
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: '3.47.9'
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test --reporter expanded
+
   # Despliegue continuo: cada push a develop con las pruebas en verde publica las imágenes en GitHub Container Registry.
   # La VM de Azure las baja sola (implantacion/nube/actualizar.sh). Nunca corre en pull requests.
   publicar:
