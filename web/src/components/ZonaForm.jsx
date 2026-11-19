@@ -1,5 +1,6 @@
 import { Check, Eraser, Save, Undo2 } from 'lucide-react'
 import { useState } from 'react'
+import { LIMITES } from '../utils/camposFormulario'
 import { poligonoAPuntos, puntosAPoligono } from '../utils/geojson'
 import { buscarPuntoImantado, RADIO_IMAN_METROS } from '../utils/iman'
 import EditorPoligono from './EditorPoligono'
@@ -145,6 +146,7 @@ export default function ZonaForm({
               setNombre(e.target.value)
               modificado()
             }}
+            maxLength={LIMITES.zonaNombre}
             aria-describedby="ayudaZonaNombre"
             required
           />
