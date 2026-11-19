@@ -30,6 +30,12 @@ spec:
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef: { name: logistica-db, key: DB_PASSWORD }
+            # Login con JWT encendido (la web se compila con VITE_AUTH_HABILITADA=true)
+            - name: SEGURIDAD_HABILITADA
+              value: "true"
+            - name: JWT_SECRETO
+              valueFrom:
+                secretKeyRef: { name: logistica-jwt, key: JWT_SECRETO }
           resources:
             requests: { cpu: 250m, memory: 384Mi }
             limits: { cpu: "1", memory: 768Mi }

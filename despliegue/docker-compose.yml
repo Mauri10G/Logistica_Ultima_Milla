@@ -1,6 +1,8 @@
 # Despliegue completo en contenedores: base PostGIS, backend y web.
 # Lo ejecuta el pipeline de Jenkins con:  docker compose -f despliegue/docker-compose.yml -p logistica-prod up -d
 # La web queda en http://localhost:8081
+# Login con JWT encendido, igual que en la nube. Es solo para la demostracion local: el JWT_SECRETO por defecto
+# esta en el repositorio y NO se debe usar en un servidor real (ahi va en el .env).
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -27,6 +29,8 @@ services:
       DB_URL: jdbc:postgresql://db:5432/logistica
       DB_USER: logistica
       DB_PASSWORD: ${DB_PASSWORD:-logistica}
+      SEGURIDAD_HABILITADA: "true"
+      JWT_SECRETO: ${JWT_SECRETO:-demo-local-logistica-jwt-clave-de-32-caracteres-o-mas}
     depends_on:
       db:
         condition: service_healthy

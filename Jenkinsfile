@@ -8,6 +8,12 @@ pipeline {
                      description: 'Desplegar tambien en el cluster de Kubernetes de Docker Desktop')
     }
 
+    // Jenkins revisa el repositorio cada minuto y corre solo cuando hay commits nuevos en la rama del job (*/develop).
+    // El trigger se registra despues del primer "Build Now" con este Jenkinsfile.
+    triggers {
+        pollSCM('* * * * *')
+    }
+
     environment {
         TAG = "${env.BUILD_NUMBER}"
         COMPOSE = 'docker compose -f despliegue/docker-compose.yml -p logistica-prod'
@@ -17,6 +23,8 @@ pipeline {
     options {
         timeout(time: 40, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '10'))
+        // Compose y Kubernetes comparten recursos: un despliegue a la vez
+        disableConcurrentBuilds()
     }
 
     stages {
@@ -59,10 +67,16 @@ pipeline {
         stage('Prueba de humo') {
             steps {
                 // El backend tarda en arrancar porque Flyway crea el esquema, por eso se reintenta.
+                // /api/servidor/hora es publico aunque el login este encendido (SEGURIDAD_HABILITADA=true).
                 sh '''
                     for i in $(seq 1 30); do
                       if docker exec logistica-prod-web wget -qO- http://127.0.0.1/api/servidor/hora; then
-                        echo ""; echo "La aplicacion responde a traves de Nginx"; exit 0
+                        echo ""; echo "La aplicacion responde a traves de Nginx"
+                        # Con el login encendido, una ruta protegida sin token tiene que dar 401
+                        if docker exec logistica-prod-web wget -S -qO- http://127.0.0.1/api/pedidos 2>&1 | grep -q "401"; then
+                          echo "El login esta encendido: /api/pedidos sin token responde 401"; exit 0
+                        fi
+                        echo "/api/pedidos no exigio login: revisar SEGURIDAD_HABILITADA"; exit 1
                       fi
                       echo "Esperando al backend... intento $i"; sleep 5
                     done
