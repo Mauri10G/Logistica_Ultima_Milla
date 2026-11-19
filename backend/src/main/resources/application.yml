@@ -16,6 +16,12 @@ spring:
 
 server:
   port: 8080
+  # Respuestas JSON comprimidas con gzip si el cliente lo acepta (navegador, axios, k6, Flutter): el listado de rutas
+  # de un dia de mucho volumen pesa ~2 MB en texto y ~10 veces menos comprimido (issue #31).
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 2KB
 
 management:
   endpoints:
