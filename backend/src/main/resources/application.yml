@@ -77,3 +77,6 @@ logistica:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+    # Debe coincidir con swagger-ui.version del pom.xml (override por DOMPurify vulnerable, #43): springdoc 3.2.0 trae
+    # fijada la 5.34.0 y, sin esto, busca esos archivos y /swagger-ui/index.html responde 404.
+    version: 5.35.1
