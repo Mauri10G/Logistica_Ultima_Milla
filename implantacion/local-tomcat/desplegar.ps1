@@ -24,5 +24,8 @@ Set-Location $raiz
 Remove-Item "$Tomcat\webapps\ROOT" -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item "web\dist" "$Tomcat\webapps\ROOT" -Recurse
 Copy-Item "implantacion\local-tomcat\ROOT\*" "$Tomcat\webapps\ROOT" -Recurse -Force
+# Borra la version descomprimida anterior, si no Tomcat puede seguir usando el codigo viejo
+Remove-Item "$Tomcat\webapps\logistica" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "$Tomcat\work\Catalina\localhost\logistica" -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item "backend\target\logistica.war" "$Tomcat\webapps\logistica.war" -Force
 Write-Host "Listo. Web en http://localhost:8080 y API en http://localhost:8080/logistica/api"
