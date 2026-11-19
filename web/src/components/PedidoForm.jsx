@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { errorDeNombres, errorDeTelefono, LIMITES } from '../utils/camposFormulario'
 import { fechaPorDefecto, horaMinimaEntrega, validarEntrega, validarPedido } from '../utils/validacionPedido'
 import SelectorUbicacion from './SelectorUbicacion'
 
@@ -92,6 +93,16 @@ export default function PedidoForm({
     setErrores((anteriores) => ({ ...anteriores, ubicacion: undefined }))
   }
 
+  /** Al editar, si los datos del cliente no cambiaron se envía solo su id (así no se pierde su email). */
+  function clienteSinCambios() {
+    return (
+      editando &&
+      valores.clienteNombres.trim() === pedido.clienteNombres &&
+      valores.clienteTelefono.trim() === pedido.clienteTelefono &&
+      !valores.clienteEmail.trim()
+    )
+  }
+
   function construirDatos() {
     const nombres = valores.clienteNombres.trim()
     const telefono = valores.clienteTelefono.trim()
@@ -103,10 +114,7 @@ export default function PedidoForm({
       horaEntrega: valores.horaEntrega,
       prioridad: valores.prioridad,
     }
-    // Al editar, si los datos del cliente no cambiaron se envía solo su id (así no se pierde su email).
-    const clienteSinCambios =
-      editando && nombres === pedido.clienteNombres && telefono === pedido.clienteTelefono && !valores.clienteEmail.trim()
-    if (clienteSinCambios) {
+    if (clienteSinCambios()) {
       datos.clienteId = pedido.clienteId
     } else {
       datos.clienteNombres = nombres
@@ -119,8 +127,18 @@ export default function PedidoForm({
   function enviar(evento) {
     evento.preventDefault()
     const encontrados = validarPedido({ ...valores, fechaEntrega }, horaServidor)
+    // Si el cliente no cambió solo se envía su id: el backend no revalida sus datos, y la web tampoco.
+    if (!clienteSinCambios()) {
+      encontrados.clienteNombres = errorDeNombres(valores.clienteNombres) ?? undefined
+      encontrados.clienteTelefono = errorDeTelefono(valores.clienteTelefono) ?? undefined
+    }
+    const conError = Object.keys(encontrados).filter((campo) => encontrados[campo])
     setErrores(encontrados)
-    if (Object.keys(encontrados).length > 0) return
+    if (conError.length > 0) {
+      const primero = ['clienteNombres', 'clienteTelefono'].find((campo) => encontrados[campo])
+      if (primero) document.getElementById(primero)?.focus()
+      return
+    }
     onSubmit(construirDatos())
   }
 
@@ -137,25 +155,54 @@ export default function PedidoForm({
         </h3>
         <div className="campo">
           <label htmlFor="clienteNombres">Nombres del cliente</label>
-          <input id="clienteNombres" name="clienteNombres" value={valores.clienteNombres} onChange={cambiar} required />
+          <input
+            id="clienteNombres"
+            name="clienteNombres"
+            value={valores.clienteNombres}
+            onChange={cambiar}
+            maxLength={LIMITES.clienteNombres}
+            aria-invalid={Boolean(errores.clienteNombres)}
+            aria-describedby={errores.clienteNombres ? 'errorClienteNombres' : undefined}
+            required
+          />
+          {errores.clienteNombres && (
+            <span id="errorClienteNombres" className="error-campo" role="alert">
+              {errores.clienteNombres}
+            </span>
+          )}
         </div>
         <div className="campo">
           <label htmlFor="clienteTelefono">Teléfono</label>
           <input
             id="clienteTelefono"
             name="clienteTelefono"
+            type="tel"
             value={valores.clienteTelefono}
             onChange={cambiar}
-            aria-describedby="ayudaClienteTelefono"
+            maxLength={LIMITES.clienteTelefono}
+            aria-invalid={Boolean(errores.clienteTelefono)}
+            aria-describedby={errores.clienteTelefono ? 'ayudaClienteTelefono errorClienteTelefono' : 'ayudaClienteTelefono'}
             required
           />
           <p id="ayudaClienteTelefono" className="ayuda">
-            Número con el que el repartidor puede llamar.
+            Número con el que el repartidor puede llamar (7 a 15 dígitos).
           </p>
+          {errores.clienteTelefono && (
+            <span id="errorClienteTelefono" className="error-campo" role="alert">
+              {errores.clienteTelefono}
+            </span>
+          )}
         </div>
         <div className="campo">
           <label htmlFor="clienteEmail">Email (opcional)</label>
-          <input id="clienteEmail" name="clienteEmail" type="email" value={valores.clienteEmail} onChange={cambiar} />
+          <input
+            id="clienteEmail"
+            name="clienteEmail"
+            type="email"
+            value={valores.clienteEmail}
+            onChange={cambiar}
+            maxLength={LIMITES.clienteEmail}
+          />
         </div>
       </div>
 
@@ -171,6 +218,7 @@ export default function PedidoForm({
             name="direccion"
             value={valores.direccion}
             onChange={cambiar}
+            maxLength={LIMITES.direccion}
             aria-describedby="ayudaDireccion"
             required
           />
