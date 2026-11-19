@@ -277,3 +277,59 @@ La aplicación móvil (`mobile/`) está orientada exclusivamente al repartidor (
 
 - **Unitarias y de widgets (`mobile/test/`)**: modelos (`modelos_test.dart`), servicios HTTP/STOMP/sesión simulados con `MockClient` y `SharedPreferences.setMockInitialValues`, tarjetas `PedidoTile` y pantallas (`LoginScreen`, `RutaScreen`, `SeleccionRepartidorScreen`).
 - **Integración (`mobile/integration_test/app_test.dart`)**: cubre la carga inicial en login, un flujo completo CP-11 simulado (login, ruta ordenada, Maps, confirmación de entrega, actualización en vivo por `/topic/rutas` y cierre de sesión) y el caso E2E contra backend real activado con `--dart-define=EJECUTAR_E2E=true`.
+
+## 11. Infraestructura y pruebas no funcionales
+
+Responsable: Robert Paredes (`docker-compose.yml`, `.github/workflows/`, `tests/data/`, `tests/performance/`,
+`tests/security/`).
+
+### 11.1 Infraestructura
+
+| Pieza | Qué hace |
+|---|---|
+| `docker-compose.yml` | PostGIS 16-3.4 en el puerto **5433** (para no chocar con un Postgres local) con volumen `postgis_data`. Con `--profile sonar` agrega SonarQube en el 9000. `docker compose down -v` borra **todos** los volúmenes del proyecto, también los de SonarQube |
+| CI (`.github/workflows/ci.yml`) | En cada push y PR a `develop` y `main`: backend (`mvnw verify` con Testcontainers), web (lint, Jest y build) y móvil (`flutter analyze` y `flutter test`, Flutter 3.47.9). Al hacer push a `develop` con todo en verde se publican las imágenes en GHCR (despliegue de Mauricio, ver `docs/despliegue/`) |
+| Dependabot | Mantiene al día los SHA fijados de las acciones de terceros |
+
+### 11.2 Datos masivos (`tests/data/`)
+
+- `generar-pedidos.js`: puebla el sistema **por la API** en tres escenarios: normal (500 pedidos), alta demanda (5 000) y
+  San Valentín extremo (20 000). Primero completa los repartidores disponibles (con su usuario de la app) y hace login si
+  existe `API_USUARIO`. Los pedidos simulan un día pico (horas entre 10:00 y 19:00, más demanda en el centro).
+- `volumen.sql`: **100 000 pedidos históricos** entregados, directo en PostgreSQL, con sus rutas finalizadas e historial,
+  para medir las consultas con la tabla llena. `volumen-limpiar.sql` borra solo esos datos.
+
+### 11.3 Pruebas de rendimiento (`tests/performance/`, k6)
+
+Cada script inicia sesión y manda el token; el token nunca se devuelve desde `setup()`, porque lo que devuelve queda
+escrito en el resumen de `--summary-export`. Los resúmenes se guardan en `tests/performance/reports/`.
+
+| Script | Qué mide | Umbral principal |
+|---|---|---|
+| `smoke.js` | Que el backend y el login respondan | p95 < 500 ms |
+| `carga.js` | Un día normal: 20 usuarios registrando pedidos y consultando pedidos y rutas | p95 < 800 ms, errores < 1 % |
+| `estres.js` | Niveles de 50 a 600 usuarios (o los de `NIVELES`) y recuperación; cada petición etiquetada con su nivel | Por nivel: p95 < 800 ms y errores < 1 % (el primero que falla es el punto de quiebre) |
+| `volumen.js` | Consultas y armado de una fecha con la base poblada | Listados p95 < 1,5–2 s |
+| `concurrencia.js` | Ráfaga de pedidos de último momento en la misma zona y fecha mientras otros rearman | **0** rutas sobre el máximo y **0** pedidos en dos rutas |
+
+Resultados del 19 de noviembre (detalle en `docs/evidencias/performance/`): el día normal tiene un p95 menor a 30 ms; el
+punto de quiebre por tiempo de respuesta está en 600 usuarios a la vez; no hubo errores hasta 1 600 usuarios y el sistema
+se recupera al bajar la carga; listar las rutas de San Valentín (5 003 rutas) tarda 6,96 s (#31); y la concurrencia nunca
+dejó rutas con más de 4 pedidos.
+
+### 11.4 Seguridad (`tests/security/`)
+
+- **OWASP ZAP** (`zap.sh`): baseline de la raíz sin token y pasada de la API con el token de STAFF, ambas pasivas. Solo se
+  escanean las operaciones de lectura: al importar OpenAPI, ZAP ejecuta también las de escritura y modifica la base.
+- **npm audit** de la web y **OWASP Dependency-Check** del backend (con la API key de NVD).
+- Resultados y hallazgos en `docs/evidencias/seguridad/`.
+
+### 11.5 Problemas de entorno conocidos (Windows)
+
+- **Puerto 8080 ocupado:** si IIS u otro programa lo usa, levantar el backend con `SERVER_PORT=8081` y apuntar la web
+  (`VITE_API_URL`) y k6 (`-e BASE_URL`) a ese puerto.
+- **`flutter analyze` se cae** con "FormatException: Unexpected end of input" cuando la ruta del proyecto tiene tildes
+  ("Gestión", "Implantación"). Es un fallo del servidor de análisis de Dart en Windows, no del código: copiando `mobile/` a
+  una ruta sin tildes da "No issues found!", y en el CI (Linux) funciona.
+- **`mobile/pubspec.lock` aparece modificado** después de `flutter pub get` o al abrir el proyecto en VS Code. No subirlo
+  salvo que se haya cambiado una dependencia a propósito.
