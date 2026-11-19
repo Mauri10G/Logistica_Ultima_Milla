@@ -27,6 +27,10 @@ Archivos de este cambio:
 - `implantacion/nube/`: Docker Compose, Caddyfile y script para preparar la VM.
 - `implantacion/medir-tiempos.ps1`: tiempos de respuesta de ambos entornos.
 
+Actualización automática de la nube (rama `feature/cd-local-nube`): `implantacion/nube/actualizar.sh`,
+`logistica-actualizar.service`, `logistica-actualizar.timer` e `instalar-auto-actualizacion.sh`. La VM baja sola las
+imágenes nuevas de `ghcr.io` y el flujo completo está en [docs/despliegue/CICD.md](../despliegue/CICD.md).
+
 ## 1. Servidor local con Apache Tomcat 11
 
 Spring Boot 4 necesita Servlet 6.1, por eso tiene que ser Tomcat 11. Tomcat 10.1 no sirve.
@@ -101,7 +105,9 @@ Spring Boot 4 necesita Servlet 6.1, por eso tiene que ser Tomcat 11. Tomcat 10.1
    free -h
    ```
    **N-05**: Docker instalado y la swap de 2 GB.
-6. En la PC construir las imágenes y subirlas a la VM:
+6. En la PC construir las imágenes y subirlas a la VM. **Primera implantación manual:** desde la APE 7 el compose de la nube usa
+   las imágenes de `ghcr.io` y la VM se actualiza sola (ver [docs/despliegue/CICD.md](../despliegue/CICD.md)), así que este
+   paso solo hace falta si se trabaja sin GHCR; en ese caso hay que cambiar `image:` del backend y la web a las etiquetas locales:
    ```powershell
    docker build -t logistica-backend:nube backend
    docker build -t logistica-web:nube web
@@ -109,7 +115,8 @@ Spring Boot 4 necesita Servlet 6.1, por eso tiene que ser Tomcat 11. Tomcat 10.1
    scp -i C:\ruta\clave.pem logistica-imagenes.tar azureuser@DOMINIO:~/logistica/
    ```
    **N-06**: las imágenes construidas y la subida terminada.
-7. En la VM cargar las imágenes y levantar todo:
+7. En la VM cargar las imágenes y levantar todo (con GHCR no hace falta `docker load`: `docker compose up -d` baja las imágenes, y
+   `bash instalar-auto-actualizacion.sh` deja la actualización automática):
    ```bash
    cd ~/logistica
    docker load -i logistica-imagenes.tar

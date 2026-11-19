@@ -29,6 +29,11 @@ volumen, carga, estrés y seguridad)**.
   al vencer ("Tu sesión expiró, ingresa de nuevo"); un 401 `NO_AUTENTICADO` borra la sesión y vuelve al login con el mismo aviso; un
   403 `ACCESO_DENEGADO` muestra "Acceso denegado…" sin cerrar sesión. El WebSocket manda el token en el `CONNECT`. Para probar todo
   hay que levantar el backend con `SEGURIDAD_HABILITADA=true` (ver README, "Login y seguridad").
+- **CI/CD con despliegue automático (rama `feature/cd-local-nube`):** un push a `develop` publica `ghcr.io/mauri10g/logistica-backend`
+  y `logistica-web` (job `publicar` de `ci.yml`, etiquetas `develop` y `sha-<commit>`, nunca en PR). La VM de Azure se actualiza sola
+  con un timer de systemd que corre `implantacion/nube/actualizar.sh` cada minuto (despliegue *pull*, el puerto 22 no se abre a
+  GitHub), y el Jenkins de la laptop usa `pollSCM` para desplegar en Compose (8081) y Kubernetes (8082) con el login encendido
+  (`JWT_SECRETO` de demo solo en el entorno local). Ver `docs/despliegue/CICD.md`.
 - **Pantalla "Sin acceso":** un COURIER que entra a la web ve el mismo diseño de dos columnas del login (ilustración de Ambato a la
   izquierda; a la derecha candado, título, texto, nombre del usuario y "Cerrar sesión"). El nombre sale del `sub` del token
   (`SinAccesoPage`, `PanelLogin` compartido con el login).
@@ -62,7 +67,7 @@ mobile/     Flutter (lib/: models/, services/, screens/, widgets/)
 tests/      acceptance/ (Cucumber+Playwright, features en español), performance/ (k6), security/, data/ (generador San Valentín)
 docs/       diseño del sistema, algoritmo, evidencias
 docker-compose.yml   PostGIS (5433) + SonarQube (profile "sonar")
-.github/    CI (GitHub Actions) y plantilla de PR
+.github/    CI (GitHub Actions: pruebas + publicación de imágenes en GHCR) y plantilla de PR
 ```
 
 ### Backend por módulo (cada estudiante trabaja en su carpeta)

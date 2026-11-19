@@ -70,7 +70,8 @@ git push -u origin feature/despliegue-ci-cd
    - SCM: Git
    - Repository URL: `https://github.com/Mauri10G/Logistica_Ultima_Milla.git`
    - Si el repositorio es privado, agrega una credencial **Username with password** con tu usuario de GitHub y un token personal.
-   - Branch Specifier: `*/feature/despliegue-ci-cd`
+   - Branch Specifier: `*/develop` (antes `*/feature/despliegue-ci-cd`). Con el `pollSCM` del Jenkinsfile el job corre solo en
+     cada commit nuevo; ver [CICD.md](CICD.md)
    - Script Path: `Jenkinsfile`
 3. Guarda.
    **C-06**: la configuración del job mostrando la URL, la rama y el Script Path.

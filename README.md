@@ -210,6 +210,14 @@ Referencia medida en un equipo de desarrollo: 5000 pedidos creados en ~4 s y arm
 | **El backend no arranca: `Connection refused` a `localhost:5433`** | Falta `docker compose up -d` o la base aún no está *healthy*. |
 | **Una prueba de integración falla por datos de otra prueba** | Las `*IT` comparten una sola base. Cada prueba debe usar sus propias fechas y no tocar los 20 pedidos de "mañana" de los datos base. |
 
+## Despliegue continuo (CI/CD)
+
+Un push a `develop` publica las imágenes en `ghcr.io/mauri10g/logistica-backend` y `logistica-web` (job `publicar` de
+GitHub Actions, solo si el backend y la web pasan sus pruebas). La VM de Azure las baja sola cada minuto con un timer de
+systemd (sin abrir SSH a GitHub) y Jenkins en la laptop, que revisa el repositorio cada minuto, despliega en Docker Compose
+(http://localhost:8081) y Kubernetes (http://localhost:8082), los dos con el login encendido. Flujo, pasos de una sola vez, guion de
+demo y solución de problemas en [docs/despliegue/CICD.md](docs/despliegue/CICD.md).
+
 ## Flujo de trabajo en equipo
 
 Ver [CONTRIBUTING.md](CONTRIBUTING.md): ramas `main ← develop ← feature/<modulo>-<descripcion>`, commits en español con
