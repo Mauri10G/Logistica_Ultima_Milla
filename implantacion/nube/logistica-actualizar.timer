@@ -1,0 +1,11 @@
+[Unit]
+Description=Buscar imagenes nuevas de Logistica Ultima Milla cada minuto
+
+[Timer]
+# 30 s despues de activarse (al instalar o al arrancar la VM) y luego un minuto despues de cada ejecucion
+OnActiveSec=30s
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

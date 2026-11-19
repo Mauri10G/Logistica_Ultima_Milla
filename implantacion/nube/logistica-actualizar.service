@@ -1,0 +1,13 @@
+[Unit]
+Description=Actualizar Logistica Ultima Milla con las imagenes nuevas de ghcr.io
+Wants=network-online.target
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=azureuser
+WorkingDirectory=/home/azureuser/logistica
+ExecStart=/usr/bin/env bash /home/azureuser/logistica/actualizar.sh
+# Bajar la imagen del backend en una VM pequena puede tardar
+TimeoutStartSec=900

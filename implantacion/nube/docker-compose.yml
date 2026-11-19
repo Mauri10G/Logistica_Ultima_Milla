@@ -1,6 +1,8 @@
 # Implantacion en la nube: maquina virtual Ubuntu 24.04 en Azure.
 #   docker compose --env-file .env up -d
 # Caddy recibe todo el trafico en 80 y 443, saca el certificado HTTPS solo y lo pasa a la web.
+# Las imagenes del backend y la web las publica GitHub Actions en ghcr.io en cada push a develop, y la VM las baja sola
+# con actualizar.sh (ver docs/despliegue/CICD.md). ETIQUETA elige la version: develop (la ultima) o sha-<commit corto>.
 # La web, el backend y la base no publican puertos: solo se alcanzan por la red interna de Docker.
 name: logistica-nube
 
@@ -23,7 +25,7 @@ services:
       retries: 20
 
   backend:
-    image: logistica-backend:nube
+    image: ghcr.io/mauri10g/logistica-backend:${ETIQUETA:-develop}
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -42,7 +44,7 @@ services:
         condition: service_healthy
 
   web:
-    image: logistica-web:nube
+    image: ghcr.io/mauri10g/logistica-web:${ETIQUETA:-develop}
     restart: unless-stopped
     depends_on:
       - backend
