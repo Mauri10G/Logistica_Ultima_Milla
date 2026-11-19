@@ -12,10 +12,12 @@ if ($LASTEXITCODE -ne 0) { throw "Fallo la compilacion del backend" }
 Write-Host "2/3 Web: build con la API en el contexto /logistica"
 Set-Location "$raiz\web"
 $env:VITE_API_URL = "/logistica"
+$env:VITE_AUTH_HABILITADA = "true"
 npm ci --no-audit --no-fund
 npm run build
 if ($LASTEXITCODE -ne 0) { throw "Fallo la compilacion de la web" }
 Remove-Item Env:\VITE_API_URL
+Remove-Item Env:\VITE_AUTH_HABILITADA
 
 Write-Host "3/3 Copiando a $Tomcat\webapps"
 Set-Location $raiz

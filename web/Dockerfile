@@ -15,6 +15,9 @@ RUN npm run lint && npm test -- --ci
 FROM base AS build
 ARG VITE_API_URL=mismo-origen
 ENV VITE_API_URL=$VITE_API_URL
+# La web exige login; el backend tiene que correr con SEGURIDAD_HABILITADA=true
+ARG VITE_AUTH_HABILITADA=true
+ENV VITE_AUTH_HABILITADA=$VITE_AUTH_HABILITADA
 RUN npm run build
 
 # Imagen final: Nginx sirve los archivos estaticos y reenvia /api y /ws al backend.
