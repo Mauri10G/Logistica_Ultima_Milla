@@ -49,15 +49,19 @@ public class PedidoService {
     private final ApplicationEventPublisher publicador;
     private final Clock reloj;
     private final int anticipacionMinimaMinutos;
+    private final int diasMaximosAdelante;
 
     /**
      * @param anticipacionMinimaMinutos minutos que debe haber entre la hora actual del servidor y la hora de entrega
      *                                  ({@code logistica.pedidos.anticipacion-minima-minutos}, 30 por defecto)
+     * @param diasMaximosAdelante       cuantos dias hacia el futuro se acepta una fecha de entrega
+     *                                  ({@code logistica.pedidos.dias-maximos-adelante}, 365; 0 = sin limite)
      */
     public PedidoService(PedidoRepository pedidoRepository, ClienteRepository clienteRepository,
                          ZonaRepository zonaRepository, SeguimientoService seguimientoService,
                          ControlAcceso controlAcceso, ApplicationEventPublisher publicador, Clock reloj,
-                         @Value("${logistica.pedidos.anticipacion-minima-minutos:30}") int anticipacionMinimaMinutos) {
+                         @Value("${logistica.pedidos.anticipacion-minima-minutos:30}") int anticipacionMinimaMinutos,
+                         @Value("${logistica.pedidos.dias-maximos-adelante:365}") int diasMaximosAdelante) {
         this.pedidoRepository = pedidoRepository;
         this.clienteRepository = clienteRepository;
         this.zonaRepository = zonaRepository;
@@ -66,6 +70,7 @@ public class PedidoService {
         this.publicador = publicador;
         this.reloj = reloj;
         this.anticipacionMinimaMinutos = Math.max(anticipacionMinimaMinutos, 0);
+        this.diasMaximosAdelante = Math.max(diasMaximosAdelante, 0);
     }
 
     @Transactional
@@ -174,6 +179,11 @@ public class PedidoService {
         LocalDateTime ahora = ahoraEnMinutos();
         if (fechaEntrega.isBefore(ahora.toLocalDate())) {
             throw new ReglaNegocioException("FECHA_ENTREGA_PASADA", "La fecha de entrega no puede ser anterior a hoy");
+        }
+        LocalDate maxima = ahora.toLocalDate().plusDays(diasMaximosAdelante);
+        if (diasMaximosAdelante > 0 && fechaEntrega.isAfter(maxima)) {
+            throw new ReglaNegocioException("FECHA_ENTREGA_LEJANA", "La fecha de entrega no puede ser posterior al "
+                    + maxima + " (" + diasMaximosAdelante + " dias desde hoy)");
         }
         if (LocalDateTime.of(fechaEntrega, horaEntrega).isBefore(ahora.plusMinutes(anticipacionMinimaMinutos))) {
             throw new ReglaNegocioException("HORA_ENTREGA_INVALIDA", "La hora de entrega debe ser al menos "

@@ -422,6 +422,32 @@ class ApiRestIT extends IntegrationTestBase {
         mvc.perform(delete("/api/repartidores/" + id)).andExpect(status().isNoContent());
     }
 
+    @Test
+    @DisplayName("issue #32: telefono con letras o nombre sin letras -> 400; fecha a mas de un año -> 422")
+    void formatosYFechaMaxima() throws Exception {
+        String base = """
+                {"clienteNombres": "%s", "clienteTelefono": "%s", "direccion": "Bolivar y Mera", %s,
+                 "fechaEntrega": "%s", "horaEntrega": "10:00"}
+                """;
+        LocalDate fecha = hoy().plusDays(36);
+        postJson("/api/pedidos", base.formatted("Cliente API", "abc", CENTRO, fecha))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.clienteTelefono").value(org.hamcrest.Matchers.containsString("7 a 15")));
+        postJson("/api/pedidos", base.formatted("12345", "0991112223", CENTRO, fecha))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.clienteNombres").value("El nombre debe contener al menos una letra"));
+        postJson("/api/pedidos", base.formatted("Cliente API", "0991112223", CENTRO, hoy().plusYears(5)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.codigo").value("FECHA_ENTREGA_LEJANA"));
+        // el formato con + y espacios es valido
+        postJson("/api/pedidos", base.formatted("Ángela Núñez", "+593 99 111 2223", CENTRO, fecha))
+                .andExpect(status().isCreated());
+
+        postJson("/api/repartidores", """
+                {"nombres": "Repartidor IT", "telefono": "abc", "usuario": "rep.formato", "clave": "clave123"}
+                """).andExpect(status().isBadRequest()).andExpect(jsonPath("$.errores.telefono").exists());
+    }
+
     private ResultActions patchEstado(long id, String estado, String origen) throws Exception {
         return mvc.perform(patch("/api/pedidos/" + id + "/estado").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"estado\": \"%s\", \"origen\": \"%s\"}".formatted(estado, origen)));

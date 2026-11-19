@@ -195,3 +195,13 @@ set SEGURIDAD_HABILITADA=true&& mvnw spring-boot:run      # cmd
 Todas las respuestas llevan `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 `Content-Security-Policy` (estricta para la API; Swagger UI tiene una propia que le permite cargar sus recursos),
 `Referrer-Policy: no-referrer`, `Permissions-Policy` y `Cache-Control: no-store`.
+
+## Validación de formatos (issue #32)
+
+| Campo | Regla | Error |
+|---|---|---|
+| `clienteTelefono` (pedido), `telefono` (repartidor, alta y edición) | Solo dígitos, espacios, guiones y un `+` inicial; de 7 a 15 dígitos. Ej.: `0991234567`, `+593 99 123 4567`, `03-282-1234` | 400 `VALIDACION` con `errores.<campo>` |
+| `clienteNombres` (pedido), `nombres` (repartidor) | Al menos una letra (`12345` o `---` se rechazan; tildes y ñ se aceptan) | 400 `VALIDACION` |
+| `fechaEntrega` | Como máximo hoy + `logistica.pedidos.dias-maximos-adelante` (365; 0 = sin límite) | 422 `FECHA_ENTREGA_LEJANA` |
+
+`GET /api/pedidos?page=&size=` no responde 400 con valores fuera de rango: `size` se ajusta a 1–1000 y `page` a ≥ 0.
