@@ -25,6 +25,9 @@
 
         <!-- Versiones fuera del BOM de Spring Boot -->
         <springdoc.version>3.2.0</springdoc.version>
+        <!-- springdoc 3.2.0 trae Swagger UI 5.34.0, con DOMPurify 3.4.16 vulnerable (#43). La 5.35.0+ trae DOMPurify 3.4.17.
+             Quitar este override cuando springdoc incluya una Swagger UI corregida. -->
+        <swagger-ui.version>5.35.1</swagger-ui.version>
         <jacoco.version>0.8.16</jacoco.version>
         <sonar-maven-plugin.version>5.8.0.7211</sonar-maven-plugin.version>
         <dependency-check.version>13.0.0</dependency-check.version>
@@ -42,6 +45,16 @@
         <sonar.host.url>http://localhost:9000</sonar.host.url>
         <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.webjars</groupId>
+                <artifactId>swagger-ui</artifactId>
+                <version>${swagger-ui.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Web / API REST -->
