@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.List;
 
 import ec.edu.uta.logistica.repartidores.dto.DisponibilidadRequest;
+import ec.edu.uta.logistica.repartidores.dto.RepartidorAltaRequest;
 import ec.edu.uta.logistica.repartidores.dto.RepartidorRequest;
 import ec.edu.uta.logistica.repartidores.dto.RepartidorResponse;
 import ec.edu.uta.logistica.repartidores.service.RepartidorService;
@@ -48,7 +49,7 @@ public class RepartidorController {
     }
 
     @PostMapping
-    public ResponseEntity<RepartidorResponse> crear(@Valid @RequestBody RepartidorRequest solicitud) {
+    public ResponseEntity<RepartidorResponse> crear(@Valid @RequestBody RepartidorAltaRequest solicitud) {
         RepartidorResponse creado = repartidorService.crear(solicitud);
         return ResponseEntity.created(URI.create("/api/repartidores/" + creado.id())).body(creado);
     }
