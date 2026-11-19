@@ -1,0 +1,7 @@
+# Mantiene al dia los SHA fijados de las acciones de GitHub (ci.yml)
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
