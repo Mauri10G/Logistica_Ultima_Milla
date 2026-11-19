@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import ec.edu.uta.logistica.common.config.LogisticaProperties;
 import ec.edu.uta.logistica.common.exception.ConflictoException;
@@ -65,7 +66,14 @@ public class RutaService {
     @Transactional(readOnly = true)
     public List<RutaResponse> listarPorFecha(LocalDate fecha) {
         LocalDate dia = fecha != null ? fecha : LocalDate.now(reloj);
-        return rutaRepository.buscarPorFecha(dia).stream().map(RutaResponse::desde).toList();
+        List<Ruta> rutas = rutaRepository.buscarPorFecha(dia);
+        // Los pedidos de todas las rutas se traen en una sola consulta y se agrupan aqui (antes era una consulta
+        // por cada lote de rutas y otras por sus clientes). Cada grupo conserva el orden de visita.
+        Map<Long, List<Pedido>> pedidosPorRuta = pedidoRepository.buscarDeRutasPorFecha(dia).stream()
+                .collect(Collectors.groupingBy(pedido -> pedido.getRuta().getId()));
+        return rutas.stream()
+                .map(ruta -> RutaResponse.desde(ruta, pedidosPorRuta.getOrDefault(ruta.getId(), List.of())))
+                .toList();
     }
 
     @Transactional(readOnly = true)

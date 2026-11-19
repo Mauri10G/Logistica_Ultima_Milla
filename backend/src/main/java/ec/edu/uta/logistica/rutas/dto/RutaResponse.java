@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import ec.edu.uta.logistica.pedidos.dto.PedidoResponse;
+import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.rutas.entity.EstadoRuta;
 import ec.edu.uta.logistica.rutas.entity.Ruta;
 
@@ -20,6 +21,14 @@ public record RutaResponse(
         List<PedidoResponse> pedidos) {
 
     public static RutaResponse desde(Ruta ruta) {
+        return desde(ruta, ruta.getPedidos());
+    }
+
+    /**
+     * Igual que {@link #desde(Ruta)} pero con los pedidos ya cargados (en orden de visita), sin recorrer la coleccion
+     * perezosa de la ruta. Lo usa el listado por fecha para no consultar los pedidos ruta por ruta.
+     */
+    public static RutaResponse desde(Ruta ruta, List<Pedido> pedidos) {
         return new RutaResponse(
                 ruta.getId(),
                 ruta.getFecha(),
@@ -29,6 +38,6 @@ public record RutaResponse(
                 ruta.getRepartidor().getNombres(),
                 ruta.getEstado(),
                 ruta.getMaxPedidos(),
-                ruta.getPedidos().stream().map(PedidoResponse::desde).toList());
+                pedidos.stream().map(PedidoResponse::desde).toList());
     }
 }

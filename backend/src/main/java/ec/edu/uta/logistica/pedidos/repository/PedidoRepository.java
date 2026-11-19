@@ -38,6 +38,17 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long>, JpaSpecif
         return buscar(fecha, zonaId, estado, null, paginacion);
     }
 
+    /**
+     * Todos los pedidos de las rutas de una fecha, con su cliente y su zona, en orden de visita dentro de cada ruta
+     * (ruta, orden). Una sola consulta para armar el listado de rutas sin consultar ruta por ruta ni pedido por pedido.
+     */
+    @Query("""
+            select p from Pedido p join fetch p.cliente join fetch p.zona
+            where p.ruta.fecha = :fecha
+            order by p.ruta.id, p.ordenEnRuta
+            """)
+    List<Pedido> buscarDeRutasPorFecha(@Param("fecha") LocalDate fecha);
+
     /** Zonas que tienen pedidos pendientes sin ruta para una fecha (solo ids: no carga entidades). */
     @Query("""
             select distinct p.zona.id from Pedido p
