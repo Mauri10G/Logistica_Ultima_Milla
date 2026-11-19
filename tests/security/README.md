@@ -1,7 +1,8 @@
 # Pruebas de seguridad
 
 Los reportes se guardan en [`reports/`](reports/) (la carpeta se versiona vacía; los archivos generados están en
-`.gitignore`). Para el informe, copiar la evidencia a `docs/evidencias/`.
+`.gitignore`). Para el informe, la evidencia se copia a [`docs/evidencias/seguridad/`](../../docs/evidencias/seguridad/),
+donde está el **reporte de seguridad** con los hallazgos y su corrección.
 
 ## 1. Dependencias vulnerables — OWASP Dependency-Check (Maven)
 
@@ -10,44 +11,49 @@ cd backend
 ./mvnw org.owasp:dependency-check-maven:check -Dnvd.api.key=TU_API_KEY
 ```
 
+Para no escribir la key en la línea de comandos (queda en el historial), guardarla una vez en una variable de entorno:
+
+```bash
+read -rs NVD_API_KEY && export NVD_API_KEY      # Git Bash: la pide sin mostrarla
+./mvnw org.owasp:dependency-check-maven:check -Dnvd.api.key="$NVD_API_KEY"
+```
+
 - La API key de NVD se pasa **como `-Dnvd.api.key=...`** (no con otro nombre). Se solicita gratis en
   https://nvd.nist.gov/developers/request-an-api-key. Sin key, la primera descarga de la base NVD es muy lenta.
-- La primera ejecución descarga la base de vulnerabilidades (varios minutos); las siguientes son incrementales.
-- El build falla si hay alguna vulnerabilidad con CVSS ≥ 7 (`failBuildOnCVSS` en el `pom.xml`).
-- Reportes: `backend/target/dependency-check-report.html` y `.json` → copiarlos a `tests/security/reports/`.
-- Si aparecen CVE en `spring-core`, `log4j` u otras transitivas: subir la versión de Spring Boot en el `pom.xml`
-  (hoy 4.1.2) y revisar `./mvnw dependency:tree`.
+- La primera ejecución descarga la base de vulnerabilidades (varios m## 2. Análisis dinámico — OWASP ZAP (Docker)
 
-## 2. Análisis dinámico — OWASP ZAP baseline (Docker)
-
-Con el backend corriendo en `http://localhost:8080` (y opcionalmente la web en `http://localhost:5173`).
-Desde la **raíz del repositorio**:
-
-**Git Bash**
+Con el backend corriendo en `http://localhost:8080`, desde la **raíz del repositorio** en Git Bash:
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/tests/security/reports:/zap/wrk:rw" -t ghcr.io/zaproxy/zaproxy:stable \
-  zap-baseline.py -t http://host.docker.internal:8080 -r zap-baseline-backend.html -J zap-baseline-backend.json
+bash tests/security/zap.sh antes       # el sufijo identifica la ejecución: antes / despues de las correcciones
+BASE_URL=http://servidor:8080 bash tests/security/zap.sh
 ```
 
-**cmd (Windows)**
+El script hace login como `staff` (o `API_USUARIO` / `API_CLAVE`) y ejecuta dos pasadas **pasivas** (solo observan las
+respuestas, no atacan):
 
-```bat
-docker run --rm -v "%cd%\tests\security\reports:/zap/wrk:rw" -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://host.docker.internal:8080 -r zap-baseline-backend.html
-```
+| Pasada | Qué revisa | Reportes |
+|---|---|---|
+| Baseline | La raíz del backend sin token: cabeceras, Swagger, páginas públicas | `zap-baseline-<sufijo>.html/.json` |
+| API | Importa la documentación OpenAPI y recorre las operaciones con el token | `zap-api-<sufijo>.html/.json` |
 
 - `host.docker.internal` es el `localhost` de tu PC visto desde el contenedor (Docker Desktop).
-- Para escanear la API usando su documentación OpenAPI (más cobertura de endpoints):
+- Con la seguridad encendida, un escaneo sin token solo ve respuestas 401: por eso la pasada de API manda el token.
+- **Cuidado:** al importar OpenAPI, ZAP ejecuta **cada** operación documentada con datos de ejemplo, también `PUT`,
+  `PATCH` y `DELETE`, aunque esté en modo seguro (`-S`), y eso modifica la base. El script le pasa a ZAP una copia de
+  la documentación con solo las operaciones de lectura y el login. No usar `zap-api-scan.py` directo contra la API.
+- Hacerlo solo contra el sistema propio (localhost).
+
+## 3. Dependencias de la web — npm audit
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/tests/security/reports:/zap/wrk:rw" -t ghcr.io/zaproxy/zaproxy:stable \
-  zap-api-scan.py -t http://host.docker.internal:8080/v3/api-docs -f openapi -r zap-api-backend.html
+cd web
+npm audit --omit=dev                                         # solo lo que llega al navegador
+npm audit --json > ../tests/security/reports/npm-audit-web.json
 ```
 
-- `zap-baseline.py` termina con código distinto de 0 si hay alertas (WARN/FAIL): es normal y se interpreta en el informe.
-- Es un escaneo **pasivo**: no ataca. Hacerlo solo contra el sistema propio (localhost).
+## Hallazgos y estado
 
-## Hallazgos esperados en esta base
-
-- Sin autenticación (todavía) y CORS abierto para `localhost` y el emulador: es una decisión del alcance actual.
-- Cabeceras de seguridad HTTP no configuradas (CSP, X-Frame-Options...): candidato a mejora.
+Ver el reporte en [`docs/evidencias/seguridad/`](../../docs/evidencias/seguridad/). Resumen al 19 de noviembre:
+ZAP sin hallazgos altos ni medios, 0 vulnerabilidades en las dependencias de producción de la web, 18 moderadas solo en
+herramientas de prueba, y Dependency-Check del backend pendiente de la API key de NVD.
