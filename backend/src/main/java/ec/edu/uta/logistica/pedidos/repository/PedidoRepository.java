@@ -1,16 +1,13 @@
 package ec.edu.uta.logistica.pedidos.repository;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 
 import ec.edu.uta.logistica.pedidos.entity.EstadoPedido;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
-import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,26 +22,20 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long>, JpaSpecif
     Page<Pedido> findAll(Specification<Pedido> filtros, Pageable paginacion);
 
     /**
-     * Listado con filtros opcionales (parametro nulo = sin filtrar). Se arma con Specification porque el patron
-     * JPQL "(:p is null or ...)" no funciona en PostgreSQL con parametros nulos sin tipo.
+     * Listado con filtros opcionales (parametro nulo = sin filtrar), busqueda por texto en cliente y direccion (sin
+     * mayusculas ni tildes) y orden por columna logica ({@link ConsultaPedidos#COLUMNAS_ORDENABLES}). Se arma con
+     * Specification porque el patron JPQL "(:p is null or ...)" no funciona en PostgreSQL con parametros nulos sin
+     * tipo. El orden del {@code Pageable} lo aplica la especificacion; sin orden, entrega (fecha y hora) y luego id.
      */
+    default Page<Pedido> buscar(LocalDate fecha, Long zonaId, EstadoPedido estado, String texto, Pageable paginacion) {
+        Specification<Pedido> filtros =
+                ConsultaPedidos.especificacion(fecha, zonaId, estado, texto, paginacion.getSort());
+        return findAll(filtros, PageRequest.of(paginacion.getPageNumber(), paginacion.getPageSize()));
+    }
+
+    /** Igual que {@link #buscar(LocalDate, Long, EstadoPedido, String, Pageable)} sin busqueda por texto. */
     default Page<Pedido> buscar(LocalDate fecha, Long zonaId, EstadoPedido estado, Pageable paginacion) {
-        Specification<Pedido> filtros = (pedido, consulta, cb) -> {
-            List<Predicate> condiciones = new ArrayList<>();
-            if (fecha != null) {
-                condiciones.add(cb.equal(pedido.get("fechaEntrega"), fecha));
-            }
-            if (zonaId != null) {
-                condiciones.add(cb.equal(pedido.get("zona").get("id"), zonaId));
-            }
-            if (estado != null) {
-                condiciones.add(cb.equal(pedido.get("estado"), estado));
-            }
-            return cb.and(condiciones.toArray(Predicate[]::new));
-        };
-        Pageable ordenada = PageRequest.of(paginacion.getPageNumber(), paginacion.getPageSize(),
-                Sort.by("fechaEntrega", "horaEntrega", "id"));
-        return findAll(filtros, ordenada);
+        return buscar(fecha, zonaId, estado, null, paginacion);
     }
 
     /** Zonas que tienen pedidos pendientes sin ruta para una fecha (solo ids: no carga entidades). */

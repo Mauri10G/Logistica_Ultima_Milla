@@ -64,7 +64,8 @@ class ZonaServiceTest {
         when(zonaRepository.existsByNombreIgnoreCase("Nueva")).thenReturn(false);
         when(zonaRepository.buscarSuperpuestas(anyString(), anyLong(), anyDouble())).thenReturn(List.of(centro));
 
-        assertThatThrownBy(() -> servicio.crear(new ZonaRequest("Nueva", geoJson(), null, null), false))
+        var zonaNueva = new ZonaRequest("Nueva", geoJson(), null, null);
+        assertThatThrownBy(() -> servicio.crear(zonaNueva, false))
                 .isInstanceOf(ConflictoException.class)
                 .hasMessageContaining("Centro")
                 .satisfies(e -> assertThat(((ApiException) e).getCodigo()).isEqualTo("ZONA_SUPERPUESTA"));
@@ -78,7 +79,8 @@ class ZonaServiceTest {
         when(zonaRepository.existsByNombreIgnoreCase("Interior")).thenReturn(false);
         when(zonaRepository.buscarSuperpuestas(anyString(), anyLong(), anyDouble())).thenReturn(List.of(centro));
 
-        assertThatThrownBy(() -> servicio.crear(new ZonaRequest("Interior", geoJson(), null, null), false))
+        var zonaNueva = new ZonaRequest("Interior", geoJson(), null, null);
+        assertThatThrownBy(() -> servicio.crear(zonaNueva, false))
                 .isInstanceOf(ConflictoException.class)
                 .hasMessageContaining("Centro")
                 .satisfies(e -> assertThat(((ApiException) e).getCodigo()).isEqualTo("ZONA_SUPERPUESTA"));
@@ -90,7 +92,8 @@ class ZonaServiceTest {
         when(zonaRepository.existsByNombreIgnoreCase("Nueva")).thenReturn(false);
         when(zonaRepository.buscarSuperpuestas(anyString(), anyLong(), anyDouble())).thenReturn(List.of(centro, Fabrica.zona(2L, "Norte")));
 
-        assertThatThrownBy(() -> servicio.crear(new ZonaRequest("Nueva", geoJson(), null, null), false))
+        var zonaNueva = new ZonaRequest("Nueva", geoJson(), null, null);
+        assertThatThrownBy(() -> servicio.crear(zonaNueva, false))
                 .hasMessageContaining("Centro, Norte")
                 .hasMessageContaining("compartir borde");
     }
@@ -202,7 +205,8 @@ class ZonaServiceTest {
         when(zonaRepository.findByNombreIgnoreCase("Centro")).thenReturn(Optional.of(centro));
         when(zonaRepository.buscarSuperpuestas(anyString(), eq(1L), anyDouble())).thenReturn(List.of(norte));
 
-        assertThatThrownBy(() -> servicio.actualizar(1L, new ZonaRequest("Centro", geoJson(), null, null), false))
+        var zonaNueva = new ZonaRequest("Centro", geoJson(), null, null);
+        assertThatThrownBy(() -> servicio.actualizar(1L, zonaNueva, false))
                 .isInstanceOf(ConflictoException.class).hasMessageContaining("Norte");
     }
 
@@ -211,7 +215,8 @@ class ZonaServiceTest {
     void nombreDuplicado() {
         when(zonaRepository.existsByNombreIgnoreCase("Centro")).thenReturn(true);
 
-        assertThatThrownBy(() -> servicio.crear(new ZonaRequest("Centro", geoJson(), null, null), false))
+        var zonaNueva = new ZonaRequest("Centro", geoJson(), null, null);
+        assertThatThrownBy(() -> servicio.crear(zonaNueva, false))
                 .isInstanceOf(ConflictoException.class);
     }
 
@@ -222,7 +227,8 @@ class ZonaServiceTest {
                 List.of(-78.62, -1.24), List.of(-78.61, -1.24), List.of(-78.61, -1.23), List.of(-78.62, -1.23))));
         when(zonaRepository.existsByNombreIgnoreCase("Nueva")).thenReturn(false);
 
-        assertThatThrownBy(() -> servicio.crear(new ZonaRequest("Nueva", abierto, null, null), false))
+        var zonaNueva = new ZonaRequest("Nueva", abierto, null, null);
+        assertThatThrownBy(() -> servicio.crear(zonaNueva, false))
                 .isInstanceOf(SolicitudInvalidaException.class);
     }
 }

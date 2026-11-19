@@ -119,10 +119,48 @@ class ClusterPorZonaVecinoMasCercanoTest {
     @DisplayName("sin pedidos devuelve vacio y sin repartidores lanza IllegalStateException")
     void casosLimite() {
         assertThat(estrategia.planificar(List.of(), repartidores, Map.of(), 4)).isEmpty();
-        assertThatThrownBy(() -> estrategia.planificar(pedidosEnZona(centro, 1, 2), List.of(), Map.of(), 4))
+        List<Pedido> pedidos = pedidosEnZona(centro, 1, 2);
+        List<Repartidor> sinRepartidores = List.of();
+        Map<Long, Integer> sinCarga = Map.of();
+        assertThatThrownBy(() -> estrategia.planificar(pedidos, sinRepartidores, sinCarga, 4))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> estrategia.planificar(pedidosEnZona(centro, 1, 2), repartidores, Map.of(), 0))
+        assertThatThrownBy(() -> estrategia.planificar(pedidos, repartidores, sinCarga, 0))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("con ventana horaria de 60 min se visita primero la franja mas temprana, aunque otra parada este mas cerca")
+    void respetaLaVentanaHoraria() {
+        // misma linea que ordenaPorVecinoMasCercano: sin ventanas el orden es p2, p1, p3, p4 (va y vuelve por cercania)
+        Pedido p1 = Fabrica.pedido(1L, centro, FECHA, LocalTime.of(11, 0), -1.24, -78.6200);
+        Pedido p2 = Fabrica.pedido(2L, centro, FECHA, LocalTime.of(9, 0), -1.24, -78.6190);
+        Pedido p3 = Fabrica.pedido(3L, centro, FECHA, LocalTime.of(10, 0), -1.24, -78.6170);
+        Pedido p4 = Fabrica.pedido(4L, centro, FECHA, LocalTime.of(12, 0), -1.24, -78.6100);
+        ClusterPorZonaVecinoMasCercano conVentana = new ClusterPorZonaVecinoMasCercano(60);
+
+        List<RutaPlanificada> rutas = conVentana.planificar(List.of(p4, p3, p2, p1), repartidores, Map.of(), 4);
+
+        assertThat(rutas.get(0).paradas()).containsExactly(p2, p3, p1, p4);
+    }
+
+    @Test
+    @DisplayName("dentro de una misma franja manda la cercania")
+    void dentroDeLaFranjaMandaLaCercania() {
+        // las tres entre 09:00 y 09:59: arranca por la mas temprana (id 1) y luego la mas cercana, no la mas temprana
+        Pedido p1 = Fabrica.pedido(1L, centro, FECHA, LocalTime.of(9, 0), -1.24, -78.6200);
+        Pedido p2 = Fabrica.pedido(2L, centro, FECHA, LocalTime.of(9, 10), -1.24, -78.6100);
+        Pedido p3 = Fabrica.pedido(3L, centro, FECHA, LocalTime.of(9, 50), -1.24, -78.6195);
+
+        List<RutaPlanificada> rutas = new ClusterPorZonaVecinoMasCercano(60)
+                .planificar(List.of(p1, p2, p3), repartidores, Map.of(), 4);
+
+        assertThat(rutas.get(0).paradas()).containsExactly(p1, p3, p2);
+    }
+
+    @Test
+    @DisplayName("una ventana negativa no es valida")
+    void ventanaNegativa() {
+        assertThatThrownBy(() -> new ClusterPorZonaVecinoMasCercano(-1)).isInstanceOf(IllegalArgumentException.class);
     }
 
     private List<Pedido> pedidosEnZona(Zona zona, long desdeId, int cantidad) {

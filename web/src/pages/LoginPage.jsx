@@ -1,22 +1,16 @@
-import { CircleAlert, Eye, EyeOff, LoaderCircle, Lock, LogIn, MapPinned, Radio, Route, User } from 'lucide-react'
+import { CircleAlert, Clock, Eye, EyeOff, LoaderCircle, Lock, LogIn, User } from 'lucide-react'
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { iniciarSesionApi } from '../api/authApi'
-import { guardarSesion } from '../auth/sesion'
-import IlustracionLogin from '../components/IlustracionLogin'
+import { guardarSesion, obtenerAvisoSesion } from '../auth/sesion'
 import FondoRutas from '../components/FondoRutas'
 import Logo from '../components/Logo'
+import PanelLogin from '../components/PanelLogin'
 import { ROL_STAFF, useSesion } from '../auth/useSesion'
 import { estadoHttp, mensajeDeError } from '../utils/errores'
 import { saludoSegunHora } from '../utils/saludo'
 
 export const MENSAJE_CREDENCIALES = 'Usuario o clave incorrectos'
-
-const PUNTOS = [
-  { Icono: Route, texto: 'Rutas automáticas por zona y repartidor' },
-  { Icono: Radio, texto: 'Seguimiento en vivo de cada pedido' },
-  { Icono: MapPinned, texto: 'Zonas dibujadas directamente en el mapa' },
-]
 
 export default function LoginPage() {
   const { sesion, authHabilitada } = useSesion()
@@ -27,6 +21,7 @@ export default function LoginPage() {
   const [error, setError] = useState(null)
   const [enviando, setEnviando] = useState(false)
   const [saludo] = useState(() => saludoSegunHora())
+  const [avisoSesion] = useState(obtenerAvisoSesion) // "Tu sesión expiró…" si la sesión anterior terminó sola
 
   // Sin login habilitado, o con una sesión de personal ya iniciada, no hay nada que hacer aquí.
   if (!authHabilitada || sesion?.rol === ROL_STAFF) return <Navigate to="/" replace />
@@ -37,7 +32,7 @@ export default function LoginPage() {
     setError(null)
     try {
       const datos = await iniciarSesionApi(usuario.trim(), clave)
-      guardarSesion(datos)
+      guardarSesion({ ...datos, usuario: usuario.trim() })
       navegar('/', { replace: true })
     } catch (e) {
       setError(estadoHttp(e) === 401 ? MENSAJE_CREDENCIALES : mensajeDeError(e))
@@ -48,26 +43,7 @@ export default function LoginPage() {
 
   return (
     <main className="login-pagina">
-      <section className="login-panel">
-        <IlustracionLogin />
-        <div className="login-panel-texto">
-          <div className="login-panel-marca">
-            <Logo />
-            <span>Entregas y Rutas</span>
-          </div>
-          <p className="login-frase">Organiza tus entregas de última milla en tiempo real</p>
-          <ul className="login-puntos">
-            {PUNTOS.map(({ Icono, texto }) => (
-              <li key={texto}>
-                <span className="login-punto-icono">
-                  <Icono size={18} aria-hidden="true" />
-                </span>
-                {texto}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+      <PanelLogin />
 
       <section className="login-lado-form">
         <FondoRutas />
@@ -126,6 +102,13 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {avisoSesion && !error && (
+              <p className="mensaje-advertencia mensaje-con-icono" role="status">
+                <Clock size={18} aria-hidden="true" />
+                <span>{avisoSesion}</span>
+              </p>
+            )}
 
             {error && (
               <p id="errorLogin" className="mensaje-error mensaje-con-icono" role="alert">

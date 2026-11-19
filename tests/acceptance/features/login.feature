@@ -1,13 +1,11 @@
 # language: es
-@pendiente
 Característica: Inicio de sesión del personal
   Para que solo el personal autorizado use la web
   Como dueño del negocio
   Quiero que la web pida usuario y clave y rechace a quien no es del personal
 
-  # @pendiente: el login todavía no existe en el backend (POST /api/auth/login, lo publica Joseph) y la web lo trae
-  # apagado. Para ejecutarlo: levantar la web con VITE_AUTH_HABILITADA=true, definir ACEP_USUARIO_PERSONAL,
-  # ACEP_CLAVE_PERSONAL, ACEP_USUARIO_REPARTIDOR y ACEP_CLAVE_REPARTIDOR, y correr:  npm run test:pendientes
+  # Este feature no tiene Antecedentes de inicio de sesión: cada escenario parte sin sesión. Requiere el backend con
+  # SEGURIDAD_HABILITADA=true y la web con VITE_AUTH_HABILITADA=true (ver tests/acceptance/README.md).
 
   Escenario: Sin sesión la web pide iniciar sesión
     Cuando abre la pantalla de Pedidos sin haber iniciado sesión
@@ -27,11 +25,21 @@ Característica: Inicio de sesión del personal
     Entonces ve el mensaje de error "Usuario o clave incorrectos"
     Y ve la pantalla de inicio de sesión
 
+  Escenario: Clave incorrecta de un usuario que sí existe
+    Dado que el personal abre la pantalla de inicio de sesión
+    Cuando escribe el usuario "staff" y la clave "clave-incorrecta"
+    Y pulsa el botón "Ingresar"
+    Entonces ve el mensaje de error "Usuario o clave incorrectos"
+    Y ve la pantalla de inicio de sesión
+
   Escenario: Un repartidor no tiene acceso a la web
     Dado que el personal abre la pantalla de inicio de sesión
     Cuando escribe el usuario y la clave de un repartidor
     Y pulsa el botón "Ingresar"
     Entonces ve la pantalla "Sin acceso"
+    Y la pantalla Sin acceso muestra el candado y el nombre del repartidor
+    Cuando pulsa el botón "Cerrar sesión"
+    Entonces ve la pantalla de inicio de sesión
 
   Escenario: Cerrar sesión devuelve a la pantalla de inicio de sesión
     Dado que el personal abre la pantalla de inicio de sesión

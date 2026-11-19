@@ -58,16 +58,16 @@ docker compose up -d
 docker compose ps
 
 # 2. Backend (perfil dev por defecto). Flyway crea el esquema y los datos base (5 zonas de Ambato,
-#    6 repartidores y 20 pedidos de ejemplo para mañana)
+#    6 repartidores, 20 pedidos de ejemplo para mañana y los usuarios de prueba)
 cd backend
-./mvnw spring-boot:run
+SEGURIDAD_HABILITADA=true ./mvnw spring-boot:run          # Git Bash, con la seguridad (login) encendida
 #    Verificar:  http://localhost:8080/actuator/health  ->  {"status":"UP"}
 
 # 3. App web (en otra terminal)
 cd web
-cp .env.example .env        # VITE_API_URL=http://localhost:8080
+cp .env.example .env        # VITE_API_URL=http://localhost:8080 y VITE_AUTH_HABILITADA=true
 npm install
-npm run dev                 # http://localhost:5173
+npm run dev                 # http://localhost:5173  (pide usuario y clave)
 
 # 4. App móvil (en otra terminal) — emulador Android
 cd mobile
@@ -76,11 +76,66 @@ flutter run                                              # API por defecto: http
 flutter run --dart-define=API_URL=http://192.168.1.10:8080   # celular físico: IP de tu PC
 ```
 
-Prueba rápida del flujo completo: en la web, **Rutas → Mañana → Armar rutas**; en el móvil indicar el id de un
-repartidor (1 a 6), marcar un pedido y ver cómo **Seguimiento** se actualiza solo.
+### Login y seguridad (backend + web)
+
+La web **exige iniciar sesión** (`VITE_AUTH_HABILITADA=true` en `web/.env.example`) y el backend debe correr con la
+seguridad encendida (`SEGURIDAD_HABILITADA=true`); si no, el backend deja todo abierto y el login es solo de adorno.
+
+```powershell
+# PowerShell (desde backend/)
+$env:SEGURIDAD_HABILITADA="true"; .\mvnw spring-boot:run
+
+# cmd:        set SEGURIDAD_HABILITADA=true&& mvnw spring-boot:run
+# Git Bash:   SEGURIDAD_HABILITADA=true ./mvnw spring-boot:run
+```
+
+Con `$env:SEGURIDAD_HABILITADA` en PowerShell la variable dura lo que dure esa terminal; para volver a la seguridad apagada
+basta una terminal nueva (o `Remove-Item Env:SEGURIDAD_HABILITADA`) y poner `VITE_AUTH_HABILITADA=false` en `web/.env`.
+
+Usuarios de prueba (migración `V4__usuarios.sql`; el contrato completo está en [docs/api-auth.md](docs/api-auth.md)):
+
+| Usuario | Clave | Rol | Para qué |
+|---|---|---|---|
+| `staff` | `staff123` | STAFF | La **web** (personal del negocio): entra a todas las pantallas |
+| `carlos`, `luis`, `andrea`, `diego`, `paola`, `marco` | `repartidor123` | COURIER (repartidores 1 a 6) | La **app móvil**. Si uno entra a la web ve "Sin acceso" |
+
+La sesión de la web dura 12 horas (`expiraEn` del login); al vencer, o si el backend responde 401, vuelve al login con el aviso
+"Tu sesión expiró, ingresa de nuevo". Si un usuario no tiene permiso para algo (403) ve un aviso y la sesión sigue abierta.
+
+Prueba rápida del flujo completo: en la web (usuario `staff`), **Rutas → Mañana → Armar rutas**; en el móvil iniciar sesión con
+el usuario de un repartidor, marcar un pedido y ver cómo **Seguimiento** se actualiza solo.
 
 Para reiniciar la base de datos desde cero (se vuelven a aplicar las migraciones al arrancar el backend):
 `docker compose down -v && docker compose up -d`.
+
+### Levantar todo con la seguridad encendida (revisión completa)
+
+Es la forma de probar el sistema como queda en producción: el backend exige token y la web exige login. **Las dos
+mitades deben coincidir**: backend con `SEGURIDAD_HABILITADA=true` y web con `VITE_AUTH_HABILITADA=true` (en `web/.env`).
+
+```bash
+# Terminal 1: base de datos
+docker compose up -d
+
+# Terminal 2: backend con login y permisos por rol
+cd backend
+SEGURIDAD_HABILITADA=true ./mvnw spring-boot:run           # PowerShell: $env:SEGURIDAD_HABILITADA="true"; .\mvnw spring-boot:run
+
+# Terminal 3: web (web/.env con VITE_AUTH_HABILITADA=true)
+cd web
+npm install && npm run dev                                 # http://localhost:5173
+
+# Terminal 4: pruebas de aceptación (las 27, con el navegador de Playwright)
+cd tests/acceptance
+npm install && npm run navegador && npm test               # reporte en tests/acceptance/reports/cucumber.html
+```
+
+Qué probar a mano: entrar como `staff` / `staff123` y recorrer Pedidos (buscar con o sin tildes, ordenar por cada encabezado,
+pasar de página), Seguimiento y Rutas; cerrar sesión y entrar como `carlos` / `repartidor123` para ver la pantalla **Sin
+acceso** (con el nombre del usuario y el botón Cerrar sesión). La búsqueda (`q`), el orden (`sort`) y la paginación los
+resuelve el backend: ver [docs/api-auth.md](docs/api-auth.md#listado-de-pedidos-filtros-búsqueda-orden-y-paginación).
+
+Al terminar, apaga el backend y la web con `Ctrl+C` en sus terminales (y `docker compose down` si ya no usarás la base).
 
 ### Backend con un PostGIS efímero (sin docker compose)
 
@@ -92,7 +147,7 @@ Documentación interactiva en **Swagger UI**. Todos los errores devuelven `{ tim
 
 | Método y ruta | Descripción |
 |---|---|
-| `GET/POST /api/pedidos` · `GET/PUT/DELETE /api/pedidos/{id}` | CRUD de pedidos. Filtros: `fecha`, `zonaId`, `estado`, `page`, `size` (total en `X-Total-Count`) |
+| `GET/POST /api/pedidos` · `GET/PUT/DELETE /api/pedidos/{id}` | CRUD de pedidos. Filtros: `fecha`, `zonaId`, `estado`; búsqueda `q` (cliente o dirección, sin tildes); orden `sort` (`id`, `cliente`, `direccion`, `zona`, `fechaEntrega`, `fechaRegistro`, `estado`); `page`, `size` (total en `X-Total-Count`). Detalle en `docs/api-auth.md` |
 | `PATCH /api/pedidos/{id}/estado` | Lo usa la app móvil: `{"estado":"RECOGIDO","origen":"MOVIL"}` |
 | `GET/POST /api/zonas` · `PUT/DELETE /api/zonas/{id}` | Zonas con el polígono en GeoJSON. `?confirmarSuperposicion=true` permite superponer |
 | `GET/POST /api/repartidores` · `PUT/DELETE /api/repartidores/{id}` | CRUD de repartidores |
@@ -119,7 +174,7 @@ Máximo de pedidos por ruta: `logistica.rutas.max-pedidos: 4`.
 | **Unitarias web** | Jest + React Testing Library + user-event v14 | `cd web && npm test` | — |
 | **Unitarias móvil** | `flutter_test` | `cd mobile && flutter test` | — |
 | **Integración móvil** | `integration_test` | `cd mobile && flutter test integration_test` | Emulador/dispositivo |
-| **Aceptación** | Cucumber.js + Playwright (features en español) | `cd tests/acceptance && npm install && npm run navegador && npm test` | Backend + web corriendo |
+| **Aceptación** | Cucumber.js + Playwright (features en español) | `cd tests/acceptance && npm install && npm run navegador && npm test` | Backend (con `SEGURIDAD_HABILITADA=true`) + web (con `VITE_AUTH_HABILITADA=true`) corriendo |
 | **Humo** | k6 | `k6 run tests/performance/smoke.js` | Backend corriendo |
 | **Carga** | k6 | `k6 run tests/performance/carga.js` | Backend corriendo |
 | **Estrés** | k6 | `k6 run tests/performance/estres.js` | Backend corriendo |

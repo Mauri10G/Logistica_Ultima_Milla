@@ -4,6 +4,7 @@ import {
   endpointNoDisponible,
   estadoHttp,
   MENSAJE_FUNCION_NO_DISPONIBLE,
+  MENSAJE_ACCESO_DENEGADO,
   mensajeDeError,
   mensajeDeErrorPedido,
 } from './errores'
@@ -31,6 +32,12 @@ function errorHttp(status, datos) {
 describe('errores', () => {
   test('mensajeDeError usa el mensaje de la API', () => {
     expect(mensajeDeError(errorHttp(409, { mensaje: 'Pedido no editable' }))).toBe('Pedido no editable')
+  })
+
+  test('mensajeDeError explica un 403 ACCESO_DENEGADO con un aviso claro, sin importar el texto del backend', () => {
+    const error = errorHttp(403, { codigo: 'ACCESO_DENEGADO', mensaje: 'Su rol no tiene permiso para esta operacion' })
+    expect(mensajeDeError(error)).toBe(MENSAJE_ACCESO_DENEGADO)
+    expect(mensajeDeErrorPedido(error)).toBe(MENSAJE_ACCESO_DENEGADO)
   })
 
   test('mensajeDeError agrega el detalle de los campos inválidos', () => {

@@ -33,6 +33,7 @@ persona trabaja en su carpeta.
 | `rutas` | Armado de rutas | `Ruta` (`agregarPedido`), `ArmadoRutasService`, `RutaService` (último momento), `BloqueoZonaFecha`, `algoritmo/` |
 | `repartidores` | Gestión de repartidores | `Repartidor`, disponibilidad, `GET .../ruta-actual` |
 | `seguimiento` | Tiempo real e historial | `SeguimientoService` (historial + evento), `SeguimientoPublicador` (STOMP tras el commit) |
+| `seguridad` | Login y permisos | `Usuario`, `AuthService` (BCrypt), `TokenService` (JWT HS256), `SeguridadConfig` (reglas por rol, cabeceras), `ControlAcceso` (un COURIER solo lo suyo), `AutenticacionStompInterceptor` (CONNECT de `/ws`) |
 
 Dependencias entre módulos (solo hacia abajo): `rutas → pedidos, repartidores, zonas, seguimiento`;
 `pedidos → zonas, seguimiento`; `seguimiento → pedidos` (solo enums); `common` no depende de nadie.
@@ -47,6 +48,7 @@ ruta(id, fecha, zona_id, repartidor_id, estado, max_pedidos, version)
 pedido(id, cliente_id, direccion, ubicacion geometry(Point,4326), zona_id, fecha_entrega, hora_entrega,
        fecha_registro, prioridad, estado, registrado_por_personal, ruta_id?, orden_en_ruta?, version)
 historial_estado_pedido(id, pedido_id, estado_anterior?, estado_nuevo, fecha_cambio, origen WEB|MOVIL)
+usuario(id, usuario UNIQUE(lower), clave BCrypt, rol STAFF|COURIER, repartidor_id?, activo, creado_en)   -- V4
 ```
 
 Índices: GIST en `zona.area` y `pedido.ubicacion`; compuesto `pedido(fecha_entrega, zona_id, estado)`;
@@ -55,7 +57,9 @@ historial_estado_pedido(id, pedido_id, estado_anterior?, estado_nuevo, fecha_cam
 separados ~200 m entre sí, 6 repartidores, 10 clientes y 20 pedidos para mañana.
 `V3__zonas_contiguas.sql`: reemplaza el área de esas 5 zonas (por nombre; mismos ids y nombres) por polígonos pegados
 entre sí, sin huecos. Cada polígono contiene al rectángulo anterior, así que los 20 pedidos siguen en su misma zona.
-`V4` en adelante queda para las siguientes migraciones (la V4 es de la tabla de usuarios).
+`V4__usuarios.sql`: tabla `usuario` (clave con BCrypt; un COURIER siempre apunta a su repartidor y un STAFF nunca),
+un usuario `staff` y un usuario por cada repartidor de V2 (`carlos`, `luis`, `andrea`, `diego`, `paola`, `marco`).
+Credenciales y permisos en `docs/api-auth.md`.
 
 #### Zonas: contiguas, sin huecos y sin cruces
 
@@ -103,8 +107,28 @@ Ruta:   ARMADA → EN_CURSO (se recoge el primer pedido) → FINALIZADA (todos E
 2. **Armar rutas** (`POST /api/rutas/armar?fecha=` o `@Scheduled`): ver sección 5.
 3. **Repartidor** consulta `GET /api/repartidores/{id}/ruta-actual` y marca `RECOGIDO → EN_CAMINO → ENTREGADO`
    (cada `PATCH` valida la transición, guarda historial y publica en `/topic/pedidos`; la ruta cambia de estado sola).
-4. **Último momento** (`POST /api/rutas/ultimo-momento/{pedidoId}`): se inserta en una ruta `ARMADA` de su zona y fecha
-   con espacio (la de parada más cercana) o se crea una ruta nueva con el repartidor de menor carga.
+4. **Último momento automático**: al registrar un pedido (`POST /api/pedidos`) para una fecha que **ya tiene rutas
+   armadas**, `PedidoService` publica `PedidoRegistradoEvent` y `UltimoMomentoAutomatico` (módulo rutas, en la misma
+   transacción) lo inserta en una ruta `ARMADA` de su zona y fecha con espacio (la de parada más cercana) o crea una
+   ruta nueva con el repartidor de menor carga. La respuesta ya sale `ASIGNADO` con `rutaId` y `ordenEnRuta`. Si la fecha
+   aún no tiene rutas, o no hay repartidores disponibles, queda `PENDIENTE` para el armado. Se apaga con
+   `logistica.rutas.ultimo-momento-automatico=false`; el endpoint manual `POST /api/rutas/ultimo-momento/{pedidoId}`
+   sigue existiendo. Usa el mismo bloqueo por (zona, fecha) que el armado.
+5. **Ajustes manuales** (solo STAFF, solo rutas `ARMADA`; `AjusteRutasService`), para corregir lo que el armado no
+   asignó bien. Toman el mismo bloqueo por (zona, fecha) que el armado, en orden ascendente de zona, y releen la ruta
+   y el pedido con bloqueo antes de decidir. Cada cambio se publica en `/topic/rutas` (`RUTA_ACTUALIZADA` con su motivo).
+
+   | Endpoint | Qué hace | Errores |
+   |---|---|---|
+   | `PATCH /api/rutas/{id}/repartidor` `{ "repartidorId": 3 }` | Cambia el repartidor (activo y disponible) | 404 repartidor, 422 `REPARTIDOR_NO_DISPONIBLE` |
+   | `POST /api/rutas/{id}/pedidos/{pedidoId}` | Mueve el pedido al final de la ruta, desde otra ruta `ARMADA` de la misma fecha (aunque sea de otra zona) o desde `PENDIENTE` | 409 `RUTA_LLENA` (respeta el máximo), `PEDIDO_YA_EN_RUTA`, `PEDIDO_NO_MOVIBLE`; 422 `FECHA_DISTINTA` |
+   | `DELETE /api/rutas/{id}/pedidos/{pedidoId}` | Saca el pedido: vuelve a `PENDIENTE` sin ruta (queda en el historial) y se renumeran las paradas | 409 `PEDIDO_NO_ESTA_EN_RUTA` |
+   | `PUT /api/rutas/{id}/orden` `{ "pedidos": [12, 7, 9] }` | Nuevo orden de visita; debe traer exactamente los pedidos de la ruta | 422 `ORDEN_INVALIDO` |
+
+   Todos responden 409 `RUTA_NO_MODIFICABLE` si la ruta ya está `EN_CURSO` o `FINALIZADA`, y devuelven la ruta actualizada.
+   `V5__orden_en_ruta_diferido.sql` cambia el índice único `(ruta_id, orden_en_ruta)` por una restricción `UNIQUE
+   DEFERRABLE INITIALLY DEFERRED`: se sigue garantizando al hacer commit, pero permite renumerar (intercambiar 1 y 2) en
+   la misma transacción.
 
 ### Mensajes WebSocket (STOMP sobre `ws://host:8080/ws`)
 
@@ -115,29 +139,54 @@ Ruta:   ARMADA → EN_CURSO (se recoge el primer pedido) → FINALIZADA (todos E
 
 ## 5. Estrategia de armado de rutas
 
-**Estado: implementación inicial, el algoritmo definitivo lo confirma el equipo.** Está detrás de la interfaz
-`EstrategiaArmadoRutas` (función pura: no toca la base de datos), por lo que se puede cambiar o comparar fácilmente.
+**Estado: confirmada por el equipo.** Nos quedamos con `ClusterPorZonaVecinoMasCercano` (agrupar por zona y ordenar
+por vecino más cercano). Está detrás de la interfaz `EstrategiaArmadoRutas`, que es una función pura (no toca la base
+de datos): la transacción, los bloqueos y la persistencia son de `ArmadoRutasService`.
 
-### Implementación actual: `ClusterPorZonaVecinoMasCercano`
+### Por qué la elegimos
 
-1. **Agrupar** los pendientes por `(fecha de entrega, zona)`.
-2. **Partir en clusters** de hasta `max_pedidos` por cercanía: se toma como semilla el pedido más alejado del centroide
-   de los que quedan y se le suman sus vecinos más cercanos (distancia haversine) hasta llenar el cluster.
-3. **Ordenar las paradas** de cada cluster por vecino más cercano, empezando por el pedido con la hora aproximada más
-   temprana.
-4. **Asignar** cada ruta al repartidor disponible con menos pedidos ese día (empate: menor id).
+| Criterio | Cómo lo cumple |
+|---|---|
+| Reglas del enunciado | Agrupa por zona y fecha de entrega y nunca arma una ruta de más de `max_pedidos` (4) |
+| Simple de explicar y de probar | Cuatro pasos deterministas (los empates se resuelven por id): las pruebas unitarias fijan el resultado exacto |
+| Rápida | 5000 pedidos de San Valentín → 1252 rutas en ~11 s, dentro del armado programado de las 18:00 |
+| Sin dependencias | Solo distancia haversine en Java; un solver de VRP (OR-Tools) agregaría una librería nativa y cambiaría el stack |
+| Encaja con el resto | El último momento y los ajustes manuales operan sobre las mismas rutas por zona y fecha y el mismo bloqueo |
 
-Es determinista (los empates se resuelven por id). Zonas con pocos pedidos generan rutas de 1 o 2 pedidos.
-Medido: 5000 pedidos de San Valentín → 1252 rutas en ~11 s (con 6 repartidores, cada uno recibe muchas rutas: en la
-práctica serían viajes sucesivos).
+Las alternativas (k-means o DBSCAN por zona, barrido angular, VRP con OR-Tools, mejora con 2-opt) dan rutas algo más
+cortas pero son más difíciles de probar de forma determinista y no cambian lo que el enunciado exige.
 
-### Limitaciones conocidas / alternativas a evaluar
+### Cómo funciona
 
-- El último cluster de una zona puede quedar con 1 pedido (p. ej. 5 pedidos → 4 + 1). Alternativa: balancear (3 + 2).
-- El orden por vecino más cercano es una heurística golosa; se puede mejorar con 2-opt.
-- La hora aproximada solo decide la primera parada; no hay ventanas de tiempo.
-- No considera `capacidad_maxima` del repartidor (campo reservado) ni tiempos de viaje reales (distancia en línea recta).
-- Alternativas posibles: k-means / DBSCAN por zona, barrido angular (*sweep*), o un solver de VRP (OR-Tools).
+1. **Agrupar** los pedidos `PENDIENTE` sin ruta por `(fecha de entrega, zona)`. Las zonas y las fechas no se mezclan.
+2. **Partir en clusters** de hasta `max_pedidos` por cercanía: semilla = el pedido más alejado del centroide de los que
+   quedan (así los pedidos de la periferia no quedan sueltos al final); se le suman sus vecinos más cercanos
+   (haversine) hasta llenar el cluster. Se repite con los que quedan.
+3. **Ordenar las paradas** de cada cluster por vecino más cercano, empezando por el pedido con la hora más temprana.
+   Opcional, `logistica.rutas.ventana-horaria-minutos` (0 = desactivado): la hora de entrega funciona como **ventana
+   de tiempo**; con 60 se visitan primero todas las entregas de la franja 09:00–09:59 (por cercanía dentro de ella),
+   luego las de 10:00–10:59, etc.
+4. **Asignar** cada ruta al repartidor disponible con menos pedidos ese día (empate: menor id), contando la carga que
+   ya tenía antes del armado.
+
+### Lo que se revisó y corrigió
+
+- **Hora de entrega ignorada después de la primera parada** (defecto): con el vecino más cercano puro, una ruta podía
+  pasar por un pedido de las 18:00 antes que por uno de las 09:30 si estaba más cerca. Se agregó la ventana horaria
+  configurable (pruebas `respetaLaVentanaHoraria` y `dentroDeLaFranjaMandaLaCercania`). Queda en 0 por defecto para no
+  cambiar el comportamiento que ya validaron la web y las pruebas de aceptación; el equipo puede encenderla con 60.
+- Se verificó con pruebas que ninguna ruta supera el máximo, que cada pedido aparece exactamente una vez, que zonas y
+  fechas no se mezclan, el particionado por cercanía, el reparto de carga y los casos límite (sin pedidos, sin
+  repartidores, máximo menor a 1).
+
+### Limitaciones conocidas
+
+- El último cluster de una zona puede quedar con 1 pedido (5 pedidos → 4 + 1). Deja espacio para el último momento,
+  por eso no se balancea (3 + 2).
+- El vecino más cercano es una heurística golosa; 2-opt la mejoraría.
+- Distancia en línea recta, no tiempos de viaje reales; `capacidad_maxima` del repartidor sigue reservada.
+- El armado crea rutas nuevas para los pendientes aunque haya rutas `ARMADA` con espacio en la misma zona; esas se
+  llenan con el último momento automático o con los ajustes manuales.
 
 Para cambiar el algoritmo: crear una clase `@Component` que implemente `EstrategiaArmadoRutas`, dejar una sola activa
 (`@Primary` o `@ConditionalOnProperty`) y reutilizar `ClusterPorZonaVecinoMasCercanoTest` como modelo de pruebas.
@@ -171,8 +220,9 @@ dos rutas.
 | Hora de entrega | La fecha y hora de entrega deben ser ≥ **ahora + `logistica.pedidos.anticipacion-minima-minutos`** (30 por defecto, `@Value` en `PedidoService`), al registrar y al editar; si no, **422** `HORA_ENTREGA_INVALIDA` con la hora del servidor en el mensaje. "Ahora" es el `Clock` del backend truncado a minutos (la hora del pedido es de precisión minuto); **no se confía en el reloj del computador del usuario**, que puede cambiarse. Una fecha anterior a hoy sigue dando `FECHA_ENTREGA_PASADA`. Mañana en adelante acepta cualquier hora |
 | Hora del servidor | `GET /api/servidor/hora` → `{fecha, hora, zonaHoraria, anticipacionMinimaMinutos, entregaMinimaFecha, entregaMinimaHora}`, sin datos sensibles. `entregaMinima*` es la primera entrega aceptada (ahora + anticipación; a las 23:50 ya es mañana 00:20). La web la pide cada vez que abre el modal de pedido y de ella saca la fecha por defecto y mínima, la hora mínima si la fecha es esa primera fecha y el aviso de hora inválida. Si no responde o llega incompleta, la web no valida fecha ni hora y el backend decide y explica el rechazo |
 | Tiempo real | Se publica `AFTER_COMMIT`: nunca se envía un cambio que luego se revierta |
-| Autenticación | Aún no; CORS en un solo lugar y sin Spring Security para agregarlo después |
-| Paginación | `GET /api/pedidos` devuelve una lista y el total en `X-Total-Count` |
+| Autenticación | Spring Security + `spring-boot-starter-oauth2-resource-server` con JWT firmados con HS256 (clave en `logistica.seguridad.jwt.secreto`, sin librerías extra). API sin estado: sin sesión HTTP ni cookies, por eso no aplica CSRF. Roles `STAFF` (web) y `COURIER` (móvil). Las reglas por rol están en `SeguridadConfig`; las de "solo lo suyo" (un COURIER y una ruta ajena → 403) en `ControlAcceso`. El origen del historial sale del rol, no del cuerpo. `logistica.seguridad.habilitada=false` deja todo abierto mientras la web y el móvil terminan. Contrato: `docs/api-auth.md` |
+| Cabeceras de seguridad | `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Content-Security-Policy` (estricta en la API, propia en Swagger UI), `Referrer-Policy: no-referrer`, `Permissions-Policy`, `Cache-Control: no-store`. CORS se aplica dentro de Spring Security para que los 401/403 también lleven sus cabeceras |
+| Paginación, búsqueda y orden de pedidos | `GET /api/pedidos` resuelve todo en el backend: `page` (desde 0) y `size` (1 a 1000, 100 por defecto) devuelven solo esa página y el total de **todas** las páginas, con los filtros y `q` ya aplicados, va en `X-Total-Count`. `q` busca en el nombre del cliente **o** la dirección sin importar mayúsculas ni tildes (`lower(translate(...))` en PostgreSQL, sin extensiones; `%` y `_` se buscan como texto). `sort` usa el formato de Spring (`sort=fechaEntrega,desc`, repetible) y solo admite `id`, `cliente`, `direccion`, `zona`, `fechaEntrega`, `fechaRegistro` y `estado`; otra columna da 400 `SOLICITUD_INVALIDA`. `fechaEntrega` ordena por fecha y luego hora; `estado` por su lugar en el flujo (no alfabético); siempre se desempata por `id` para que paginar no repita ni pierda filas. Sin `sort` el orden es entrega y luego `id`. La lógica está en `pedidos/repository/ConsultaPedidos` (Specification) y la validación de columnas en `PedidoService`. **La web pagina, busca y ordena en el backend**: `usePedidosTabla` (Pedidos y Seguimiento) manda `page`, `size`, `q` (con 300 ms de espera tras la última tecla) y `sort` en cada cambio y nunca filtra ni ordena en el navegador; abre ordenada por `#` ascendente (`sort=id,asc`). Solo Inicio recorre todos los pedidos del día por lotes de 1000. Contrato: `docs/api-auth.md` |
 
 ## 8. Casos de prueba cubiertos
 
@@ -186,14 +236,17 @@ dos rutas.
 | CP-11 | Seguimiento en tiempo real | Verificado a mano con un cliente STOMP real; pendiente automatizar con Playwright |
 | — | Transiciones de estado | `EstadoPedidoTest`, `ApiRestIT` |
 | — | Algoritmo de rutas | `ClusterPorZonaVecinoMasCercanoTest`, `ArmadoRutasServiceTest` |
+| — | Último momento automático al registrar, y su concurrencia con el armado | `PedidoServiceTest`, `UltimoMomentoAutomaticoTest`, `UltimoMomentoAutomaticoIT` |
+| — | Ajustes manuales de rutas (máximo, renumeración, solo ARMADA, 403 para COURIER, concurrencia con el armado) | `RutaTest`, `AjusteRutasServiceTest`, `AjusteRutasIT` |
+| — | Login, roles y permisos (401/403, COURIER contra ruta ajena, origen por rol, CONNECT de STOMP, cabeceras) | `AuthServiceTest`, `SeguridadConfigTest`, `ControlAccesoTest`, `AutenticacionStompInterceptorTest`, `PedidoServiceTest`, `SeguridadIT` |
 
 Los CP-01, CP-02 y CP-10 no se detallaron en el enunciado de esta base: quedan por mapear por el equipo.
 
 ## 9. Pendiente (después de esta base)
 
-- Confirmar el algoritmo de armado y sus parámetros (ver sección 5).
-- Disparar la inserción de último momento automáticamente al registrar un pedido cuando ya hay rutas armadas.
-- Autenticación y roles; ventana de tiempo para el armado programado por zona.
+- Decidir si se enciende la ventana horaria del armado (`logistica.rutas.ventana-horaria-minutos`, sección 5).
+- Encender `logistica.seguridad.habilitada` cuando la web y el móvil manden el token; ventana de tiempo para el armado
+  programado por zona.
 - Automatizar CP-11 con Playwright (dos páginas: una hace el `PATCH`, la otra observa la tabla).
 - Pruebas de seguridad (Dependency-Check y ZAP) ejecutadas y archivadas en `tests/security/reports/` y `docs/evidencias/`.
 

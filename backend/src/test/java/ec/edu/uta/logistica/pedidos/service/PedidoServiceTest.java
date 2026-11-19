@@ -15,6 +15,8 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.Optional;
 
+import ec.edu.uta.logistica.common.exception.AccesoDenegadoException;
+import ec.edu.uta.logistica.common.exception.ApiException;
 import ec.edu.uta.logistica.common.exception.ConflictoException;
 import ec.edu.uta.logistica.common.exception.ReglaNegocioException;
 import ec.edu.uta.logistica.common.exception.SolicitudInvalidaException;
@@ -27,10 +29,14 @@ import ec.edu.uta.logistica.pedidos.entity.EstadoPedido;
 import ec.edu.uta.logistica.pedidos.entity.OrigenCambio;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.pedidos.entity.TransicionInvalidaException;
+import ec.edu.uta.logistica.pedidos.evento.PedidoRegistradoEvent;
 import ec.edu.uta.logistica.pedidos.repository.ClienteRepository;
 import ec.edu.uta.logistica.pedidos.repository.PedidoRepository;
+import ec.edu.uta.logistica.rutas.entity.Ruta;
 import ec.edu.uta.logistica.seguimiento.service.SeguimientoService;
+import ec.edu.uta.logistica.seguridad.service.ControlAcceso;
 import ec.edu.uta.logistica.testutil.Fabrica;
+import ec.edu.uta.logistica.testutil.Sesiones;
 import ec.edu.uta.logistica.zonas.entity.Zona;
 import ec.edu.uta.logistica.zonas.repository.ZonaRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +46,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 
 /** Reglas CP-03 (zona), CP-04 (fecha y hora de entrega), CP-05 (edicion) y transiciones de estado. */
@@ -60,6 +68,8 @@ class PedidoServiceTest {
     private ZonaRepository zonaRepository;
     @Mock
     private SeguimientoService seguimientoService;
+    @Mock
+    private ApplicationEventPublisher publicador;
 
     private PedidoService servicio;
     private final Zona centro = Fabrica.zona(1L, "Centro");
@@ -70,8 +80,8 @@ class PedidoServiceTest {
     }
 
     private PedidoService servicioCon(Clock reloj, int anticipacionMinutos) {
-        return new PedidoService(pedidoRepository, clienteRepository, zonaRepository, seguimientoService, reloj,
-                anticipacionMinutos);
+        return new PedidoService(pedidoRepository, clienteRepository, zonaRepository, seguimientoService,
+                new ControlAcceso(), publicador, reloj, anticipacionMinutos);
     }
 
     private static Clock relojA(String instanteUtc) {
@@ -99,10 +109,11 @@ class PedidoServiceTest {
     void direccionFueraDeZona() {
         when(zonaRepository.buscarZonaQueContiene(-1.2412, -78.6197)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> servicio.registrar(solicitud(HOY)))
+        var solicitud = solicitud(HOY);
+        assertThatThrownBy(() -> servicio.registrar(solicitud))
                 .isInstanceOf(DireccionFueraDeZonaException.class)
                 .hasMessage("La dirección no corresponde a ninguna zona configurada")
-                .satisfies(e -> assertThat(((ReglaNegocioException) e).getStatus())
+                .satisfies(e -> assertThat(((ApiException) e).getStatus())
                         .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT));
 
         verify(pedidoRepository, never()).save(any());
@@ -112,7 +123,8 @@ class PedidoServiceTest {
     @Test
     @DisplayName("CP-04: no se permite una fecha de entrega anterior a hoy")
     void fechaPasada() {
-        assertThatThrownBy(() -> servicio.registrar(solicitud(HOY.minusDays(1))))
+        var solicitud = solicitud(HOY.minusDays(1));
+        assertThatThrownBy(() -> servicio.registrar(solicitud))
                 .isInstanceOf(ReglaNegocioException.class)
                 .hasMessageContaining("anterior a hoy");
 
@@ -134,6 +146,8 @@ class PedidoServiceTest {
         // la fecha de registro viene del reloj y es distinta de la de entrega
         assertThat(respuesta.fechaRegistro().toLocalDate()).isEqualTo(HOY);
         assertThat(respuesta.registradoPorPersonal()).isTrue();
+        // avisa al modulo de rutas para la insercion automatica de ultimo momento
+        verify(publicador).publishEvent(new PedidoRegistradoEvent(null, HOY, 1L));
     }
 
     @Nested
@@ -143,7 +157,8 @@ class PedidoServiceTest {
         @Test
         @DisplayName("registrar: hoy con una hora ya pasada se rechaza con 422 y el mensaje con la hora del servidor")
         void registrarHoyConHoraPasada() {
-            assertThatThrownBy(() -> servicio.registrar(solicitud(HOY, LocalTime.of(7, 0))))
+            var solicitud = solicitud(HOY, LocalTime.of(7, 0));
+            assertThatThrownBy(() -> servicio.registrar(solicitud))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessage("La hora de entrega debe ser al menos 30 minutos después de la hora actual del "
                             + "servidor, 10:00")
@@ -159,10 +174,12 @@ class PedidoServiceTest {
         @Test
         @DisplayName("registrar: hoy con una hora dentro de la anticipacion (10:29 con ahora 10:00) se rechaza")
         void registrarHoyDentroDeLaAnticipacion() {
-            assertThatThrownBy(() -> servicio.registrar(solicitud(HOY, LocalTime.of(10, 29))))
+            var solicitud = solicitud(HOY, LocalTime.of(10, 29));
+            assertThatThrownBy(() -> servicio.registrar(solicitud))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessageContaining("al menos 30 minutos");
-            assertThatThrownBy(() -> servicio.registrar(solicitud(HOY, LocalTime.of(10, 0))))
+            var solicitud2 = solicitud(HOY, LocalTime.of(10, 0));
+            assertThatThrownBy(() -> servicio.registrar(solicitud2))
                     .isInstanceOf(ReglaNegocioException.class);
 
             verifyNoInteractions(zonaRepository, clienteRepository, pedidoRepository);
@@ -195,10 +212,12 @@ class PedidoServiceTest {
             Pedido pendiente = Fabrica.pedido(7L, centro, HOY.plusDays(1));
             when(pedidoRepository.findById(7L)).thenReturn(Optional.of(pendiente));
 
-            assertThatThrownBy(() -> servicio.editar(7L, solicitud(HOY, LocalTime.of(7, 0))))
+            var solicitud = solicitud(HOY, LocalTime.of(7, 0));
+            assertThatThrownBy(() -> servicio.editar(7L, solicitud))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessageContaining("hora actual del servidor, 10:00");
-            assertThatThrownBy(() -> servicio.editar(7L, solicitud(HOY, LocalTime.of(10, 15))))
+            var solicitud2 = solicitud(HOY, LocalTime.of(10, 15));
+            assertThatThrownBy(() -> servicio.editar(7L, solicitud2))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessageContaining("al menos 30 minutos");
 
@@ -242,7 +261,8 @@ class PedidoServiceTest {
 
             assertThat(conSegundos.registrar(solicitud(HOY, LocalTime.of(10, 30))).horaEntrega())
                     .isEqualTo(LocalTime.of(10, 30));
-            assertThatThrownBy(() -> conSegundos.registrar(solicitud(HOY, LocalTime.of(10, 29))))
+            var solicitud = solicitud(HOY, LocalTime.of(10, 29));
+            assertThatThrownBy(() -> conSegundos.registrar(solicitud))
                     .isInstanceOf(ReglaNegocioException.class);
         }
 
@@ -251,7 +271,8 @@ class PedidoServiceTest {
         void anticipacionConfigurable() {
             PedidoService conNoventa = servicioCon(RELOJ, 90);
 
-            assertThatThrownBy(() -> conNoventa.registrar(solicitud(HOY, LocalTime.of(11, 0))))
+            var solicitud = solicitud(HOY, LocalTime.of(11, 0));
+            assertThatThrownBy(() -> conNoventa.registrar(solicitud))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessage("La hora de entrega debe ser al menos 90 minutos después de la hora actual del "
                             + "servidor, 10:00");
@@ -267,7 +288,8 @@ class PedidoServiceTest {
             preparaGuardadoValido();
             PedidoService noche = servicioCon(relojA("2027-02-11T03:00:00Z"), ANTICIPACION_MINUTOS);
 
-            assertThatThrownBy(() -> noche.registrar(solicitud(HOY, LocalTime.of(22, 15))))
+            var solicitud = solicitud(HOY, LocalTime.of(22, 15));
+            assertThatThrownBy(() -> noche.registrar(solicitud))
                     .isInstanceOf(ReglaNegocioException.class)
                     .hasMessageContaining("hora actual del servidor, 22:00");
             assertThat(noche.registrar(solicitud(HOY, LocalTime.of(22, 30))).fechaEntrega()).isEqualTo(HOY);
@@ -321,7 +343,8 @@ class PedidoServiceTest {
         asignado.cambiarEstado(EstadoPedido.ASIGNADO);
         when(pedidoRepository.findById(7L)).thenReturn(Optional.of(asignado));
 
-        assertThatThrownBy(() -> servicio.editar(7L, solicitud(HOY.plusDays(1))))
+        var solicitud = solicitud(HOY.plusDays(1));
+        assertThatThrownBy(() -> servicio.editar(7L, solicitud))
                 .isInstanceOf(ConflictoException.class)
                 .hasMessageContaining("PENDIENTE");
 
@@ -377,7 +400,8 @@ class PedidoServiceTest {
         pedido.cambiarEstado(EstadoPedido.ASIGNADO);
         when(pedidoRepository.findById(7L)).thenReturn(Optional.of(pedido));
 
-        assertThatThrownBy(() -> servicio.cambiarEstado(7L, new EstadoPedidoRequest(EstadoPedido.ENTREGADO, null)))
+        var cambio = new EstadoPedidoRequest(EstadoPedido.ENTREGADO, null);
+        assertThatThrownBy(() -> servicio.cambiarEstado(7L, cambio))
                 .isInstanceOf(TransicionInvalidaException.class);
 
         assertThat(pedido.getEstado()).isEqualTo(EstadoPedido.ASIGNADO);
@@ -390,9 +414,124 @@ class PedidoServiceTest {
         Pedido pedido = Fabrica.pedido(7L, centro, HOY.plusDays(1));
         when(pedidoRepository.findById(7L)).thenReturn(Optional.of(pedido));
 
-        assertThatThrownBy(() -> servicio.cambiarEstado(7L, new EstadoPedidoRequest(EstadoPedido.ASIGNADO, null)))
+        var cambio = new EstadoPedidoRequest(EstadoPedido.ASIGNADO, null);
+        assertThatThrownBy(() -> servicio.cambiarEstado(7L, cambio))
                 .isInstanceOf(ReglaNegocioException.class);
 
         verifyNoInteractions(seguimientoService);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "pagina {0}, tamano {1} -> pagina {2}, tamano {3}")
+    @org.junit.jupiter.params.provider.CsvSource({"0, 0, 0, 1", "0, 1, 0, 1", "2, 1000, 2, 1000", "0, 1001, 0, 1000",
+            "-3, -5, 0, 1"})
+    @DisplayName("listar limita el tamano de pagina entre 1 y 1000 y la pagina a >= 0 (Math.clamp)")
+    void limitaLaPaginacion(int pagina, int tamano, int paginaEsperada, int tamanoEsperado) {
+        when(pedidoRepository.buscar(any(), any(), any(), any(), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        servicio.listar(null, null, null, null, Sort.unsorted(), pagina, tamano);
+
+        verify(pedidoRepository).buscar(null, null, null, null,
+                org.springframework.data.domain.PageRequest.of(paginaEsperada, tamanoEsperado));
+    }
+
+    @Test
+    @DisplayName("listar pasa el texto de busqueda y el orden pedido al repositorio")
+    void pasaBusquedaYOrden() {
+        when(pedidoRepository.buscar(any(), any(), any(), any(), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        Sort orden = Sort.by(Sort.Order.desc("fechaEntrega"), Sort.Order.asc("id"));
+
+        servicio.listar(HOY, 3L, EstadoPedido.PENDIENTE, "bolivar", orden, 2, 25);
+
+        verify(pedidoRepository).buscar(HOY, 3L, EstadoPedido.PENDIENTE, "bolivar",
+                org.springframework.data.domain.PageRequest.of(2, 25, orden));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "sort={0} es una columna permitida")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"id", "cliente", "direccion", "zona", "fechaEntrega",
+            "fechaRegistro", "estado"})
+    @DisplayName("listar acepta cada columna ordenable")
+    void aceptaColumnasOrdenables(String columna) {
+        when(pedidoRepository.buscar(any(), any(), any(), any(), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        servicio.listar(null, null, null, null, Sort.by(columna), 0, 10);
+
+        verify(pedidoRepository).buscar(any(), any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "sort={0} se rechaza")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"telefono", "ubicacion", "version", "cliente.email",
+            "ruta"})
+    @DisplayName("listar rechaza con 400 las columnas que no son ordenables")
+    void rechazaColumnasNoOrdenables(String columna) {
+        Sort orden = Sort.by(columna);
+
+        assertThatThrownBy(() -> servicio.listar(null, null, null, null, orden, 0, 10))
+                .isInstanceOfSatisfying(SolicitudInvalidaException.class, ex -> {
+                    assertThat(ex.getStatus().value()).isEqualTo(400);
+                    assertThat(ex.getMessage()).contains(columna).contains("fechaEntrega");
+                });
+        verifyNoInteractions(pedidoRepository);
+    }
+
+    @Nested
+    @DisplayName("Permisos: un COURIER solo cambia pedidos de su ruta y el origen sale del rol")
+    class Permisos {
+
+        @org.junit.jupiter.api.AfterEach
+        void cerrarSesion() {
+            Sesiones.cerrar();
+        }
+
+        private Pedido asignadoA(long repartidorId) {
+            Pedido pedido = Fabrica.pedido(7L, centro, HOY.plusDays(1));
+            new Ruta(HOY.plusDays(1), centro, Fabrica.repartidor(repartidorId, "R"), 4).agregarPedido(pedido);
+            when(pedidoRepository.findById(7L)).thenReturn(Optional.of(pedido));
+            return pedido;
+        }
+
+        @Test
+        @DisplayName("COURIER sobre un pedido de otra ruta: 403 y el pedido no cambia ni deja historial")
+        void courierRutaAjena() {
+            Pedido pedido = asignadoA(2L);
+            Sesiones.comoCourier(1L);
+
+            var cambio = new EstadoPedidoRequest(EstadoPedido.RECOGIDO, null);
+            assertThatThrownBy(() -> servicio.cambiarEstado(7L, cambio))
+                    .isInstanceOf(AccesoDenegadoException.class)
+                    .satisfies(e -> assertThat(((AccesoDenegadoException) e).getStatus())
+                            .isEqualTo(HttpStatus.FORBIDDEN));
+            assertThatThrownBy(() -> servicio.obtener(7L)).isInstanceOf(AccesoDenegadoException.class);
+
+            assertThat(pedido.getEstado()).isEqualTo(EstadoPedido.ASIGNADO);
+            verify(pedidoRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(seguimientoService);
+        }
+
+        @Test
+        @DisplayName("COURIER sobre su pedido: avanza y el historial dice MOVIL aunque el cuerpo diga WEB")
+        void courierRutaPropia() {
+            asignadoA(1L);
+            Sesiones.comoCourier(1L);
+
+            servicio.cambiarEstado(7L, new EstadoPedidoRequest(EstadoPedido.RECOGIDO, OrigenCambio.WEB));
+
+            verify(seguimientoService).registrarCambio(7L, EstadoPedido.ASIGNADO, EstadoPedido.RECOGIDO,
+                    OrigenCambio.MOVIL);
+        }
+
+        @Test
+        @DisplayName("STAFF cambia cualquier pedido y el historial dice WEB aunque el cuerpo diga MOVIL")
+        void staffOrigenWeb() {
+            asignadoA(2L);
+            Sesiones.comoStaff();
+
+            servicio.cambiarEstado(7L, new EstadoPedidoRequest(EstadoPedido.RECOGIDO, OrigenCambio.MOVIL));
+
+            verify(seguimientoService).registrarCambio(7L, EstadoPedido.ASIGNADO, EstadoPedido.RECOGIDO,
+                    OrigenCambio.WEB);
+        }
     }
 }

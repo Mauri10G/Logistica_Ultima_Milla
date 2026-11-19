@@ -15,18 +15,30 @@ volumen, carga y estrés.
 
 - **App web** (React): personal del negocio. **App móvil** (Flutter): repartidores.
 - Módulos funcionales: Registro de pedidos, Gestión de zonas, Armado de rutas, Gestión de repartidores, Seguimiento.
-- Fuera de alcance: pasarelas de pago. El login no existe aún (la app móvil elige repartidor por id); el código está
-  preparado para agregarlo (CORS centralizado en `common/config/WebConfig`, sin Spring Security todavía).
+- Fuera de alcance: pasarelas de pago. Hay login con JWT (`POST /api/auth/login`, roles STAFF para la web y COURIER para la
+  móvil, contrato en `docs/api-auth.md`); el backend lo aplica solo con `SEGURIDAD_HABILITADA=true` (CORS en `common/config/WebConfig`).
 
 ## Estado actual
 
-- **Hecho por Mauricio y en `develop`:** web completa con diseño, tablas, confirmaciones y deshacer, login rediseñado, zonas
-  contiguas con imán, validación de hora del servidor, pruebas Jest, aceptación CP-01 a CP-13 y análisis SonarQube.
-- **Login:** existe en la web pero está apagado (`VITE_AUTH_HABILITADA=false`), esperando el backend.
-- **Pendiente de Joseph:** `POST /api/auth/login`, los 4 endpoints de ajustes de rutas, paginación en `GET /api/pedidos` y las
-  correcciones de Sonar en `docs/evidencias/sonar/issues-backend.md`. La migración V3 ya está usada: él empieza en **V4**.
-- **Pendiente de Mauricio cuando Joseph termine:** encender el login, verificar el contrato y quitar `@pendiente` de las pruebas
-  de aceptación.
+**Web, backend e integración completos.** Pendiente solo el **móvil (Erick)** y las **pruebas no funcionales (Robert:
+volumen, carga, estrés y seguridad)**.
+
+- **Web (Mauricio):** diseño, tablas, confirmaciones y deshacer, zonas contiguas con imán, validación de hora del servidor,
+  ajustes manuales de rutas (cambiar repartidor, mover, sacar y reordenar), pruebas Jest y análisis SonarQube.
+- **Login encendido e integrado:** `VITE_AUTH_HABILITADA=true` en `web/.env.example`. La web guarda `expiraEn` y cierra la sesión sola
+  al vencer ("Tu sesión expiró, ingresa de nuevo"); un 401 `NO_AUTENTICADO` borra la sesión y vuelve al login con el mismo aviso; un
+  403 `ACCESO_DENEGADO` muestra "Acceso denegado…" sin cerrar sesión. El WebSocket manda el token en el `CONNECT`. Para probar todo
+  hay que levantar el backend con `SEGURIDAD_HABILITADA=true` (ver README, "Login y seguridad").
+- **Pantalla "Sin acceso":** un COURIER que entra a la web ve el mismo diseño de dos columnas del login (ilustración de Ambato a la
+  izquierda; a la derecha candado, título, texto, nombre del usuario y "Cerrar sesión"). El nombre sale del `sub` del token
+  (`SinAccesoPage`, `PanelLogin` compartido con el login).
+- **Backend de pedidos terminado:** `GET /api/pedidos` pagina (`page`, `size`, total en `X-Total-Count`), busca (`q`: cliente o
+  dirección, sin mayúsculas ni tildes) y ordena (`sort` de Spring: `id`, `cliente`, `direccion`, `zona`, `fechaEntrega`,
+  `fechaRegistro`, `estado`; otra columna da 400). Contrato en `docs/api-auth.md`, lógica en `pedidos/repository/ConsultaPedidos`.
+- **Pedidos y Seguimiento 100 % contra el backend:** la web ya no trae todo por lotes al buscar u ordenar; ver "Web: rutas y tablas".
+- **Pruebas de aceptación:** 27 escenarios en verde con la seguridad encendida (CP-17 busca un pedido que no está en la primera
+  página); todos (menos `login.feature`) empiezan con "que el personal inició sesión"; CP-11 cambia el estado con el token del
+  repartidor dueño de la ruta (origen MOVIL). Último reporte en `docs/evidencias/aceptacion/`.
 
 ## Stack — NO CAMBIARLO
 
@@ -96,9 +108,15 @@ ec.edu.uta.logistica
 - Rutas: la raíz `/` es **Inicio** y cualquier ruta desconocida (`*`) también redirige a Inicio (`web/src/App.jsx`).
 - Todas las tablas (Pedidos, Seguimiento, Zonas, Repartidores) usan `components/Tabla.jsx` + `hooks/useTabla.js`: 10 filas por
   página (selector 10/25/50, "Mostrando 1 a 10 de 24", anterior/siguiente/números), orden al pulsar los encabezados y vuelta a la
-  página 1 al cambiar filtro, búsqueda u orden. Al cargar o recargar vienen ordenadas por `#` de menor a mayor; el orden elegido
-  por el usuario no se conserva. Hoy el orden y la paginación son del navegador: para pasarlos al backend se cambia solo
-  `useTabla`, no las páginas.
+  página 1 al cambiar filtro, búsqueda u orden. Zonas y Repartidores ordenan y paginan en el navegador (al cargar, por `#`).
+- **Pedidos y Seguimiento paginan, buscan y ordenan en el backend** con `usePedidosTabla` (sobre `useTabla` con la opción `remoto` y
+  `TablaVista`): cada cambio de página, tamaño, orden, búsqueda o filtro es una petición
+  `GET /api/pedidos?page=&size=&sort=&q=&fecha=&zonaId=&estado=` y el total sale de `X-Total-Count`. Nada se filtra ni se ordena en el
+  navegador. El orden con que abre la tabla es por `#` de menor a mayor (`sort=id,asc`). Las columnas pasan a `sort` así: Entrega y
+  Hora → `fechaEntrega`, Registro → `fechaRegistro`; Ruta, Historial y Acciones no ordenan. El buscador espera 300 ms tras la
+  última tecla (`useRetraso`) y manda `q`. En Seguimiento las pastillas de estado son una consulta de tamaño 1 por estado (solo
+  cuenta el total). Solo Inicio usa `listarTodosLosPedidos` (lotes de 1000) para sus tarjetas y el avance del día. En las pruebas
+  Jest, `src/__mocks__/backendPedidos.js` simula `GET /api/pedidos` (estado, `q`, `sort`, página).
 - Pedidos: filtro de fecha en hoy al abrir (Hoy / Mañana / Todas), buscador por cliente o dirección, botón Ver (modal de solo
   lectura con datos, ruta y historial) y, si el pedido no es PENDIENTE, un candado con tooltip en vez de Editar/Eliminar.
 - Rutas: cada ruta es un resumen; los controles de ajuste salen con "Ajustar ruta". El mapa queda fijo y resalta la ruta bajo el mouse.
@@ -124,7 +142,8 @@ docker compose up -d                       # PostGIS en :5433 (obligatorio para 
 docker compose --profile sonar up -d       # + SonarQube en :9000
 
 # Backend (cd backend)
-./mvnw spring-boot:run                     # perfil dev, http://localhost:8080 (Swagger: /swagger-ui.html)
+./mvnw spring-boot:run                     # perfil dev, http://localhost:8080 (Swagger: /swagger-ui.html), seguridad apagada
+SEGURIDAD_HABILITADA=true ./mvnw spring-boot:run   # con login (PowerShell: $env:SEGURIDAD_HABILITADA="true"; .\mvnw spring-boot:run)
 ./mvnw test                                # unitarias (surefire, *Test)
 ./mvnw verify                              # unitarias + integración Testcontainers (failsafe, *IT) + JaCoCo
 ./mvnw verify sonar:sonar -Dsonar.token=TOKEN
@@ -141,7 +160,7 @@ flutter pub get && flutter test && flutter analyze
 flutter run --dart-define=API_URL=http://10.0.2.2:8080
 
 # Transversales
-cd tests/acceptance && npm install && npm test              # Cucumber + Playwright (backend y web arriba)
+cd tests/acceptance && npm install && npm test              # Cucumber + Playwright (backend con SEGURIDAD_HABILITADA=true y web arriba)
 k6 run tests/performance/smoke.js                           # también carga.js, estres.js, volumen.js
 node tests/data/generar-pedidos.js --armar                  # 5000 pedidos de San Valentín
 ```

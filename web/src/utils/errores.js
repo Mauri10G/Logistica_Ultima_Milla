@@ -1,6 +1,11 @@
+export const MENSAJE_ACCESO_DENEGADO = 'Acceso denegado: su usuario no tiene permiso para realizar esta acción.'
+
 /** Mensaje legible de un error de axios: usa el cuerpo uniforme de la API ({ codigo, mensaje, errores }). */
 export function mensajeDeError(error) {
   const datos = error?.response?.data
+  if (error?.response?.status === 403 && (!datos?.codigo || datos.codigo === 'ACCESO_DENEGADO')) {
+    return MENSAJE_ACCESO_DENEGADO // 403 ACCESO_DENEGADO: aviso claro, la sesión sigue abierta
+  }
   if (datos?.errores) {
     const detalle = Object.entries(datos.errores)
       .map(([campo, texto]) => `${campo}: ${texto}`)

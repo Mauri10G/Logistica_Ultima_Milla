@@ -4,6 +4,9 @@ Característica: Gestión de repartidores
   Como personal del negocio
   Quiero registrar repartidores y controlar su disponibilidad
 
+  Antecedentes:
+    Dado que el personal inició sesión
+
   Escenario: CP-10 Registrar un nuevo repartidor y su disponibilidad
     Dado que el personal abre la pantalla de "Repartidores"
     Cuando pulsa el botón "Nuevo repartidor"

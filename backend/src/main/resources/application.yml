@@ -40,10 +40,25 @@ logistica:
     anticipacion-minima-minutos: 30
   rutas:
     max-pedidos: 4 # maximo de pedidos por ruta
+    # Al registrar un pedido para una fecha que ya tiene rutas armadas, se inserta solo en una ruta con espacio de su
+    # zona o en una ruta nueva (UltimoMomentoAutomatico).
+    ultimo-momento-automatico: true
+    # Ventana de tiempo al ordenar las paradas: con 60, una ruta visita primero todas las entregas de 09:00-09:59, luego
+    # las de 10:00-10:59, etc. (vecino mas cercano dentro de cada franja). 0 = vecino mas cercano puro.
+    ventana-horaria-minutos: 0
     armado:
       programado-habilitado: true # armado automatico con @Scheduled
       cron: "0 0 18 * * *" # todos los dias a las 18:00 (hora de logistica.zona-horaria)
       dias-adelante: 1 # arma rutas del dia siguiente
+  seguridad:
+    # false: toda la API queda abierta (sin token) mientras la web y el movil terminan el login. El login igual
+    # funciona. Para encenderla: SEGURIDAD_HABILITADA=true. Contrato y permisos en docs/api-auth.md.
+    habilitada: ${SEGURIDAD_HABILITADA:false}
+    jwt:
+      # Clave HMAC-SHA256 (minimo 32 caracteres). Este valor es solo para desarrollo: en un despliegue real se pasa
+      # por la variable de entorno JWT_SECRETO.
+      secreto: ${JWT_SECRETO:dev-logistica-ultima-milla-clave-hs256-solo-desarrollo}
+      expiracion-minutos: 720 # 12 horas: una jornada de trabajo
   cors:
     origenes-permitidos:
       - http://localhost:5173 # app web (Vite)

@@ -1554,25 +1554,52 @@ button.disponibilidad.disponible::before {
    Login
    ========================================================================== */
 
-.pantalla-login {
+/* --- Pantalla "Sin acceso": usa el mismo diseño de dos columnas del login --- */
+
+.sin-acceso {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-4);
+  text-align: center;
+}
+
+.sin-acceso-candado {
   display: grid;
   place-items: center;
-  min-height: 100vh;
-  padding: var(--espacio-4);
-  background:
-    radial-gradient(900px 500px at 10% -10%, #dbe4ff 0%, transparent 60%),
-    radial-gradient(700px 400px at 100% 110%, #e4defa 0%, transparent 55%), var(--color-fondo);
+  width: 4.75rem;
+  height: 4.75rem;
+  border-radius: 50%;
+  color: var(--color-primario);
+  background: var(--color-primario-suave);
+  border: 1px solid var(--color-primario-borde);
 }
 
-.pantalla-login > .tarjeta {
-  width: min(440px, 100%);
+.sin-acceso-texto h1 {
   margin: 0;
-  padding: var(--espacio-5);
-  box-shadow: var(--sombra-md);
+  font-size: var(--texto-3xl);
+  letter-spacing: -0.02em;
 }
 
-.pantalla-login > .tarjeta h1 {
-  font-size: var(--texto-xl);
+.sin-acceso-texto p {
+  margin: var(--espacio-2) 0 0;
+  color: var(--color-suave);
+}
+
+.sin-acceso-usuario {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin: 0;
+  padding: var(--espacio-2) var(--espacio-4);
+  border-radius: 999px;
+  background: var(--color-tarjeta-suave);
+  border: 1px solid var(--color-borde);
+  color: var(--color-texto);
+}
+
+.sin-acceso .login-enviar {
+  margin-top: var(--espacio-2);
 }
 
 /* --- Login: dos columnas a pantalla completa (panel con ilustración + formulario) --- */
@@ -1756,7 +1783,8 @@ button.disponibilidad.disponible::before {
   color: var(--color-texto);
 }
 
-.login-formulario .mensaje-error {
+.login-formulario .mensaje-error,
+.login-formulario .mensaje-advertencia {
   margin: 0;
 }
 

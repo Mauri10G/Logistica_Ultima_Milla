@@ -6,8 +6,7 @@
   "scripts": {
     "navegador": "playwright install chromium",
     "test": "cucumber-js",
-    "test:dry": "cucumber-js --dry-run",
-    "test:pendientes": "cucumber-js --profile pendientes"
+    "test:dry": "cucumber-js --dry-run"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^13.3.0",

@@ -6,6 +6,7 @@ import java.time.LocalTime;
 
 import ec.edu.uta.logistica.common.geo.GeoUtil;
 import ec.edu.uta.logistica.pedidos.entity.Cliente;
+import ec.edu.uta.logistica.pedidos.entity.DatosEntrega;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.pedidos.entity.PrioridadPedido;
 import ec.edu.uta.logistica.repartidores.entity.Repartidor;
@@ -43,8 +44,8 @@ public final class Fabrica {
 
     public static Pedido pedido(Long id, Zona zona, LocalDate fechaEntrega, LocalTime hora, double lat, double lng) {
         Cliente cliente = new Cliente("Cliente " + id, "0980000000", null);
-        Pedido pedido = new Pedido(cliente, "Direccion " + id, GeoUtil.punto(lat, lng), zona, fechaEntrega, hora,
-                LocalDateTime.of(2026, 1, 1, 8, 0), PrioridadPedido.NORMAL, true);
+        Pedido pedido = new Pedido(cliente, "Direccion " + id, GeoUtil.punto(lat, lng), zona,
+                new DatosEntrega(fechaEntrega, hora, PrioridadPedido.NORMAL), LocalDateTime.of(2026, 1, 1, 8, 0), true);
         ReflectionTestUtils.setField(pedido, "id", id);
         return pedido;
     }

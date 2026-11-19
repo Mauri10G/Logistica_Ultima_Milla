@@ -5,5 +5,5 @@ import { resolverUrlApi } from './utils/urlApi'
 
 export const API_URL = resolverUrlApi(import.meta.env.VITE_API_URL, window.location.origin)
 
-/** Con false (por defecto) la web funciona sin login; con true exige iniciar sesion. */
+/** Con true la web exige iniciar sesion (.env.example lo trae en true); sin la variable o con false funciona sin login. */
 export const AUTH_HABILITADA = import.meta.env.VITE_AUTH_HABILITADA === 'true'

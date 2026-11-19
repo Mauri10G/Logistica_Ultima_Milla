@@ -1,16 +1,35 @@
 import { api } from './client'
 
-/** @returns {Promise<{ pedidos: object[], total: number }>} (el total viene en la cabecera X-Total-Count) */
-export async function listarPedidos({ fecha, zonaId, estado, page = 0, size = 100 } = {}) {
+/** Máximo de pedidos por petición que acepta el backend (pide más y lo recorta a 1000). */
+export const TAMANO_LOTE = 1000
+
+/**
+ * Una página de pedidos. El backend busca (`q`: cliente o dirección, sin mayúsculas ni tildes), ordena (`sort`, con el
+ * formato de Spring: "fechaEntrega,desc"; sin orden va por entrega y luego id) y pagina (`page` desde 0, `size`).
+ * @returns {Promise<{ pedidos: object[], total: number }>} el total (de todas las páginas) viene en la cabecera X-Total-Count
+ */
+export async function listarPedidos({ fecha, zonaId, estado, q, sort, page = 0, size = 100 } = {}) {
   const params = { page, size }
   if (fecha) params.fecha = fecha
   if (zonaId) params.zonaId = zonaId
   if (estado) params.estado = estado
+  if (q?.trim()) params.q = q.trim()
+  if (sort) params.sort = sort
   const respuesta = await api.get('/pedidos', { params })
   return {
     pedidos: respuesta.data,
     total: Number(respuesta.headers['x-total-count'] ?? respuesta.data.length),
   }
+}
+
+/** Todos los pedidos que cumplen el filtro, pidiéndolos por lotes de 1000 (nunca se queda en la primera página). Lo usa Inicio. */
+export async function listarTodosLosPedidos(filtros = {}) {
+  const primero = await listarPedidos({ ...filtros, page: 0, size: TAMANO_LOTE })
+  const lotes = Math.ceil(primero.total / TAMANO_LOTE)
+  const restantes = await Promise.all(
+    Array.from({ length: Math.max(0, lotes - 1) }, (_, i) => listarPedidos({ ...filtros, page: i + 1, size: TAMANO_LOTE })),
+  )
+  return { pedidos: [primero, ...restantes].flatMap((lote) => lote.pedidos), total: primero.total }
 }
 
 export async function crearPedido(datos) {

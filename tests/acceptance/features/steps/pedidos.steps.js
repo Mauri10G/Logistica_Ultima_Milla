@@ -16,7 +16,7 @@ Given('que existe un pedido pendiente del cliente de la prueba en la zona {strin
   const [latitud, longitud] = PUNTOS[zona]
   const respuesta = await fetch(`${this.api}/api/pedidos`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: this.autorizacion },
     body: JSON.stringify({
       clienteNombres: this.cliente,
       clienteTelefono: '0990000000',
@@ -140,7 +140,7 @@ Then('ve el aviso de hora {string} bajo el campo de hora de entrega', async func
 // ---------- Comprobaciones contra el backend ----------
 
 Then('el sistema guardó el pedido del cliente de la prueba como {string} en la zona {string}', async function (estado, zona) {
-  const lista = await (await fetch(`${this.api}/api/pedidos?fecha=${this.manana}&size=1000`)).json()
+  const lista = await (await fetch(`${this.api}/api/pedidos?fecha=${this.manana}&size=1000`, { headers: { Authorization: this.autorizacion } })).json()
   const pedidos = lista.filter((pedido) => pedido.clienteNombres === this.cliente)
   assert.strictEqual(pedidos.length, 1, `se esperaba 1 pedido de ${this.cliente} y hay ${pedidos.length}`)
   assert.strictEqual(pedidos[0].estado, estado)
@@ -158,12 +158,12 @@ Then('el pedido de la prueba quedó registrado por el personal del negocio', asy
 })
 
 Then('el sistema no registró ningún pedido del cliente de la prueba', async function () {
-  const lista = await (await fetch(`${this.api}/api/pedidos?size=1000`)).json()
+  const lista = await (await fetch(`${this.api}/api/pedidos?size=1000`, { headers: { Authorization: this.autorizacion } })).json()
   assert.strictEqual(lista.filter((pedido) => pedido.clienteNombres === this.cliente).length, 0)
 })
 
 Then('el sistema conserva el pedido de la prueba pendiente', async function () {
-  const respuesta = await fetch(`${this.api}/api/pedidos/${this.pedido.id}`)
+  const respuesta = await fetch(`${this.api}/api/pedidos/${this.pedido.id}`, { headers: { Authorization: this.autorizacion } })
   assert.strictEqual(respuesta.status, 200, 'el pedido ya no existe')
   assert.strictEqual((await respuesta.json()).estado, 'PENDIENTE')
 })
@@ -171,7 +171,7 @@ Then('el sistema conserva el pedido de la prueba pendiente', async function () {
 Then('el sistema eliminó el pedido de la prueba', async function () {
   // la web llama a la API recién al terminar los 6 segundos de "Deshacer": se consulta hasta que el pedido desaparece
   for (let intento = 0; intento < 20; intento++) {
-    const respuesta = await fetch(`${this.api}/api/pedidos/${this.pedido.id}`)
+    const respuesta = await fetch(`${this.api}/api/pedidos/${this.pedido.id}`, { headers: { Authorization: this.autorizacion } })
     if (respuesta.status === 404) return
     await this.pagina.waitForTimeout(500)
   }
@@ -179,7 +179,57 @@ Then('el sistema eliminó el pedido de la prueba', async function () {
 })
 
 Then('el pedido de la prueba sigue pendiente con la dirección {string}', async function (direccion) {
-  const pedido = await (await fetch(`${this.api}/api/pedidos/${this.pedido.id}`)).json()
+  const pedido = await (await fetch(`${this.api}/api/pedidos/${this.pedido.id}`, { headers: { Authorization: this.autorizacion } })).json()
   assert.strictEqual(pedido.direccion, direccion)
   assert.strictEqual(pedido.estado, 'PENDIENTE')
+})
+
+// ---------- Paginación y búsqueda en el backend (CP-17) ----------
+
+const nombreDelPedido = (mundo, numero) => `${mundo.cliente} ${String(numero).padStart(2, '0')}`
+
+Given('que existen {int} pedidos de la prueba en la zona {string} para una fecha lejana', async function (cantidad, zona) {
+  const [latitud, longitud] = PUNTOS[zona]
+  // uno tras otro: los números (#) quedan en el mismo orden que los nombres y el 12 cae en la segunda página
+  for (let numero = 1; numero <= cantidad; numero++) {
+    const respuesta = await fetch(`${this.api}/api/pedidos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: this.autorizacion },
+      body: JSON.stringify({
+        clienteNombres: nombreDelPedido(this, numero),
+        clienteTelefono: '0990000000',
+        direccion: `Calle ${numero} ${this.etiqueta}`,
+        latitud,
+        longitud,
+        fechaEntrega: this.fechaLejana,
+        horaEntrega: '10:00',
+      }),
+    })
+    assert.strictEqual(respuesta.status, 201)
+  }
+})
+
+When('elige la fecha lejana en el filtro de fecha de la lista', async function () {
+  await this.pagina.locator('#filtroFecha').fill(this.fechaLejana)
+})
+
+Then('la paginación indica {string}', async function (texto) {
+  await this.pagina.getByText(texto, { exact: true }).waitFor()
+})
+
+Then('el pedido {int} de la prueba no está en la primera página de la lista', async function (numero) {
+  await this.pagina.getByRole('row', { name: nombreDelPedido(this, 1) }).waitFor()
+  assert.strictEqual(await this.pagina.getByRole('row', { name: nombreDelPedido(this, numero) }).count(), 0)
+})
+
+When('busca el pedido {int} de la prueba en la lista de pedidos', async function (numero) {
+  await this.pagina.locator('#buscarPedido').fill(nombreDelPedido(this, numero))
+})
+
+Then('ve el pedido {int} de la prueba en la lista', async function (numero) {
+  await this.pagina.getByRole('row', { name: nombreDelPedido(this, numero) }).waitFor()
+})
+
+Then('la lista no muestra el pedido {int} de la prueba', async function (numero) {
+  await this.pagina.getByRole('row', { name: nombreDelPedido(this, numero) }).waitFor({ state: 'detached' })
 })

@@ -16,17 +16,23 @@ import ec.edu.uta.logistica.pedidos.dto.HoraServidorResponse;
 import ec.edu.uta.logistica.pedidos.dto.PedidoRequest;
 import ec.edu.uta.logistica.pedidos.dto.PedidoResponse;
 import ec.edu.uta.logistica.pedidos.entity.Cliente;
+import ec.edu.uta.logistica.pedidos.entity.DatosEntrega;
 import ec.edu.uta.logistica.pedidos.entity.EstadoPedido;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
+import ec.edu.uta.logistica.pedidos.evento.PedidoRegistradoEvent;
 import ec.edu.uta.logistica.pedidos.repository.ClienteRepository;
+import ec.edu.uta.logistica.pedidos.repository.ConsultaPedidos;
 import ec.edu.uta.logistica.pedidos.repository.PedidoRepository;
 import ec.edu.uta.logistica.seguimiento.service.SeguimientoService;
+import ec.edu.uta.logistica.seguridad.service.ControlAcceso;
 import ec.edu.uta.logistica.zonas.entity.Zona;
 import ec.edu.uta.logistica.zonas.repository.ZonaRepository;
 import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +45,8 @@ public class PedidoService {
     private final ClienteRepository clienteRepository;
     private final ZonaRepository zonaRepository;
     private final SeguimientoService seguimientoService;
+    private final ControlAcceso controlAcceso;
+    private final ApplicationEventPublisher publicador;
     private final Clock reloj;
     private final int anticipacionMinimaMinutos;
 
@@ -47,12 +55,15 @@ public class PedidoService {
      *                                  ({@code logistica.pedidos.anticipacion-minima-minutos}, 30 por defecto)
      */
     public PedidoService(PedidoRepository pedidoRepository, ClienteRepository clienteRepository,
-                         ZonaRepository zonaRepository, SeguimientoService seguimientoService, Clock reloj,
+                         ZonaRepository zonaRepository, SeguimientoService seguimientoService,
+                         ControlAcceso controlAcceso, ApplicationEventPublisher publicador, Clock reloj,
                          @Value("${logistica.pedidos.anticipacion-minima-minutos:30}") int anticipacionMinimaMinutos) {
         this.pedidoRepository = pedidoRepository;
         this.clienteRepository = clienteRepository;
         this.zonaRepository = zonaRepository;
         this.seguimientoService = seguimientoService;
+        this.controlAcceso = controlAcceso;
+        this.publicador = publicador;
         this.reloj = reloj;
         this.anticipacionMinimaMinutos = Math.max(anticipacionMinimaMinutos, 0);
     }
@@ -64,10 +75,15 @@ public class PedidoService {
         Zona zona = calcularZona(solicitud.latitud(), solicitud.longitud());
         Cliente cliente = resolverClienteNuevo(solicitud);
 
-        Pedido pedido = new Pedido(cliente, solicitud.direccion().trim(), ubicacion, zona,
-                solicitud.fechaEntrega(), solicitud.horaEntrega(), LocalDateTime.now(reloj),
-                solicitud.prioridad(), solicitud.registradoPorPersonal() == null || solicitud.registradoPorPersonal());
-        return PedidoResponse.desde(pedidoRepository.save(pedido));
+        DatosEntrega entrega = new DatosEntrega(solicitud.fechaEntrega(), solicitud.horaEntrega(), solicitud.prioridad());
+        Pedido pedido = new Pedido(cliente, solicitud.direccion().trim(), ubicacion, zona, entrega,
+                LocalDateTime.now(reloj), solicitud.registradoPorPersonal() == null || solicitud.registradoPorPersonal());
+        Pedido guardado = pedidoRepository.save(pedido);
+        // Si la fecha ya tiene rutas armadas, el modulo de rutas lo inserta como ultimo momento en esta misma
+        // transaccion (UltimoMomentoAutomatico); la respuesta ya sale ASIGNADO y con su ruta.
+        publicador.publishEvent(new PedidoRegistradoEvent(guardado.getId(), guardado.getFechaEntrega(),
+                zona.getId()));
+        return PedidoResponse.desde(guardado);
     }
 
     @Transactional
@@ -86,15 +102,33 @@ public class PedidoService {
 
     @Transactional(readOnly = true)
     public PedidoResponse obtener(Long id) {
-        return PedidoResponse.desde(buscar(id));
+        Pedido pedido = buscar(id);
+        controlAcceso.exigirPedidoPropio(pedido); // un COURIER solo ve pedidos de sus rutas
+        return PedidoResponse.desde(pedido);
     }
 
-    /** Devuelve la pagina solicitada; el total sale en la cabecera X-Total-Count. */
+    /**
+     * Devuelve la pagina solicitada; el total sale en la cabecera X-Total-Count. {@code texto} busca en el nombre del
+     * cliente y la direccion sin importar mayusculas ni tildes. {@code orden} solo admite
+     * {@link ConsultaPedidos#COLUMNAS_ORDENABLES}; otra columna lanza 400.
+     */
     @Transactional(readOnly = true)
-    public Page<PedidoResponse> listar(LocalDate fecha, Long zonaId, EstadoPedido estado, int pagina, int tamano) {
-        int tamanoSeguro = Math.min(Math.max(tamano, 1), 1000);
-        return pedidoRepository.buscar(fecha, zonaId, estado, PageRequest.of(Math.max(pagina, 0), tamanoSeguro))
+    public Page<PedidoResponse> listar(LocalDate fecha, Long zonaId, EstadoPedido estado, String texto, Sort orden,
+                                       int pagina, int tamano) {
+        exigirColumnasOrdenables(orden);
+        int tamanoSeguro = Math.clamp(tamano, 1, 1000);
+        return pedidoRepository.buscar(fecha, zonaId, estado, texto,
+                        PageRequest.of(Math.max(pagina, 0), tamanoSeguro, orden))
                 .map(PedidoResponse::desde);
+    }
+
+    private static void exigirColumnasOrdenables(Sort orden) {
+        for (Sort.Order pedida : orden) {
+            if (!ConsultaPedidos.COLUMNAS_ORDENABLES.contains(pedida.getProperty())) {
+                throw new SolicitudInvalidaException("No se puede ordenar por '" + pedida.getProperty()
+                        + "'. Columnas permitidas: " + String.join(", ", ConsultaPedidos.COLUMNAS_ORDENABLES));
+            }
+        }
     }
 
     @Transactional
@@ -104,10 +138,14 @@ public class PedidoService {
         pedidoRepository.delete(pedido);
     }
 
-    /** PATCH /api/pedidos/{id}/estado: valida la transicion, guarda el historial y notifica por WebSocket. */
+    /**
+     * PATCH /api/pedidos/{id}/estado: valida la transicion, guarda el historial y notifica por WebSocket.
+     * Un COURIER solo puede cambiar pedidos de una ruta suya (403). El origen sale del rol del token.
+     */
     @Transactional
     public PedidoResponse cambiarEstado(Long id, EstadoPedidoRequest solicitud) {
         Pedido pedido = buscar(id);
+        controlAcceso.exigirPedidoPropio(pedido);
         if (solicitud.estado() == EstadoPedido.ASIGNADO) {
             throw new ReglaNegocioException("ESTADO_NO_PERMITIDO",
                     "El estado ASIGNADO solo se establece al asignar el pedido a una ruta");
@@ -115,7 +153,8 @@ public class PedidoService {
         EstadoPedido anterior = pedido.getEstado();
         pedido.cambiarEstado(solicitud.estado()); // lanza TransicionInvalidaException si no es el siguiente estado
         pedidoRepository.saveAndFlush(pedido);
-        seguimientoService.registrarCambio(pedido.getId(), anterior, pedido.getEstado(), solicitud.origenOWeb());
+        seguimientoService.registrarCambio(pedido.getId(), anterior, pedido.getEstado(),
+                controlAcceso.origen(solicitud.origen()));
         return PedidoResponse.desde(pedido);
     }
 

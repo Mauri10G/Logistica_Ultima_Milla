@@ -1,5 +1,5 @@
 import { Eye, PackageSearch } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { listarPedidos } from '../api/pedidosApi'
 import { obtenerHistorial } from '../api/seguimientoApi'
 import { mensajeDeError } from '../utils/errores'
@@ -10,11 +10,11 @@ import EstadoBadge from '../components/EstadoBadge'
 import EstadoVacio from '../components/EstadoVacio'
 import HistorialPedido from '../components/HistorialPedido'
 import IndicadorConexion from '../components/IndicadorConexion'
-import Tabla from '../components/Tabla'
+import { TablaVista } from '../components/Tabla'
 import { fechaIso } from '../hooks/fechas'
+import { usePedidosTabla } from '../hooks/usePedidosTabla'
 import { useWebSocketTopic } from '../hooks/useWebSocketTopic'
 import { TOPIC_PEDIDOS } from '../services/websocket'
-import { coincide } from '../utils/busqueda'
 import { ESTADOS_PEDIDO } from '../utils/estados'
 
 const COLUMNAS = [
@@ -23,23 +23,16 @@ const COLUMNAS = [
   { clave: 'direccion', titulo: 'Dirección' },
   { clave: 'zona', titulo: 'Zona' },
   { clave: 'hora', titulo: 'Hora' },
-  { clave: 'ruta', titulo: 'Ruta' },
+  { clave: 'ruta', titulo: 'Ruta', ordenable: false },
   { clave: 'estado', titulo: 'Estado' },
-  { clave: 'historial', titulo: 'Historial' },
+  { clave: 'historial', titulo: 'Historial', ordenable: false },
 ]
 
-const VALORES = {
-  id: (pedido) => pedido.id,
-  cliente: (pedido) => pedido.clienteNombres,
-  direccion: (pedido) => pedido.direccion,
-  zona: (pedido) => pedido.zonaNombre,
-  hora: (pedido) => pedido.horaEntrega,
-  ruta: (pedido) => pedido.rutaId,
-  estado: (pedido) => ESTADOS_PEDIDO.indexOf(pedido.estado),
+/** Cuántos pedidos hay de la fecha en cada estado (una consulta de tamaño 1 por estado: solo interesa X-Total-Count). */
+async function contarPorEstado(fecha) {
+  const totales = await Promise.all(ESTADOS_PEDIDO.map((estado) => listarPedidos({ fecha, estado, size: 1 })))
+  return Object.fromEntries(ESTADOS_PEDIDO.map((estado, i) => [estado, totales[i].total]))
 }
-
-// Al cargar o recargar, la tabla viene por número de pedido de menor a mayor.
-const ORDEN_INICIAL = { clave: 'id', direccion: 'asc' }
 
 /**
  * Seguimiento en tiempo real (CP-11): cuando el repartidor cambia el estado de un pedido desde la app
@@ -50,31 +43,35 @@ export default function SeguimientoPage() {
   const [fecha, setFecha] = useState(fechaIso(0))
   const [busqueda, setBusqueda] = useState('')
   const [estadoFiltro, setEstadoFiltro] = useState('')
-  const [pedidos, setPedidos] = useState([])
+  const [resumen, setResumen] = useState({})
   const [recienActualizados, setRecienActualizados] = useState(new Set())
-  const [error, setError] = useState(null)
-  const [seleccionadoId, setSeleccionadoId] = useState(null)
+  const [errorResumen, setErrorResumen] = useState(null)
+  const [seleccionado, setSeleccionado] = useState(null) // el pedido elegido: sigue abierto aunque se cambie de página
   const [historial, setHistorial] = useState(null)
   const [errorHistorial, setErrorHistorial] = useState(null)
-  const [cargando, setCargando] = useState(true)
   const temporizadores = useRef([])
   const seleccionadoRef = useRef(null)
 
-  const cargar = useCallback(async () => {
+  // El backend filtra por fecha y estado, busca por cliente o dirección, ordena y pagina (ver usePedidosTabla).
+  const filtros = useMemo(() => ({ fecha, estado: estadoFiltro }), [fecha, estadoFiltro])
+  const { tabla, setPedidos, cargando, error: errorLista, setError: setErrorLista, recargar } = usePedidosTabla({
+    filtros,
+    busqueda,
+  })
+
+  // Las pastillas cuentan todos los pedidos de la fecha, no solo la página que se ve.
+  const cargarResumen = useCallback(async () => {
     try {
-      const resultado = await listarPedidos({ fecha, size: 1000 })
-      setPedidos(resultado.pedidos)
-      setError(null)
+      setResumen(await contarPorEstado(fecha))
+      setErrorResumen(null)
     } catch (e) {
-      setError(mensajeDeError(e))
-    } finally {
-      setCargando(false)
+      setErrorResumen(mensajeDeError(e))
     }
   }, [fecha])
 
   useEffect(() => {
-    cargar()
-  }, [cargar])
+    cargarResumen()
+  }, [cargarResumen])
 
   useEffect(() => {
     const pendientes = temporizadores.current
@@ -95,7 +92,7 @@ export default function SeguimientoPage() {
 
   function seleccionar(pedido) {
     seleccionadoRef.current = pedido.id
-    setSeleccionadoId(pedido.id)
+    setSeleccionado(pedido)
     setHistorial(null)
     setErrorHistorial(null)
     cargarHistorial(pedido.id)
@@ -103,7 +100,7 @@ export default function SeguimientoPage() {
 
   function cerrarHistorial() {
     seleccionadoRef.current = null
-    setSeleccionadoId(null)
+    setSeleccionado(null)
     setHistorial(null)
     setErrorHistorial(null)
   }
@@ -122,18 +119,16 @@ export default function SeguimientoPage() {
         })
       }, 3000),
     )
-    if (cambio.pedidoId === seleccionadoRef.current) cargarHistorial(cambio.pedidoId)
+    if (cambio.pedidoId === seleccionadoRef.current) {
+      setSeleccionado((actual) => ({ ...actual, estado: cambio.estadoNuevo }))
+      cargarHistorial(cambio.pedidoId)
+    }
+    // los totales de las pastillas cambian; con un filtro de estado, además, el pedido puede salir de la lista
+    cargarResumen()
+    if (estadoFiltro) recargar()
   })
 
-  const resumen = pedidos.reduce((acumulado, pedido) => {
-    acumulado[pedido.estado] = (acumulado[pedido.estado] ?? 0) + 1
-    return acumulado
-  }, {})
-
-  const seleccionado = pedidos.find((pedido) => pedido.id === seleccionadoId)
-  const visibles = pedidos.filter(
-    (pedido) => (!estadoFiltro || pedido.estado === estadoFiltro) && coincide(busqueda, pedido.clienteNombres, pedido.direccion),
-  )
+  const totalPedidos = ESTADOS_PEDIDO.reduce((suma, estado) => suma + (resumen[estado] ?? 0), 0)
 
   return (
     <section>
@@ -144,7 +139,13 @@ export default function SeguimientoPage() {
         <IndicadorConexion conectado={conectado} />
       </EncabezadoPagina>
 
-      <Avisos error={error} onCerrarError={() => setError(null)} />
+      <Avisos
+        error={errorLista ?? errorResumen}
+        onCerrarError={() => {
+          setErrorLista(null)
+          setErrorResumen(null)
+        }}
+      />
 
       <div className="filtros">
         <div className="campo">
@@ -174,7 +175,7 @@ export default function SeguimientoPage() {
             aria-pressed={estadoFiltro === ''}
             onClick={() => setEstadoFiltro('')}
           >
-            Todos {pedidos.length}
+            Todos {totalPedidos}
           </button>
         </li>
         {ESTADOS_PEDIDO.map((estado) => (
@@ -192,14 +193,11 @@ export default function SeguimientoPage() {
       </ul>
 
       <div className={seleccionado ? 'dos-columnas dos-columnas-historial' : undefined}>
-        <Tabla
+        <TablaVista
+          tabla={tabla}
           titulo="Pedidos de la fecha con su estado actual"
           columnas={COLUMNAS}
-          valores={VALORES}
-          filas={visibles}
           cargando={cargando}
-          ordenInicial={ORDEN_INICIAL}
-          reiniciarCon={[fecha, busqueda, estadoFiltro]}
           vacio={
             <EstadoVacio
               icono={PackageSearch}
@@ -212,7 +210,7 @@ export default function SeguimientoPage() {
               key={pedido.id}
               className={[
                 recienActualizados.has(pedido.id) ? 'fila-actualizada' : '',
-                pedido.id === seleccionadoId ? 'fila-seleccionada' : '',
+                pedido.id === seleccionado?.id ? 'fila-seleccionada' : '',
               ]
                 .join(' ')
                 .trim() || undefined}
@@ -231,7 +229,7 @@ export default function SeguimientoPage() {
                   type="button"
                   className="secundario pequeno"
                   aria-label={`Ver historial del pedido ${pedido.id}`}
-                  aria-pressed={pedido.id === seleccionadoId}
+                  aria-pressed={pedido.id === seleccionado?.id}
                   onClick={() => seleccionar(pedido)}
                 >
                   <Eye size={14} aria-hidden="true" />

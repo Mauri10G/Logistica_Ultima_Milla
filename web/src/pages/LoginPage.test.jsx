@@ -2,7 +2,7 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { iniciarSesionApi } from '../api/authApi'
-import { obtenerSesion } from '../auth/sesion'
+import { expirarSesion, guardarSesion, MENSAJE_SESION_EXPIRADA, obtenerAvisoSesion, obtenerSesion } from '../auth/sesion'
 import LoginPage from './LoginPage'
 
 // El login se prueba encendido; la lógica de sesión y redirecciones está en auth/acceso.test.jsx.
@@ -145,10 +145,10 @@ describe('LoginPage: estado de carga', () => {
     expect(boton).toHaveAttribute('aria-busy', 'true')
     expect(screen.queryByRole('button', { name: 'Ingresar' })).not.toBeInTheDocument()
 
-    await act(async () => resolver({ token: 'tok', rol: 'STAFF', repartidorId: null }))
+    await act(async () => resolver({ token: 'tok', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z' }))
 
     expect(await screen.findByText('Pantalla de inicio')).toBeInTheDocument()
-    expect(obtenerSesion()).toEqual({ token: 'tok', rol: 'STAFF', repartidorId: null })
+    expect(obtenerSesion()).toEqual({ token: 'tok', rol: 'STAFF', repartidorId: null, expiraEn: '2999-01-01T00:00:00Z', usuario: 'admin' })
   })
 
   test('si falla, el botón vuelve a Ingresar y se puede reintentar', async () => {
@@ -164,5 +164,43 @@ describe('LoginPage: estado de carga', () => {
     const boton = screen.getByRole('button', { name: 'Ingresar' })
     expect(boton).toBeEnabled()
     expect(boton).toHaveAttribute('aria-busy', 'false')
+  })
+})
+
+describe('LoginPage: aviso de sesión expirada', () => {
+  test('sin una sesión anterior que haya terminado sola no hay aviso', () => {
+    dibujarLogin()
+
+    expect(screen.queryByText(MENSAJE_SESION_EXPIRADA)).not.toBeInTheDocument()
+  })
+
+  test('tras expirar la sesión muestra "Tu sesión expiró, ingresa de nuevo"', () => {
+    guardarSesion({ token: 'viejo', rol: 'STAFF' })
+    expirarSesion()
+
+    dibujarLogin()
+
+    expect(screen.getByRole('status')).toHaveTextContent('Tu sesión expiró, ingresa de nuevo')
+  })
+
+  test('un login con error cambia el aviso por el error, y un login correcto lo borra', async () => {
+    const user = userEvent.setup()
+    guardarSesion({ token: 'viejo', rol: 'STAFF' })
+    expirarSesion()
+    iniciarSesionApi.mockRejectedValueOnce({ response: { status: 401, data: { codigo: 'CREDENCIALES_INVALIDAS' } } })
+    dibujarLogin()
+
+    await user.type(screen.getByLabelText('Usuario'), 'nadie')
+    await user.type(screen.getByLabelText('Clave'), 'mal')
+    await user.click(screen.getByRole('button', { name: 'Ingresar' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Usuario o clave incorrectos')
+    expect(screen.queryByText(MENSAJE_SESION_EXPIRADA)).not.toBeInTheDocument()
+
+    iniciarSesionApi.mockResolvedValueOnce({ token: 'nuevo', rol: 'STAFF', repartidorId: null, expiraEn: null })
+    await user.click(screen.getByRole('button', { name: 'Ingresar' }))
+
+    expect(await screen.findByText('Pantalla de inicio')).toBeInTheDocument()
+    expect(obtenerAvisoSesion()).toBeNull()
   })
 })

@@ -1,6 +1,7 @@
 package ec.edu.uta.logistica.zonas.entity;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -45,16 +46,22 @@ public class Zona {
         this.activa = activa;
     }
 
+    /**
+     * Las marcas de auditoria usan la zona horaria del negocio (la misma de {@code logistica.zona-horaria}) y no la
+     * del servidor, que en Docker o en CI suele estar en UTC. Una entidad JPA no recibe el Clock por inyeccion.
+     */
+    static final ZoneId ZONA_NEGOCIO = ZoneId.of("America/Guayaquil");
+
     @PrePersist
     void alCrear() {
-        LocalDateTime ahora = LocalDateTime.now();
+        LocalDateTime ahora = LocalDateTime.now(ZONA_NEGOCIO);
         this.creadoEn = ahora;
         this.actualizadoEn = ahora;
     }
 
     @PreUpdate
     void alActualizar() {
-        this.actualizadoEn = LocalDateTime.now();
+        this.actualizadoEn = LocalDateTime.now(ZONA_NEGOCIO);
     }
 
     public Long getId() {

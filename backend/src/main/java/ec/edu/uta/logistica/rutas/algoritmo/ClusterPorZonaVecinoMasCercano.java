@@ -12,6 +12,8 @@ import ec.edu.uta.logistica.common.geo.GeoUtil;
 import ec.edu.uta.logistica.pedidos.entity.Pedido;
 import ec.edu.uta.logistica.repartidores.entity.Repartidor;
 import org.locationtech.jts.geom.Point;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,7 +23,9 @@ import org.springframework.stereotype.Component;
  *   <li>Parte cada grupo en clusters de hasta {@code maxPedidos} por cercania: toma como semilla el pedido mas
  *       alejado del centroide de los que quedan y le suma sus vecinos mas cercanos.</li>
  *   <li>Ordena las paradas de cada cluster por vecino mas cercano, empezando por el pedido con la hora mas
- *       temprana.</li>
+ *       temprana. Con {@code logistica.rutas.ventana-horaria-minutos > 0} la hora de entrega funciona como ventana de
+ *       tiempo: se visitan primero todas las paradas de la franja mas temprana (por vecino mas cercano dentro de ella)
+ *       y luego las de la siguiente, para no llegar a las 09:30 despues de pasar por las 18:00.</li>
  *   <li>Asigna cada ruta al repartidor disponible con menos carga (empate: menor id).</li>
  * </ol>
  * Es determinista: ante empates se desempata por id de pedido / repartidor.
@@ -30,6 +34,23 @@ import org.springframework.stereotype.Component;
 public class ClusterPorZonaVecinoMasCercano implements EstrategiaArmadoRutas {
 
     private record Clave(LocalDate fecha, Long zonaId) {
+    }
+
+    /** Ancho de la franja horaria en minutos; 0 = sin ventanas (vecino mas cercano puro). */
+    private final int ventanaMinutos;
+
+    /** Sin ventanas de tiempo: el comportamiento original. */
+    public ClusterPorZonaVecinoMasCercano() {
+        this(0);
+    }
+
+    /** @param ventanaMinutos {@code logistica.rutas.ventana-horaria-minutos} (0 = desactivado) */
+    @Autowired
+    public ClusterPorZonaVecinoMasCercano(@Value("${logistica.rutas.ventana-horaria-minutos:0}") int ventanaMinutos) {
+        if (ventanaMinutos < 0) {
+            throw new IllegalArgumentException("La ventana horaria no puede ser negativa");
+        }
+        this.ventanaMinutos = ventanaMinutos;
     }
 
     @Override
@@ -103,7 +124,10 @@ public class ClusterPorZonaVecinoMasCercano implements EstrategiaArmadoRutas {
         orden.add(actual);
         while (!pendientes.isEmpty()) {
             Pedido desde = actual;
+            // con ventanas, solo se puede elegir dentro de la franja mas temprana que quede
+            int franja = pendientes.stream().mapToInt(this::franja).min().orElseThrow();
             actual = pendientes.stream()
+                    .filter(p -> franja(p) == franja)
                     .min(Comparator.comparingDouble((Pedido p) -> GeoUtil.distanciaMetros(desde.getUbicacion(),
                             p.getUbicacion())).thenComparing(PorId.INSTANCIA))
                     .orElseThrow();
@@ -111,6 +135,11 @@ public class ClusterPorZonaVecinoMasCercano implements EstrategiaArmadoRutas {
             orden.add(actual);
         }
         return orden;
+    }
+
+    /** Numero de franja horaria del pedido; sin ventanas todos caen en la misma (0). */
+    private int franja(Pedido pedido) {
+        return ventanaMinutos == 0 ? 0 : pedido.getHoraEntrega().toSecondOfDay() / 60 / ventanaMinutos;
     }
 
     private Repartidor repartidorConMenosCarga(List<Repartidor> repartidores, Map<Long, Integer> carga) {

@@ -11,6 +11,7 @@ import ec.edu.uta.logistica.pedidos.entity.EstadoPedido;
 import ec.edu.uta.logistica.pedidos.service.PedidoService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,15 +35,21 @@ public class PedidoController {
         this.pedidoService = pedidoService;
     }
 
-    /** Filtros opcionales por fecha de entrega, zona y estado. El total va en la cabecera X-Total-Count. */
+    /**
+     * Filtros opcionales por fecha de entrega, zona y estado; {@code q} busca en cliente y direccion (sin mayusculas ni
+     * tildes); {@code sort} con el formato de Spring ({@code sort=fechaEntrega,desc}) por id, cliente, direccion, zona,
+     * fechaEntrega, fechaRegistro o estado. El total va en la cabecera X-Total-Count.
+     */
     @GetMapping
     public ResponseEntity<List<PedidoResponse>> listar(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
             @RequestParam(required = false) Long zonaId,
             @RequestParam(required = false) EstadoPedido estado,
+            @RequestParam(required = false) String q,
+            Sort sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "100") int size) {
-        Page<PedidoResponse> pagina = pedidoService.listar(fecha, zonaId, estado, page, size);
+        Page<PedidoResponse> pagina = pedidoService.listar(fecha, zonaId, estado, q, sort, page, size);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(pagina.getTotalElements()))
                 .body(pagina.getContent());
