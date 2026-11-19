@@ -52,8 +52,19 @@ npm audit --omit=dev                                         # solo lo que llega
 npm audit --json > ../tests/security/reports/npm-audit-web.json
 ```
 
+## 4. Validación de campos contra la API
+
+```bash
+node tests/security/validaciones.js                    # backend en http://localhost:8080, con la seguridad encendida
+node tests/security/validaciones.js http://servidor:8080
+```
+
+Envía 63 casos límite (obligatorios, longitudes, formatos, rangos, fechas, geometrías de zona, transiciones de estado,
+401 y 403) y compara el código HTTP con el esperado. Borra al final los pedidos que llega a crear y termina con código 1
+si algún caso no responde lo esperado.
+
 ## Hallazgos y estado
 
-Ver el reporte en [`docs/evidencias/seguridad/`](../../docs/evidencias/seguridad/). Resumen al 19 de noviembre:
-ZAP sin hallazgos altos ni medios, 0 vulnerabilidades en las dependencias de producción de la web, 18 moderadas solo en
-herramientas de prueba, y en el backend una sola dependencia vulnerable: DOMPurify dentro de Swagger UI (#43).
+Ver el reporte en [`docs/evidencias/seguridad/`](../../docs/evidencias/seguridad/). Después de las correcciones
+(19 de noviembre): ZAP sin hallazgos altos ni medios, Dependency-Check y `npm audit` con 0 vulnerabilidades, y los 63
+casos de validación de campos como se espera.

@@ -3,7 +3,30 @@
 Responsable: Robert Paredes. Pruebas de seguridad del sistema: dependencias vulnerables, análisis dinámico de la API con
 OWASP ZAP y validación de entradas. Cómo repetirlas: [`tests/security/README.md`](../../../tests/security/README.md).
 
-## Resumen
+## Resumen: antes y después de las correcciones
+
+Las dos rondas son del 19 de noviembre de 2026. Entre una y otra se corrigieron los hallazgos: validaciones del backend
+(#35, Joseph), validaciones de la web (#37, Mauricio), Swagger UI con DOMPurify corregido e índice en
+`pedido.cliente_id` (#47), y dependencias de prueba de la web (#48).
+
+| Prueba | Antes | Después | Hallazgos altos o críticos después |
+|---|---|---|---|
+| ZAP baseline (raíz del backend, sin token) | 67 reglas pasan, 0 altos o medios | 67 reglas pasan, 0 altos o medios | 0 |
+| ZAP API (operaciones de lectura, con token STAFF) | 119 reglas pasan, 0 altos o medios; 1 bajo | Igual: 119 pasan; 1 bajo (falta `Cross-Origin-Resource-Policy`) | 0 |
+| OWASP Dependency-Check del backend (74 dependencias) | 1 dependencia vulnerable: 1 crítica, 1 alta, 1 baja | **0 vulnerabilidades** | 0 |
+| `npm audit` de la web, producción | 0 | 0 | 0 |
+| `npm audit` de la web, con desarrollo | 18 moderadas (Jest) | **0** | 0 |
+| Validación de campos contra la API | 58 de 63 casos como se espera | **63 de 63** | 0 |
+
+**Meta del equipo cumplida: ZAP y Dependency-Check sin hallazgos altos después de las correcciones.** Queda una sola
+alerta de riesgo bajo (la cabecera `Cross-Origin-Resource-Policy`), que es una mejora opcional.
+
+Reportes "después": [`zap-baseline-despues-2026-11-19.html`](zap-baseline-despues-2026-11-19.html),
+[`zap-api-despues-2026-11-19.html`](zap-api-despues-2026-11-19.html),
+[`dependency-check-backend-despues-2026-11-19.html`](dependency-check-backend-despues-2026-11-19.html) y
+[`npm-audit-web-despues-2026-11-19.json`](npm-audit-web-despues-2026-11-19.json).
+
+### Primera ronda (antes)
 
 | Prueba | Fecha | Resultado | Hallazgos altos | Hallazgos medios |
 |---|---|---|---|---|
@@ -106,7 +129,14 @@ geometrías de zona, transiciones de estado, 401 y 403). 58 respondieron como se
 - [#33](https://github.com/Mauri10G/Logistica_Ultima_Milla/issues/33) (web, Mauricio): los formularios no limitan la
   longitud de los campos ni validan el teléfono.
 
-## 4. Pendiente
+## 4. Correcciones aplicadas
 
-- Repetir ZAP y Dependency-Check después de las correcciones de #32, #33, #40 y #43 (`bash tests/security/zap.sh despues`)
-  y agregar la comparación a este reporte. Meta del equipo: sin hallazgos altos.
+| Hallazgo | Corrección | Comprobación |
+|---|---|---|
+| El teléfono y el nombre aceptaban cualquier texto; la fecha de entrega no tenía máximo (#32) | Validaciones en el backend (#35) | `"abc"` y `"12345"` → 400; fecha a 5 años → 422 `FECHA_ENTREGA_LEJANA` |
+| Formularios web sin límite de longitud ni validación del teléfono (#33) | Validaciones en la web (#37) | Pruebas de Jest de la web |
+| DOMPurify 3.4.16 dentro de Swagger UI 5.34.0 (#43) | Swagger UI 5.35.1 fijada en el `pom.xml` y en `springdoc.swagger-ui.version` (#47). Sin lo segundo, springdoc buscaba los archivos de la 5.34.0 y Swagger UI daba 404 | Dependency-Check: 0 vulnerabilidades; `/swagger-ui/index.html` → 200 |
+| 18 moderadas en `glob` y `minimatch` de Jest (#40) | `overrides` en `web/package.json`: `glob` 14.0.2 y `minimatch` 11.0.1 (#48) | `npm audit` → 0; lint, 745 pruebas y build pasan |
+
+Mejora opcional que queda: agregar `Cross-Origin-Resource-Policy: same-site` a las respuestas del backend (riesgo bajo).
+Para repetir la validación de campos: `node tests/security/validaciones.js`.
